@@ -1,4 +1,4 @@
-use orthrus_alloc as orthrus;
+use orthrus_helper as orthrus;
 
 /// This is designed so that the only thing that persists is either an error of why
 /// decompression failed, or a buffer containing the decompressed data.
