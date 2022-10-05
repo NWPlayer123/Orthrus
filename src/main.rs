@@ -1,7 +1,7 @@
 use std::fs::File;
 use std::io::prelude::*;
-
 use clap::{AppSettings, Arg, Command, SubCommand};
+use orthrus_yaz0 as yaz0;
 
 fn main() {
     //TODO: allow modules to generate their own subcommand and just register it here

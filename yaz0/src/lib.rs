@@ -8,9 +8,9 @@ pub fn load(path: &str) -> Result<Vec<u8>, std::io::Error> {
     let mut input = orthrus::acquire_file(path)?;
 
     //read header from the buffer
-    let _magic = orthrus::read_u32(&input, 0);
-    let dec_size: usize = orthrus::read_u32(&input, 4) as usize;
-    let _alignment = orthrus::read_u32(&input, 8);
+    let _magic = orthrus::read_u32(&input, 0); //"Yaz0"
+    let dec_size = orthrus::read_u32(&input, 4) as usize;
+    let _alignment = orthrus::read_u32(&input, 8); //should be zero on files before Wii U
 
     //allocate decompression buffer, zero-initialize
     let mut buffer = vec![0u8; dec_size];
@@ -41,7 +41,7 @@ fn decompress_into(input: &mut [u8], output: &mut [u8], output_size: usize) -> R
             src_pos += 1;
             dst_pos += 1;
         }
-        else {
+        else { //do RLE copy
             let code = orthrus::read_u16(input, src_pos);
             src_pos += 2;
 

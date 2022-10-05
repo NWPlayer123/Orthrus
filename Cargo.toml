@@ -1,9 +1,13 @@
 [package]
 name = "orthrus"
 version = "0.1.0"
+authors = ["NWPlayer123 <nikki@aetheria.dev>"]
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+description = "A new way to modify games."
+readme = "../README.md"
+repository = "https://github.com/NWPlayer123/Orthrus"
+license = "MIT"
+keywords = ["modding", "gamedev"]
 
 [profile.release-lto]
 inherits = "release"
@@ -13,5 +17,18 @@ lto = "thin"
 codegen-units = 1
 
 [dependencies]
-orthrus-yaz0 = { version = "0.1.0", path = "./yaz0" }
-clap = { version = "3.2.19" }
+orthrus-yaz0 = { version = "0.1.0", path = "yaz0" }
+clap = { version = "~3.2" }
+
+[workspace]
+members = [
+    "helper",
+    "yaz0"
+]
+
+# Workspace members should have their own details, e.g. a version bump on yaz0 should not necessarily
+# require a version bump on all other modules, along with their own authors since this repo will get
+# very large in the future, with different people focusing on features in a specific module
+[workspace.package]
+license = "MIT"
+repository = "https://github.com/NWPlayer123/Orthrus"
