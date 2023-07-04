@@ -13,12 +13,12 @@ keywords = ["modding", "gamedev"]
 inherits = "release"
 opt-level = "z"
 strip = true
-lto = "thin"
+lto = "fat"
 codegen-units = 1
 
 [dependencies]
 orthrus-yaz0 = { version = "0.1.0", path = "yaz0" }
-clap = { version = "~3.2" }
+clap = { version = "4.3", features = ["cargo"]}
 
 [workspace]
 members = [
