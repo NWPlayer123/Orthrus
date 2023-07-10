@@ -32,9 +32,9 @@ fn main() {
                     let input_fn = sub_matches.get_one::<String>("input").unwrap();
                     let output_fn = sub_matches.get_one::<String>("output").unwrap();
 
-                    let file = yaz0::load(input_fn).unwrap();
+                    let file = yaz0::decompress(input_fn).unwrap();
                     let mut output = File::create(output_fn).unwrap();
-                    output.write(&file).unwrap();
+                    output.write_all(file.get_ref()).unwrap();
                 }
                 _ => unreachable!("Oops! Forgot to satisfy all methods"),
             }

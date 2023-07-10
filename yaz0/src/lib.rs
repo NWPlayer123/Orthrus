@@ -1,59 +1,97 @@
 use orthrus_helper as orthrus;
+use std::fs;
+use std::{
+    io,
+    io::{Cursor, Read, Seek, Write},
+};
 
-/// This is designed so that the only thing that persists is either an error of why
-/// decompression failed, or a buffer containing the decompressed data.
-/// Yaz0 is thin enough that it isn't worth saving any data from the original file.
-pub fn load(path: &str) -> Result<Vec<u8>, std::io::Error> {
-    //try to open file, create a buffer around it
-    let mut input = orthrus::acquire_file(path)?;
+/// Loads the file at `path` and tries to decompress it as a Yaz0 file.
+///
+/// # Errors
+///
+/// Returns a [`std::io::Error`] if `path` does not exist, or read/write fails.
+///
+/// # Panics
+///
+/// Panics if the Yaz0 stream is malformed and it tries to read past file bounds.
+pub fn decompress(path: &str) -> io::Result<Cursor<Vec<u8>>> {
+    //acquire file data
+    let data = fs::read(path)?;
+    let mut input = Cursor::new(data);
 
     //read header from the buffer
-    let _magic = orthrus::read_u32(&input, 0); //"Yaz0"
-    let dec_size = orthrus::read_u32(&input, 4) as usize;
-    let _alignment = orthrus::read_u32(&input, 8); //should be zero on files before Wii U
+    let _magic = orthrus::read_u32_be(&mut input)?; //"Yaz0"
+    let dec_size = orthrus::read_u32_be(&mut input)?;
+    let _alignment = orthrus::read_u32_be(&mut input)?; //0 on GC/Wii files
 
-    //allocate decompression buffer, zero-initialize
-    let mut buffer = vec![0u8; dec_size];
+    //allocate decompression buffer
+    let buffer = vec![0u8; dec_size as usize];
+    let mut output = Cursor::new(buffer);
 
     //perform the actual decompression
-    decompress_into(input.as_mut_slice(), buffer.as_mut_slice(), dec_size)?;
+    decompress_into(&mut input, &mut output)?;
 
     //if we've gotten this far, buffer is the valid decompressed data
-    Ok(buffer)
+    Ok(output)
 }
 
-fn decompress_into(input: &mut [u8], output: &mut [u8], output_size: usize) -> Result<(), std::io::Error> {
-    let mut src_pos: usize = 0x10;
-    let mut dst_pos: usize = 0;
+/// Decompresses a Yaz0 file into the output buffer.
+///
+/// This function makes no guarantees about the validity of the Yaz0 stream. It
+/// requires that input is a valid Yaz0 file including the header, and that
+/// output is large enough to write the decompressed data into.
+///
+/// # Errors
+///
+/// Returns a [`std::io::Error`] if read/write fails.
+///
+/// # Panics
+///
+/// Panics if the Yaz0 stream is malformed and it tries to read past file bounds.
+//#[inline(never)]
+fn decompress_into<I, O>(input: &mut I, output: &mut O) -> io::Result<()>
+where
+    I: Read + Seek,
+    O: Read + Write + Seek,
+{
     let mut mask: u8 = 0;
     let mut flags: u8 = 0;
 
-    while dst_pos < output_size {
-        //if we're out of bits for RLE, load in a new byte
+    //align input to start of compressed Yaz0 stream
+    input.seek(io::SeekFrom::Start(0x10))?;
+    //get size of output buffer for our loop, align to start of buffer
+    let output_size: u64 = output.seek(io::SeekFrom::End(0))?;
+    output.seek(io::SeekFrom::Start(0))?;
+
+    while output.stream_position()? < output_size {
+        //out of flag bits for RLE, load in a new byte
         if mask == 0 {
             mask = 1 << 7;
-            flags = input[src_pos];
-            src_pos += 1;
+            flags = orthrus::read_u8(input)?;
         }
 
-        if (flags & mask) != 0 { //read one byte
-            output[dst_pos] = input[src_pos];
-            src_pos += 1;
-            dst_pos += 1;
-        }
-        else { //do RLE copy
-            let code = orthrus::read_u16(input, src_pos);
-            src_pos += 2;
+        if (flags & mask) != 0 {
+            //copy one byte
+            orthrus::copy_byte(input, output)?;
+        } else {
+            //do RLE copy
+            let code = orthrus::read_u16_be(input)?;
 
-            let back = ((code & 0xFFF) + 1) as usize;
-            let size: usize = match code >> 12 {
-                0 => { let n = input[src_pos] as usize; src_pos += 1; n + 0x12 }
-                n => n as usize + 2
+            let back = ((code & 0xFFF) + 1) as u64;
+            let size = match code >> 12 {
+                0 => orthrus::read_u8(input)? as u64 + 0x12,
+                n => n as u64 + 2,
             };
-            for n in dst_pos .. dst_pos + size {
-                output[n] = output[n - back];
+
+            //the ranges can overlap so we need to copy byte-by-byte
+            let mut temp = [0u8; 1];
+            let position = output.stream_position()?;
+            for n in position..position + size {
+                output.seek(io::SeekFrom::Start(n - back))?;
+                temp[0] = orthrus::read_u8(output)?;
+                output.seek(io::SeekFrom::Start(n))?;
+                output.write_all(&temp)?;
             }
-            dst_pos += size;
         }
 
         mask >>= 1;
@@ -61,5 +99,5 @@ fn decompress_into(input: &mut [u8], output: &mut [u8], output_size: usize) -> R
     Ok(())
 }
 
-//note to self: for decompression algo, check if the min size is even possible (2), check max (0x111),
+//note to self: for compression algo, check if the min size is even possible (2), check max (0x111),
 //anywhere in the 0x1000 runback and then bisect until we find the minimum (0x88, 0x44, 0xAA, etc)

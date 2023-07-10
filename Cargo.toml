@@ -9,9 +9,7 @@ repository = "https://github.com/NWPlayer123/Orthrus"
 license = "MIT"
 keywords = ["modding", "gamedev"]
 
-[profile.release-lto]
-inherits = "release"
-opt-level = "z"
+[profile.release]
 strip = true
 lto = "fat"
 codegen-units = 1
