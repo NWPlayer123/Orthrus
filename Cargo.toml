@@ -1,6 +1,6 @@
 [package]
 name = "orthrus"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["NWPlayer123 <nikki@aetheria.dev>"]
 edition = "2021"
 description = "A new way to modify games."
@@ -15,14 +15,11 @@ lto = "fat"
 codegen-units = 1
 
 [dependencies]
-orthrus-yaz0 = { version = "0.1.0", path = "yaz0" }
-clap = { version = "4.3", features = ["cargo"]}
+orthrus-yaz0 = { version = "0.2.0", path = "crates/yaz0" }
+clap = { version = "4.3", features = ["cargo"] }
 
 [workspace]
-members = [
-    "helper",
-    "yaz0"
-]
+members = ["crates/*"]
 
 # Workspace members should have their own details, e.g. a version bump on yaz0 should not necessarily
 # require a version bump on all other modules, along with their own authors since this repo will get
