@@ -1,3 +1,4 @@
+pub mod vfs;
 use std::{
     io,
     io::{Read, Seek, Write},

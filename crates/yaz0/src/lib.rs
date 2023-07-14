@@ -16,8 +16,8 @@ use std::{
 /// Panics if the Yaz0 stream is malformed and it tries to read past file bounds.
 pub fn decompress(path: &str) -> io::Result<Cursor<Vec<u8>>> {
     //acquire file data
-    let data = fs::read(path)?;
-    let mut input = Cursor::new(data);
+    let file = fs::read(path)?;
+    let mut input = Cursor::new(file);
 
     //read header from the buffer
     let _magic = orthrus::read_u32_be(&mut input)?; //"Yaz0"
