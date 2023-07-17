@@ -1,14 +1,19 @@
-use clap::{arg, crate_authors, crate_description, crate_version, ArgGroup, Command, Id};
+use orthrus_helper as orthrus;
+use orthrus_helper::Result;
 use orthrus_panda3d as panda3d;
 use orthrus_yaz0 as yaz0;
+
 use owo_colors::OwoColorize;
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
-use time::{macros::format_description, OffsetDateTime, UtcOffset};
+use time::{OffsetDateTime, UtcOffset};
+
+pub mod menu;
+use menu::*;
 
 /* Ideally I want this to function more like readable-log-formatter from Python but this works for now */
-fn setup_logger(verbosity: u64) -> Result<(), fern::InitError> {
+fn setup_logger(verbosity: u64) -> Result<()> {
     let level = match verbosity {
         0 => log::LevelFilter::Error,
         1 => log::LevelFilter::Warn,
@@ -19,9 +24,6 @@ fn setup_logger(verbosity: u64) -> Result<(), fern::InitError> {
         _ => log::LevelFilter::Error,
     };
 
-    //set up desired datetime format
-    let format = format_description!("[year]-[month]-[day] [hour]:[minute]:[second]");
-
     //initialize a base Dispatch we can apply our two profiles (output file and stdout) to
     let base_config = fern::Dispatch::new();
 
@@ -30,7 +32,7 @@ fn setup_logger(verbosity: u64) -> Result<(), fern::InitError> {
             |out: fern::FormatCallback, message: &core::fmt::Arguments, record: &log::Record| {
                 out.finish(format_args!(
                     "[{}] {:>5} {}",
-                    OffsetDateTime::now_local().unwrap().format(format).unwrap(),
+                    orthrus::current_time().unwrap(),
                     record.level(), //display colors on console but not in the log file
                     message
                 ))
@@ -75,7 +77,7 @@ fn setup_logger(verbosity: u64) -> Result<(), fern::InitError> {
     Ok(())
 }
 
-fn main() {
+fn main() -> Result<()> {
     //Enable ANSI support on Windows, ignore it if it fails for now
     match enable_ansi_support::enable_ansi_support() {
         Ok(()) => {}
@@ -84,73 +86,35 @@ fn main() {
 
     setup_logger(4).unwrap();
 
-    let result = Command::new("Orthrus")
-        .author(crate_authors!("\n"))
-        .version(crate_version!())
-        .about(crate_description!())
-        .arg_required_else_help(true)
-        .subcommand(
-            Command::new("yaz0")
-                .about("Support for Nintendo's Yaz0 compression")
-                .arg_required_else_help(true)
-                .arg(arg!(-d --decompress "Decompress a Yaz0-compressed file"))
-                .arg(arg!(<input> "Input file to be processed"))
-                .arg(arg!(<output> "Output file to write to"))
-                .group(
-                    ArgGroup::new("methods")
-                        .args(["decompress"])
-                        .requires_all(["input", "output"])
-                        .required(true),
-                ),
-        )
-        .subcommand(
-            Command::new("panda3d")
-                .about("Support for the Panda3D Engine")
-                .arg_required_else_help(true)
-                .subcommand(
-                    Command::new("multifile")
-                        .about("Panda3D Multifile Archive")
-                        .arg_required_else_help(true)
-                        .arg(arg!(-x --extract "Extract all files from the Multifile"))
-                        .arg(arg!(<input> "Multifile to be read"))
-                        .group(
-                            ArgGroup::new("methods")
-                                .args(["extract"])
-                                .requires_all(["input"])
-                                .required(true),
-                        ),
-                ),
-        )
-        .get_matches();
+    let args: TopLevel = argp::parse_args_or_exit(argp::DEFAULT);
 
-    match result.subcommand() {
-        Some(("yaz0", sub_matches)) => {
-            match sub_matches.get_one::<Id>("methods").unwrap().as_str() {
-                "decompress" => {
-                    let input_fn = sub_matches.get_one::<String>("input").unwrap();
-                    let output_fn = sub_matches.get_one::<String>("output").unwrap();
-
-                    let file = yaz0::decompress(input_fn).unwrap();
-                    let mut output = File::create(output_fn).unwrap();
-                    output.write_all(file.get_ref()).unwrap();
+    match args.nested {
+        Modules::Yaz0(data) => match exactly_one_true(&[data.decompress]) {
+            Some(index) => match index {
+                0 => {
+                    let file = yaz0::decompress(&data.input)?;
+                    let mut output = File::create(&data.output)?;
+                    output.write_all(file.get_ref())?;
                 }
-                _ => unreachable!("Oops! Forgot to satisfy all methods"),
-            }
-        }
-        Some(("panda3d", sub_matches)) => match sub_matches.subcommand() {
-            Some(("multifile", sub_matches)) => {
-                match sub_matches.get_one::<Id>("methods").unwrap().as_str() {
-                    "extract" => {
-                        let input_fn = sub_matches.get_one::<String>("input").unwrap();
-
-                        let mut multifile = panda3d::Multifile::new();
-                        multifile.open_read(Path::new(input_fn), 0).unwrap();
-                    }
-                    _ => unreachable!("Oops! forgot to satisfy all methods"),
-                }
-            }
-            _ => unreachable!("Oops! Forgot to satisfy all subcommands"),
+                _ => unreachable!("Oops! Forgot to cover all operations."),
+            },
+            None => log::error!("Please select exactly one operation!"),
         },
-        _ => unreachable!("Oops! Forgot to satisfy all subcommands"),
+        Modules::Panda3D(module) => match module.nested {
+            Panda3DModules::Multifile(data) => match exactly_one_true(&[data.extract]) {
+                Some(index) => match index {
+                    0 => {
+                        let mut multifile = panda3d::Multifile::new();
+                        match multifile.open_read(Path::new(&data.input), 0) {
+                            Ok(_) => {}
+                            Err(_) => {}
+                        };
+                    }
+                    _ => unreachable!("Oops! Forgot to cover all operations."),
+                },
+                None => log::error!("Please select exactly one operation!"),
+            },
+        },
     }
+    Ok(())
 }

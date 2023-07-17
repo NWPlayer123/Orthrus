@@ -7,5 +7,7 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-hashbrown = "0.14.0"
-
+time = { version = "0.3", features = ["local-offset", "formatting", "macros"] }
+hashbrown = "0.14"
+thiserror = "1.0"
+log = "0.4"

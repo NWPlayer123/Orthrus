@@ -1,4 +1,8 @@
+pub mod error;
+pub mod time;
 pub mod vfs;
+pub use crate::error::{Error, Result};
+pub use crate::time::{current_time, format_timestamp, TIME_FORMAT};
 use std::{
     io,
     io::{Read, Seek, Write},

@@ -15,12 +15,13 @@ lto = "fat"
 codegen-units = 1
 
 [dependencies]
+orthrus-helper = { version = "0.2", path = "crates/helper" }
 orthrus-panda3d = { version = "0.1", path = "crates/panda3d" }
 orthrus-yaz0 = { version = "0.2", path = "crates/yaz0" }
 
 time = { version = "0.3", features = ["local-offset", "formatting", "macros"] }
-clap = { version = "4.3", features = ["cargo"] }
 log = "0.4"
+argp = "0.3"
 fern = "0.6"
 owo-colors = "3.5"
 enable-ansi-support = "0.2"
