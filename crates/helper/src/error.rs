@@ -25,6 +25,9 @@ pub enum Error {
 
     #[error("Unknown version: expected {expected}, got {got}")]
     UnknownVersion { expected: String, got: String },
+
+    #[error("Unexpected end-of-file encountered")]
+    EndOfFile,
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

@@ -1,20 +1,20 @@
 use argp::FromArgs;
 
-/// A new way to modify games.
+/// Top-level command for argp to parse.
 #[derive(FromArgs, Debug)]
-pub struct TopLevel {
-    /// Be verbose.
-    #[argp(switch, short = 'v', global)]
-    pub verbose: bool,
-
-    /// Run locally.
-    #[argp(switch)]
-    pub quiet: bool,
+#[argp(description = "A new way to modify games.")]
+pub struct Orthrus {
+    #[argp(option, short = 'v', global, default = "4")]
+    #[argp(
+        description = "Logging level (0 = FileOnly, 1 = Error, 2 = Warn, 3 = Info, 4 = Debug, 5 = Trace)"
+    )]
+    pub verbose: usize,
 
     #[argp(subcommand)]
     pub nested: Modules,
 }
 
+/// These are all the "modules" that Orthrus supports via command line.
 #[derive(FromArgs, Debug)]
 #[argp(subcommand)]
 pub enum Modules {
@@ -22,50 +22,55 @@ pub enum Modules {
     Panda3D(Panda3DOption),
 }
 
-/// Support for Nintendo's Yaz0 compression
+/// Command-line flags for Yaz0 compression support
 #[derive(FromArgs, Debug)]
 #[argp(subcommand, name = "yaz0")]
+#[argp(description = "Support for Nintendo's Yaz0 compression")]
 pub struct Yaz0Data {
-    /// Decompress a Yaz0-compressed file
     #[argp(switch, short = 'd')]
+    #[argp(description = "Decompress a Yaz0-compressed file")]
     pub decompress: bool,
 
-    /// Input file to be processed
     #[argp(option, short = 'i')]
+    #[argp(description = "Input file to be processed")]
     pub input: String,
 
-    /// Output file to write to
     #[argp(option, short = 'o')]
+    #[argp(description = "Output file to write to")]
     pub output: String,
 }
 
-/// Support for the Panda3D Engine
+/// This is the command for the `Panda3D` module.
 #[derive(FromArgs, Debug)]
 #[argp(subcommand, name = "panda3d")]
+#[argp(description = "Support for the Panda3D Engine")]
 pub struct Panda3DOption {
     #[argp(subcommand)]
     pub nested: Panda3DModules,
 }
 
+/// These are all supported files within `Panda3D`.
 #[derive(FromArgs, Debug)]
 #[argp(subcommand)]
 pub enum Panda3DModules {
     Multifile(MultifileData),
 }
 
-/// Panda3D Multifile Archive
+/// Command-line flags for `Panda3D` Multifile support
 #[derive(FromArgs, Debug)]
 #[argp(subcommand, name = "multifile")]
+#[argp(description = "Panda3D Multifile Archive")]
 pub struct MultifileData {
-    /// Extract all files from the Multifile
     #[argp(switch, short = 'x')]
+    #[argp(description = "Extract all files from the Multifile")]
     pub extract: bool,
 
-    /// Multifile to be processed
     #[argp(option, short = 'i')]
+    #[argp(description = "Multifile to be processed")]
     pub input: String,
 }
 
+#[must_use]
 pub fn exactly_one_true(bools: &[bool]) -> Option<usize> {
     let mut count = 0;
     let mut index = 0;

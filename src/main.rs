@@ -10,16 +10,18 @@ use std::path::Path;
 use time::{OffsetDateTime, UtcOffset};
 
 pub mod menu;
-use menu::*;
+use menu::{exactly_one_true, Modules, Panda3DModules};
 
 /* Ideally I want this to function more like readable-log-formatter from Python but this works for now */
-fn setup_logger(verbosity: u64) -> Result<()> {
-    let level = match verbosity {
-        0 => log::LevelFilter::Error,
-        1 => log::LevelFilter::Warn,
-        2 => log::LevelFilter::Info,
-        3 => log::LevelFilter::Debug,
-        4 => log::LevelFilter::Trace,
+fn setup_logger(verbose: usize) -> Result<()> {
+    //Allow flexible logging level
+    let level_filter = match verbose {
+        0 => log::LevelFilter::Off,
+        1 => log::LevelFilter::Error,
+        2 => log::LevelFilter::Warn,
+        3 => log::LevelFilter::Info,
+        4 => log::LevelFilter::Debug,
+        5 => log::LevelFilter::Trace,
         //default to highest
         _ => log::LevelFilter::Error,
     };
@@ -31,11 +33,10 @@ fn setup_logger(verbosity: u64) -> Result<()> {
         .format(
             |out: fern::FormatCallback, message: &core::fmt::Arguments, record: &log::Record| {
                 out.finish(format_args!(
-                    "[{}] {:>5} {}",
+                    "[{}] {:>5} {message}",
                     orthrus::current_time().unwrap(),
                     record.level(), //display colors on console but not in the log file
-                    message
-                ))
+                ));
             },
         )
         .chain(fern::log_file("output.log")?);
@@ -50,14 +51,10 @@ fn setup_logger(verbosity: u64) -> Result<()> {
                     log::Level::Debug => record.level().blue().to_string(),
                     log::Level::Trace => record.level().purple().to_string(),
                 };
-                out.finish(format_args!(
-                    "{:>16} {}",
-                    level, //display colors on console but not in the log file
-                    message
-                ))
+                out.finish(format_args!("{level:>16} {message}"));
             },
         )
-        .level(level)
+        .level(level_filter)
         .chain(std::io::stdout());
 
     base_config
@@ -67,10 +64,10 @@ fn setup_logger(verbosity: u64) -> Result<()> {
 
     match UtcOffset::local_offset_at(OffsetDateTime::UNIX_EPOCH) {
         Ok(_) => {
-            log::info!("Successfully set up logging using local timestamps")
+            log::info!("Successfully set up logging using local timestamps");
         }
         Err(_) => {
-            log::info!("Unable to acquire local offset, logging using UTC time!")
+            log::info!("Unable to acquire local offset, logging using UTC time!");
         }
     }
 
@@ -79,41 +76,43 @@ fn setup_logger(verbosity: u64) -> Result<()> {
 
 fn main() -> Result<()> {
     //Enable ANSI support on Windows, ignore it if it fails for now
-    match enable_ansi_support::enable_ansi_support() {
-        Ok(()) => {}
-        Err(_) => {}
-    }
+    enable_ansi_support::enable_ansi_support()?;
 
-    setup_logger(4).unwrap();
+    //Parse command line input
+    let args: menu::Orthrus = argp::parse_args_or_exit(argp::DEFAULT);
 
-    let args: TopLevel = argp::parse_args_or_exit(argp::DEFAULT);
+    //Setup log and fern so we can output logging messages
+    setup_logger(args.verbose)?;
 
     match args.nested {
-        Modules::Yaz0(data) => match exactly_one_true(&[data.decompress]) {
-            Some(index) => match index {
-                0 => {
-                    let file = yaz0::decompress(&data.input)?;
-                    let mut output = File::create(&data.output)?;
-                    output.write_all(file.get_ref())?;
-                }
-                _ => unreachable!("Oops! Forgot to cover all operations."),
-            },
-            None => log::error!("Please select exactly one operation!"),
-        },
-        Modules::Panda3D(module) => match module.nested {
-            Panda3DModules::Multifile(data) => match exactly_one_true(&[data.extract]) {
-                Some(index) => match index {
+        Modules::Yaz0(data) => {
+            if let Some(index) = exactly_one_true(&[data.decompress]) {
+                match index {
                     0 => {
-                        let mut multifile = panda3d::Multifile::new();
-                        match multifile.open_read(Path::new(&data.input), 0) {
-                            Ok(_) => {}
-                            Err(_) => {}
-                        };
+                        let file = yaz0::decompress(&data.input)?;
+                        let mut output = File::create(&data.output)?;
+                        output.write_all(file.get_ref())?;
                     }
                     _ => unreachable!("Oops! Forgot to cover all operations."),
-                },
-                None => log::error!("Please select exactly one operation!"),
-            },
+                }
+            } else {
+                log::error!("Please select exactly one operation!");
+            }
+        }
+        Modules::Panda3D(module) => match module.nested {
+            Panda3DModules::Multifile(data) => {
+                if let Some(index) = exactly_one_true(&[data.extract]) {
+                    match index {
+                        0 => {
+                            let mut multifile = panda3d::Multifile::new();
+                            multifile.open_read(Path::new(&data.input), 0)?;
+                        }
+                        _ => unreachable!("Oops! Forgot to cover all operations."),
+                    }
+                } else {
+                    log::error!("Please select exactly one operation!");
+                }
+            }
         },
     }
     Ok(())

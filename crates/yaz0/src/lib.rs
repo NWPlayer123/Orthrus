@@ -1,9 +1,7 @@
+use orthrus::Result;
 use orthrus_helper as orthrus;
-use std::fs;
-use std::{
-    io,
-    io::{Cursor, Read, Seek, Write},
-};
+use std::io::prelude::*;
+use std::io::{Cursor, SeekFrom};
 
 /// Loads the file at `path` and tries to decompress it as a Yaz0 file.
 ///
@@ -14,9 +12,9 @@ use std::{
 /// # Panics
 ///
 /// Panics if the Yaz0 stream is malformed and it tries to read past file bounds.
-pub fn decompress(path: &str) -> io::Result<Cursor<Vec<u8>>> {
+pub fn decompress(path: &str) -> Result<Cursor<Vec<u8>>> {
     //acquire file data
-    let file = fs::read(path)?;
+    let file = std::fs::read(path)?;
     let mut input = Cursor::new(file);
 
     //read header from the buffer
@@ -49,7 +47,7 @@ pub fn decompress(path: &str) -> io::Result<Cursor<Vec<u8>>> {
 ///
 /// Panics if the Yaz0 stream is malformed and it tries to read past file bounds.
 //#[inline(never)]
-fn decompress_into<I, O>(input: &mut I, output: &mut O) -> io::Result<()>
+fn decompress_into<I, O>(input: &mut I, output: &mut O) -> Result<()>
 where
     I: Read + Seek,
     O: Read + Write + Seek,
@@ -58,10 +56,10 @@ where
     let mut flags: u8 = 0;
 
     //align input to start of compressed Yaz0 stream
-    input.seek(io::SeekFrom::Start(0x10))?;
+    input.seek(SeekFrom::Start(0x10))?;
     //get size of output buffer for our loop, align to start of buffer
-    let output_size: u64 = output.seek(io::SeekFrom::End(0))?;
-    output.seek(io::SeekFrom::Start(0))?;
+    let output_size: u64 = output.seek(SeekFrom::End(0))?;
+    output.seek(SeekFrom::Start(0))?;
 
     while output.stream_position()? < output_size {
         //out of flag bits for RLE, load in a new byte
@@ -70,28 +68,28 @@ where
             flags = orthrus::read_u8(input)?;
         }
 
-        if (flags & mask) != 0 {
-            //copy one byte
-            orthrus::copy_byte(input, output)?;
-        } else {
+        if (flags & mask) == 0 {
             //do RLE copy
             let code = orthrus::read_u16_be(input)?;
 
-            let back = ((code & 0xFFF) + 1) as u64;
+            let back = u64::from((code & 0xFFF) + 1);
             let size = match code >> 12 {
-                0 => orthrus::read_u8(input)? as u64 + 0x12,
-                n => n as u64 + 2,
+                0 => u64::from(orthrus::read_u8(input)?) + 0x12,
+                n => u64::from(n) + 2,
             };
 
             //the ranges can overlap so we need to copy byte-by-byte
             let mut temp = [0u8; 1];
             let position = output.stream_position()?;
             for n in position..position + size {
-                output.seek(io::SeekFrom::Start(n - back))?;
+                output.seek(SeekFrom::Start(n - back))?;
                 temp[0] = orthrus::read_u8(output)?;
-                output.seek(io::SeekFrom::Start(n))?;
+                output.seek(SeekFrom::Start(n))?;
                 output.write_all(&temp)?;
             }
+        } else {
+            //copy one byte
+            orthrus::copy_byte(input, output)?;
         }
 
         mask >>= 1;
