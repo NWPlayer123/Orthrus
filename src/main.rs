@@ -1,4 +1,4 @@
-use orthrus_helper as orthrus;
+use orthrus_helper::time;
 use orthrus_helper::Result;
 use orthrus_panda3d as panda3d;
 use orthrus_yaz0 as yaz0;
@@ -7,7 +7,6 @@ use owo_colors::OwoColorize;
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
-use time::{OffsetDateTime, UtcOffset};
 
 pub mod menu;
 use menu::{exactly_one_true, Modules, Panda3DModules};
@@ -34,7 +33,7 @@ fn setup_logger(verbose: usize) -> Result<()> {
             |out: fern::FormatCallback, message: &core::fmt::Arguments, record: &log::Record| {
                 out.finish(format_args!(
                     "[{}] {:>5} {message}",
-                    orthrus::current_time().unwrap(),
+                    time::current_time().unwrap(),
                     record.level(), //display colors on console but not in the log file
                 ));
             },
@@ -62,7 +61,7 @@ fn setup_logger(verbose: usize) -> Result<()> {
         .chain(stdout_config)
         .apply()?;
 
-    match UtcOffset::local_offset_at(OffsetDateTime::UNIX_EPOCH) {
+    match time::get_local_offset() {
         Ok(_) => {
             log::info!("Successfully set up logging using local timestamps");
         }
@@ -89,7 +88,7 @@ fn main() -> Result<()> {
             if let Some(index) = exactly_one_true(&[data.decompress]) {
                 match index {
                     0 => {
-                        let file = yaz0::decompress(&data.input)?;
+                        let file = yaz0::decompress_from_path(data.input)?;
                         let mut output = File::create(&data.output)?;
                         output.write_all(file.get_ref())?;
                     }

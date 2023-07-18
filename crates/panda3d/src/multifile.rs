@@ -1,9 +1,10 @@
-use orthrus_helper as orthrus;
+use orthrus_helper::time;
 use orthrus_helper::vfs::VirtualNode;
+use orthrus_helper::DataCursor;
 use orthrus_helper::{Error, Result};
 
 use std::io::prelude::*;
-use std::io::{Cursor, SeekFrom};
+use std::io::SeekFrom;
 use std::path::Path;
 
 pub struct Multifile {
@@ -27,10 +28,7 @@ impl Multifile {
     /// Returns either a [String] containing the header comment data, or an
     /// [`io::Error`] if it reaches EOF before finding the Multifile magic
     /// ("pmf\0\n\r").
-    fn parse_header_prefix<I>(input: &mut I) -> Result<String>
-    where
-        I: BufRead + Read + Seek,
-    {
+    fn parse_header_prefix(input: &mut DataCursor) -> Result<String> {
         let mut header_prefix = String::new();
         loop {
             let mut line = String::new();
@@ -52,8 +50,7 @@ impl Multifile {
     }
 
     pub fn open_read(&mut self, path: &Path, offset: u64) -> Result<()> {
-        let file = std::fs::read(path)?;
-        let mut data = Cursor::new(file);
+        let mut data = DataCursor::new_from_file(path)?;
         data.seek(SeekFrom::Start(offset))?;
         //handle special case where it can start with hashtags
         let header_text = Multifile::parse_header_prefix(&mut data)?;
@@ -73,8 +70,8 @@ impl Multifile {
             return Err(error);
         }
 
-        let major_version = orthrus::read_i16_le(&mut data)?;
-        let minor_version = orthrus::read_i16_le(&mut data)?;
+        let major_version = data.read_i16_le()?;
+        let minor_version = data.read_i16_le()?;
 
         log::info!("Multifile version v{major_version}.{minor_version}");
 
@@ -93,19 +90,20 @@ impl Multifile {
             return Err(error);
         }
 
-        let scale_factor = orthrus::read_u32_le(&mut data)?;
+        let scale_factor = data.read_u32_le()?;
         log::info!("Scale factor (for >4GB files): {}", scale_factor);
 
         if minor_version >= 1 {
-            let timestamp = orthrus::read_u32_le(&mut data)?;
+            let timestamp = data.read_u32_le()?;
             log::info!(
                 "File Unix timestamp: {} {}",
                 timestamp,
-                orthrus::format_timestamp(i64::from(timestamp))?
+                time::format_timestamp(i64::from(timestamp))?
             );
         }
 
         //Subfile loop, separate function probably
+        //let next_index = data.read_u32_le()?;
         Ok(())
     }
 }

@@ -1,7 +1,8 @@
-use orthrus::Result;
-use orthrus_helper as orthrus;
+use orthrus_helper::DataCursor;
+use orthrus_helper::Result;
 use std::io::prelude::*;
-use std::io::{Cursor, SeekFrom};
+use std::io::SeekFrom;
+use std::path::Path;
 
 /// Loads the file at `path` and tries to decompress it as a Yaz0 file.
 ///
@@ -12,19 +13,20 @@ use std::io::{Cursor, SeekFrom};
 /// # Panics
 ///
 /// Panics if the Yaz0 stream is malformed and it tries to read past file bounds.
-pub fn decompress(path: &str) -> Result<Cursor<Vec<u8>>> {
-    //acquire file data
-    let file = std::fs::read(path)?;
-    let mut input = Cursor::new(file);
+pub fn decompress_from_path<P>(path: P) -> Result<DataCursor>
+where
+    P: AsRef<Path>,
+{
+    //acquire file data, return an error if we can't
+    let mut input = DataCursor::new_from_file(path)?;
 
     //read header from the buffer
-    let _magic = orthrus::read_u32_be(&mut input)?; //"Yaz0"
-    let dec_size = orthrus::read_u32_be(&mut input)?;
-    let _alignment = orthrus::read_u32_be(&mut input)?; //0 on GC/Wii files
+    let _magic = input.read_u32_be()?; //"Yaz0"
+    let dec_size = input.read_u32_be()?;
+    let _alignment = input.read_u32_be()?; //0 on GC/Wii files
 
     //allocate decompression buffer
-    let buffer = vec![0u8; dec_size as usize];
-    let mut output = Cursor::new(buffer);
+    let mut output = DataCursor::new(vec![0u8; dec_size as usize]);
 
     //perform the actual decompression
     decompress_into(&mut input, &mut output)?;
@@ -47,11 +49,7 @@ pub fn decompress(path: &str) -> Result<Cursor<Vec<u8>>> {
 ///
 /// Panics if the Yaz0 stream is malformed and it tries to read past file bounds.
 //#[inline(never)]
-fn decompress_into<I, O>(input: &mut I, output: &mut O) -> Result<()>
-where
-    I: Read + Seek,
-    O: Read + Write + Seek,
-{
+fn decompress_into(input: &mut DataCursor, output: &mut DataCursor) -> Result<()> {
     let mut mask: u8 = 0;
     let mut flags: u8 = 0;
 
@@ -65,16 +63,16 @@ where
         //out of flag bits for RLE, load in a new byte
         if mask == 0 {
             mask = 1 << 7;
-            flags = orthrus::read_u8(input)?;
+            flags = input.read_u8()?;
         }
 
         if (flags & mask) == 0 {
             //do RLE copy
-            let code = orthrus::read_u16_be(input)?;
+            let code = input.read_u16_be()?;
 
             let back = u64::from((code & 0xFFF) + 1);
             let size = match code >> 12 {
-                0 => u64::from(orthrus::read_u8(input)?) + 0x12,
+                0 => u64::from(input.read_u8()?) + 0x12,
                 n => u64::from(n) + 2,
             };
 
@@ -83,13 +81,13 @@ where
             let position = output.stream_position()?;
             for n in position..position + size {
                 output.seek(SeekFrom::Start(n - back))?;
-                temp[0] = orthrus::read_u8(output)?;
+                temp[0] = output.read_u8()?;
                 output.seek(SeekFrom::Start(n))?;
                 output.write_all(&temp)?;
             }
         } else {
             //copy one byte
-            orthrus::copy_byte(input, output)?;
+            input.copy_byte(output)?;
         }
 
         mask >>= 1;
