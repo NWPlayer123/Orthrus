@@ -18,7 +18,7 @@ impl DataCursor {
     ///
     /// # Errors
     ///
-    /// Returns an [`IOError`] if unable to open the file or read it into memory
+    /// Returns an [`IOError`](crate::Error::Io) if unable to open the file or read it into memory
     pub fn new_from_file<P>(path: P) -> crate::Result<Self>
     where
         P: AsRef<Path>,
@@ -286,6 +286,14 @@ impl DataCursor {
         self.inner.get_ref()
     }
 
+    pub fn as_slice(&mut self) -> &[u8] {
+        self.inner.get_ref().as_slice()
+    }
+
+    pub fn as_mut_slice(&mut self) -> &mut [u8] {
+        self.inner.get_mut().as_mut_slice()
+    }
+
     #[must_use]
     pub fn position(&self) -> u64 {
         self.inner.position()
@@ -295,6 +303,10 @@ impl DataCursor {
 impl Read for DataCursor {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         self.inner.read(buf)
+    }
+
+    fn read_exact(&mut self, buf: &mut [u8]) -> std::io::Result<()> {
+        self.inner.read_exact(buf)
     }
 }
 

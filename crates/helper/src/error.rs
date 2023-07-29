@@ -1,4 +1,5 @@
 use thiserror::Error;
+use x509_parser::nom;
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -20,6 +21,12 @@ pub enum Error {
     #[error("log::SetLoggerError error: {0}")]
     LogInvalidLogger(#[from] log::SetLoggerError),
 
+    #[error("x509_parser::error::X509Error: {0}")]
+    X509Error(#[from] x509_parser::error::X509Error),
+
+    #[error("x509_parser::nom Error: {0}")]
+    X509NomError(x509_parser::error::X509Error),
+
     #[error("Invalid magic number: expected {expected}, got {got}")]
     InvalidMagic { expected: String, got: String },
 
@@ -28,6 +35,12 @@ pub enum Error {
 
     #[error("Unexpected end-of-file encountered")]
     EndOfFile,
+}
+
+impl From<nom::Err<x509_parser::error::X509Error>> for Error {
+    fn from(err: nom::Err<x509_parser::error::X509Error>) -> Self {
+        Self::X509NomError(err.into())
+    }
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

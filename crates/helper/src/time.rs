@@ -27,6 +27,11 @@ pub fn format_timestamp(timestamp: i64) -> crate::Result<String> {
     Ok(formatted)
 }
 
+/// Returns the local offset compared to UTC. Useful for testing if the current system supports local
+/// time zones, or if the program needs to operate off UTC.
+/// 
+/// # Errors
+/// Returns a [`TimeInvalidOffset`](crate::Error::TimeInvalidOffset) if unable to get the local offset.
 pub fn get_local_offset() -> crate::Result<UtcOffset> {
     Ok(UtcOffset::local_offset_at(OffsetDateTime::UNIX_EPOCH)?)
 }

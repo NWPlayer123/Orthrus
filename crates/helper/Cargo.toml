@@ -8,6 +8,8 @@ repository.workspace = true
 
 [dependencies]
 time = { version = "0.3", features = ["local-offset", "formatting", "macros"] }
+x509-parser = { version = "0.15", features = ["validate", "verify"] }
+log = { version = "0.4", features = ["std"] }
 hashbrown = "0.14"
 thiserror = "1.0"
-log = "0.4"
+itertools = "0.11"
