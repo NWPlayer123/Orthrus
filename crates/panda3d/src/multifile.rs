@@ -1,13 +1,11 @@
-use orthrus_helper::certificate::print_x509_info;
-use orthrus_helper::time;
-use orthrus_helper::vfs::VirtualNode;
-use orthrus_helper::DataCursor;
-use orthrus_helper::{Error, Result};
-
-use enumflags2::{bitflags, BitFlag, BitFlags};
 use std::io::prelude::*;
 use std::io::SeekFrom;
 use std::path::Path;
+
+use enumflags2::{bitflags, BitFlag, BitFlags};
+use orthrus_helper::certificate::print_x509_info;
+use orthrus_helper::vfs::VirtualNode;
+use orthrus_helper::{time, DataCursor, Error, Result};
 use x509_parser::prelude::*;
 
 /// This struct is mainly for readability in place of an unnamed tuple
@@ -30,8 +28,9 @@ struct Version {
 /// | 14 | Unix timestamp | u32 | 4 | The date the Multifile was last modified. |
 ///
 /// ## Subfile Format
-/// Following the Multifile header is a number of Subfiles. In order to parse the Multifile body, you read an index offset pointing to the next
-/// Subfile header and follow it until you reach a 0 which indicates the end of the Multifile.
+/// Following the Multifile header is a number of Subfiles. In order to parse the Multifile body,
+/// you read an index offset pointing to the next Subfile header and follow it until you reach a 0
+/// which indicates the end of the Multifile.
 ///
 /// The Subfile format (v1.1) is as follows:
 ///
@@ -58,9 +57,11 @@ struct Version {
 /// | `Text` | 1 << 6 (64) | The Subfile contains text instead of binary data. |
 ///
 /// ## Certificate Format
-/// The Multifile certificate is a binary blob that can contain multiple certificates, along with the actual signature of the Multifile. It starts with the
-/// length of the signature (u32), and then the actual signature. After that is the number of certificates (u32), and then a blob containing all certificates.
-/// The way it is meant to be read is to repeatedly call `d2i_X509` or an equivalent function that allows you to get the remaining bytes after parsing a certificate.
+/// The Multifile certificate is a binary blob that can contain multiple certificates, along with
+/// the actual signature of the Multifile. It starts with the length of the signature (u32), and
+/// then the actual signature. After that is the number of certificates (u32), and then a blob
+/// containing all certificates. The way it is meant to be read is to repeatedly call `d2i_X509` or
+/// an equivalent function that allows you to get the remaining bytes after parsing a certificate.
 pub struct Multifile {
     _root: VirtualNode,
     version: Version,
@@ -83,12 +84,10 @@ impl Multifile {
         }
     }
 
-    /// Parses a `Panda3D` Multifile pre-header, which allows for comment lines
-    /// starting with '#'.
+    /// Parses a `Panda3D` Multifile pre-header, which allows for comment lines starting with '#'.
     ///
-    /// Returns either a [String] containing the header comment data, or an
-    /// [`io::Error`] if it reaches EOF before finding the Multifile magic
-    /// ("pmf\0\n\r").
+    /// Returns either a [String] containing the header comment data, or an [`io::Error`] if it
+    /// reaches EOF before finding the Multifile magic ("pmf\0\n\r").
     fn parse_header_prefix(input: &mut DataCursor) -> Result<String> {
         let mut header_prefix = String::new();
         loop {

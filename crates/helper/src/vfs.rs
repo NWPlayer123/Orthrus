@@ -1,7 +1,8 @@
 //use hashbrown::HashMap;
 //use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-/* This whole file will most definitely change in the future as more params are needed */
+/* This whole file will most definitely change in the future as more params
+ * are needed */
 
 pub enum VirtualNode {
     File(VirtualFile),

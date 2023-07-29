@@ -1,17 +1,16 @@
-use orthrus_helper::time;
-use orthrus_helper::Result;
-use orthrus_panda3d as panda3d;
-use orthrus_yaz0 as yaz0;
-
-use owo_colors::OwoColorize;
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
 
+use orthrus_helper::{time, Result};
+use owo_colors::OwoColorize;
+use {orthrus_panda3d as panda3d, orthrus_yaz0 as yaz0};
+
 pub mod menu;
 use menu::{exactly_one_true, Modules, Panda3DModules};
 
-/* Ideally I want this to function more like readable-log-formatter from Python but this works for now */
+// Ideally I want this to function more like readable-log-formatter from Python but this works for
+// now
 fn setup_logger(verbose: usize) -> Result<()> {
     //Allow flexible logging level
     let level_filter = match verbose {
@@ -24,7 +23,7 @@ fn setup_logger(verbose: usize) -> Result<()> {
         _ => log::LevelFilter::Error,
     };
 
-    //initialize a base Dispatch we can apply our two profiles (output file and stdout) to
+    // initialize a base Dispatch we can apply our two profiles (output file and stdout) to
     let base_config = fern::Dispatch::new();
 
     let file_config = fern::Dispatch::new()

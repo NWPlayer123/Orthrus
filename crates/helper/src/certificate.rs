@@ -30,10 +30,10 @@ fn format_oid(oid: &Oid) -> String {
 
 /// This function prints all relevant information from an [X.509 Certificate](X509Certificate) to
 /// [`log::debug`] using the specified indentation.
-/// 
+///
 /// # Errors
-/// Will return an [`X509Error`](crate::Error::X509Error) if unable to parse the
-/// [To Be Signed Certificate](print_x509_tbs) or [Signature Algorithm](print_x509_signature_algorithm).
+/// Will return an [`X509Error`](crate::Error::X509Error) if unable to parse the [To Be Signed
+/// Certificate](print_x509_tbs) or [Signature Algorithm](print_x509_signature_algorithm).
 pub fn print_x509_info(cert: &X509Certificate) -> crate::Result<()> {
     let indent = 1;
     print_x509_tbs(&cert.tbs_certificate, indent)?;
@@ -50,11 +50,11 @@ pub fn print_x509_info(cert: &X509Certificate) -> crate::Result<()> {
 
 /// This function prints all relevant information from a [To Be Signed Certificate](TbsCertificate)
 /// to [`log::debug`] using the specified indentation.
-/// 
+///
 /// # Errors
-/// Will return an [`X509Error`](crate::Error::X509Error) if unable to parse the
-/// [Signature Algorithm](print_x509_signature_algorithm), [Validity](print_x509_validity), or
-/// [Public Key Info](print_x509_public_key_info).
+/// Will return an [`X509Error`](crate::Error::X509Error) if unable to parse the [Signature
+/// Algorithm](print_x509_signature_algorithm), [Validity](print_x509_validity), or [Public Key
+/// Info](print_x509_public_key_info).
 pub fn print_x509_tbs(cert: &TbsCertificate, indent: usize) -> crate::Result<()> {
     log::debug!("{}To Be Signed:", make_indent(indent));
     let version = cert.version;
@@ -108,13 +108,13 @@ pub fn print_x509_tbs(cert: &TbsCertificate, indent: usize) -> crate::Result<()>
     Ok(())
 }
 
-/// This function converts an [`AlgorithmIdentifier`] to a [`SignatureAlgorithm`] and prints all relevant
-/// information to [`log::debug`] using the specified indentation.
-/// 
+/// This function converts an [`AlgorithmIdentifier`] to a [`SignatureAlgorithm`] and prints all
+/// relevant information to [`log::debug`] using the specified indentation.
+///
 /// # Errors
-/// Will return an [`X509Error`](crate::Error::X509Error) if it fails to convert to a [`SignatureAlgorithm`],
-/// or if the algorithm encoding is invalid in the case of [RSASSA-PSS](SignatureAlgorithm::RSASSA_PSS) and
-/// [RSASSA-OAEP](SignatureAlgorithm::RSAAES_OAEP).
+/// Will return an [`X509Error`](crate::Error::X509Error) if it fails to convert to a
+/// [`SignatureAlgorithm`], or if the algorithm encoding is invalid in the case of
+/// [RSASSA-PSS](SignatureAlgorithm::RSASSA_PSS) and [RSASSA-OAEP](SignatureAlgorithm::RSAAES_OAEP).
 pub fn print_x509_signature_algorithm(
     algo: &AlgorithmIdentifier,
     indent: usize,
@@ -176,10 +176,12 @@ pub fn print_x509_signature_algorithm(
     Ok(())
 }
 
-/// This function and prints all [Validity] information to [`log::debug`] using the specified indentation.
-/// 
+/// This function and prints all [Validity] information to [`log::debug`] using the specified
+/// indentation.
+///
 /// # Errors
-/// Returns [`TimeInvalidRange`](crate::Error::TimeInvalidRange) if unable to convert the timestamp to a valid date.
+/// Returns [`TimeInvalidRange`](crate::Error::TimeInvalidRange) if unable to convert the timestamp
+/// to a valid date.
 pub fn print_x509_validity(valid: &Validity, indent: usize) -> crate::Result<()> {
     log::debug!("{}Validity:", make_indent(indent));
     log::debug!(
@@ -200,8 +202,8 @@ pub fn print_x509_validity(valid: &Validity, indent: usize) -> crate::Result<()>
     Ok(())
 }
 
-/// This function parses an [`AlgorithmIdentifier`] and prints the Object Identifier and Parameters to
-/// [`log::debug`] using the specified indentation.
+/// This function parses an [`AlgorithmIdentifier`] and prints the Object Identifier and Parameters
+/// to [`log::debug`] using the specified indentation.
 pub fn print_x509_digest_algorithm(algo: &AlgorithmIdentifier, indent: usize) {
     let temp = format_oid(&algo.algorithm);
     log::debug!("{}Object Identifier: {}", make_indent(indent), temp);
@@ -223,9 +225,9 @@ pub fn print_x509_digest_algorithm(algo: &AlgorithmIdentifier, indent: usize) {
     }
 }
 
-/// This function parses a [`SubjectPublicKeyInfo`] and prints all relevant information to [`log::debug`]
-/// using the specified indentation.
-/// 
+/// This function parses a [`SubjectPublicKeyInfo`] and prints all relevant information to
+/// [`log::debug`] using the specified indentation.
+///
 /// # Errors
 /// Will return an [`X509Error`](crate::Error::X509Error) if it fails to parse the public key info.
 pub fn print_x509_public_key_info(info: &SubjectPublicKeyInfo, indent: usize) -> crate::Result<()> {
@@ -357,11 +359,13 @@ pub fn get_extension_order(ext: &ParsedExtension) -> usize {
     }
 }
 
-/// Parses an [`X509Extension`] and prints all relevant information to [`log::debug`] using the specified
-/// indentation.
-/// 
-/// Currently, it only supports [`AuthorityKeyIdentifier`], [`SubjectKeyIdentifier`], [`KeyUsage`],
-/// [`BasicConstraints`], and [`ExtendedKeyUsage`], it will print the debug output of any other extension.
+/// Parses an [`X509Extension`] and prints all relevant information to [`log::debug`] using the
+/// specified indentation.
+///
+/// Currently, it only supports [`AuthorityKeyIdentifier`],
+/// [`SubjectKeyIdentifier`](ParsedExtension::SubjectKeyIdentifier), [`KeyUsage`],
+/// [`BasicConstraints`], and [`ExtendedKeyUsage`], it will print the debug output of any other
+/// extension.
 pub fn print_x509_extension(extension: &X509Extension, indent: usize) {
     let parsed = extension.parsed_extension();
     log::debug!(

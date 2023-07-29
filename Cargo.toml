@@ -28,9 +28,10 @@ enable-ansi-support = "0.2"
 [workspace]
 members = ["crates/*"]
 
-# Workspace members should have their own details, e.g. a version bump on yaz0 should not necessarily
-# require a version bump on all other modules, along with their own authors since this repo will get
-# very large in the future, with different people focusing on features in a specific module
+# Workspace members should have their own details, e.g. a version bump on yaz0 should not
+# necessarily require a version bump on all other modules, along with their own authors since this
+# repo will get very large in the future, with different people focusing on features in a specific
+# module
 [workspace.package]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/NWPlayer123/Orthrus"

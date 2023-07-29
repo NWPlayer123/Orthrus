@@ -9,7 +9,8 @@ pub const TIME_FORMAT: &[FormatItem] =
 ///
 /// # Errors
 ///
-/// Returns [`TimeInvalidOffset`](crate::Error::TimeInvalidOffset) if unable to determine the current time zone.
+/// Returns [`TimeInvalidOffset`](crate::Error::TimeInvalidOffset) if unable to determine the
+/// current time zone.
 pub fn current_time() -> crate::Result<String> {
     let time = OffsetDateTime::now_local()?;
     let formatted = time.format(TIME_FORMAT)?;
@@ -20,18 +21,20 @@ pub fn current_time() -> crate::Result<String> {
 ///
 /// # Errors
 ///
-/// Returns [`TimeInvalidRange`](crate::Error::TimeInvalidRange) if unable to convert the timestamp to a valid date.
+/// Returns [`TimeInvalidRange`](crate::Error::TimeInvalidRange) if unable to convert the timestamp
+/// to a valid date.
 pub fn format_timestamp(timestamp: i64) -> crate::Result<String> {
     let time = OffsetDateTime::from_unix_timestamp(timestamp)?;
     let formatted = time.format(TIME_FORMAT)?;
     Ok(formatted)
 }
 
-/// Returns the local offset compared to UTC. Useful for testing if the current system supports local
-/// time zones, or if the program needs to operate off UTC.
-/// 
+/// Returns the local offset compared to UTC. Useful for testing if the current system supports
+/// local time zones, or if the program needs to operate off UTC.
+///
 /// # Errors
-/// Returns a [`TimeInvalidOffset`](crate::Error::TimeInvalidOffset) if unable to get the local offset.
+/// Returns a [`TimeInvalidOffset`](crate::Error::TimeInvalidOffset) if unable to get the local
+/// offset.
 pub fn get_local_offset() -> crate::Result<UtcOffset> {
     Ok(UtcOffset::local_offset_at(OffsetDateTime::UNIX_EPOCH)?)
 }
