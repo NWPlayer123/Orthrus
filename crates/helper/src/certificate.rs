@@ -301,7 +301,7 @@ pub fn print_x509_public_key_info(info: &SubjectPublicKeyInfo, indent: usize) ->
 
 #[must_use]
 /// This returns the raw enum names for [`ParsedExtension`], instead of using camelCase for debug.
-pub fn get_extension_name(extension: &ParsedExtension) -> &'static str {
+pub const fn get_extension_name(extension: &ParsedExtension) -> &'static str {
     match extension {
         ParsedExtension::UnsupportedExtension { .. } => "UnsupportedExtension",
         ParsedExtension::ParseError { .. } => "ParseError",
@@ -331,7 +331,7 @@ pub fn get_extension_name(extension: &ParsedExtension) -> &'static str {
 
 #[must_use]
 /// This returns the preferred sorting order for [X509 Extensions](X509Extension).
-pub fn get_extension_order(ext: &ParsedExtension) -> usize {
+pub const fn get_extension_order(ext: &ParsedExtension) -> usize {
     match ext {
         ParsedExtension::AuthorityKeyIdentifier(_) => 0,
         ParsedExtension::SubjectKeyIdentifier(_) => 1,
@@ -377,83 +377,92 @@ pub fn print_x509_extension(extension: &X509Extension, indent: usize) {
 
     match parsed {
         ParsedExtension::AuthorityKeyIdentifier(identifier) => {
-            if let Some(key_id) = &identifier.key_identifier {
-                log::debug!(
-                    "{}Identifier: {}",
-                    make_indent(indent + 1),
-                    octet_string(key_id.0)
-                );
-            }
-            if let Some(issuer) = &identifier.authority_cert_issuer {
-                for name in issuer {
-                    log::debug!("{}Issuer: {}", make_indent(indent + 1), name);
-                }
-            }
-            if let Some(serial) = identifier.authority_cert_serial {
-                log::debug!(
-                    "{}Serial: {}",
-                    make_indent(indent + 1),
-                    octet_string(serial)
-                );
-            }
+            print_x509_authority_key_identifier(identifier, indent + 1);
         }
         ParsedExtension::SubjectKeyIdentifier(identifier) => {
-            log::debug!(
-                "{}Identifier: {}",
-                make_indent(indent + 1),
-                octet_string(identifier.0)
-            );
+            print_x509_subject_key_identifier(identifier, indent + 1);
         }
         ParsedExtension::KeyUsage(usage) => {
-            log::debug!("{}Key Usage: {}", make_indent(indent + 1), usage);
+            print_x509_key_usage(usage, indent + 1);
         }
         ParsedExtension::BasicConstraints(constraints) => {
-            log::debug!(
-                "{}Certificate Authority: {}",
-                make_indent(indent + 1),
-                constraints.ca
-            );
-            if constraints.ca {
-                if let Some(value) = constraints.path_len_constraint {
-                    log::debug!(
-                        "{}Certification Path Limit: {}",
-                        make_indent(indent + 1),
-                        value
-                    );
-                }
-            }
+            print_x509_basic_constraints(constraints, indent + 1);
         }
         ParsedExtension::ExtendedKeyUsage(usage) => {
-            if usage.any {
-                log::debug!("{}Any: true", make_indent(indent + 1));
-            }
-            if usage.server_auth {
-                log::debug!("{}Server Authentication: true", make_indent(indent + 1));
-            }
-            if usage.client_auth {
-                log::debug!("{}Client Authentication: true", make_indent(indent + 1));
-            }
-            if usage.code_signing {
-                log::debug!("{}Code Signing: true", make_indent(indent + 1));
-            }
-            if usage.email_protection {
-                log::debug!("{}Email Protection: true", make_indent(indent + 1));
-            }
-            if usage.time_stamping {
-                log::debug!("{}Time Stamping: true", make_indent(indent + 1));
-            }
-            if usage.ocsp_signing {
-                log::debug!(
-                    "{}Certificate Status Signing: true",
-                    make_indent(indent + 1)
-                );
-            }
-            for oid in &usage.other {
-                log::debug!("{}Other: {}", make_indent(indent + 1), oid);
-            }
+            print_x509_extended_key_usage(usage, indent + 1);
         }
         x => {
             log::debug!("{}{:?}", make_indent(indent + 1), x);
         }
+    }
+}
+
+fn print_x509_authority_key_identifier(identifier: &AuthorityKeyIdentifier, indent: usize) {
+    if let Some(key_id) = &identifier.key_identifier {
+        log::debug!(
+            "{}Identifier: {}",
+            make_indent(indent),
+            octet_string(key_id.0)
+        );
+    }
+    if let Some(issuer) = &identifier.authority_cert_issuer {
+        for name in issuer {
+            log::debug!("{}Issuer: {}", make_indent(indent), name);
+        }
+    }
+    if let Some(serial) = identifier.authority_cert_serial {
+        log::debug!("{}Serial: {}", make_indent(indent), octet_string(serial));
+    }
+}
+
+fn print_x509_subject_key_identifier(identifier: &KeyIdentifier, indent: usize) {
+    log::debug!(
+        "{}Identifier: {}",
+        make_indent(indent),
+        octet_string(identifier.0)
+    );
+}
+
+fn print_x509_key_usage(usage: &KeyUsage, indent: usize) {
+    log::debug!("{}Key Usage: {}", make_indent(indent), usage);
+}
+
+fn print_x509_basic_constraints(constraints: &BasicConstraints, indent: usize) {
+    log::debug!(
+        "{}Certificate Authority: {}",
+        make_indent(indent),
+        constraints.ca
+    );
+    if constraints.ca {
+        if let Some(value) = constraints.path_len_constraint {
+            log::debug!("{}Certification Path Limit: {}", make_indent(indent), value);
+        }
+    }
+}
+
+fn print_x509_extended_key_usage(usage: &ExtendedKeyUsage, indent: usize) {
+    if usage.any {
+        log::debug!("{}Any: true", make_indent(indent));
+    }
+    if usage.server_auth {
+        log::debug!("{}Server Authentication: true", make_indent(indent));
+    }
+    if usage.client_auth {
+        log::debug!("{}Client Authentication: true", make_indent(indent));
+    }
+    if usage.code_signing {
+        log::debug!("{}Code Signing: true", make_indent(indent));
+    }
+    if usage.email_protection {
+        log::debug!("{}Email Protection: true", make_indent(indent));
+    }
+    if usage.time_stamping {
+        log::debug!("{}Time Stamping: true", make_indent(indent));
+    }
+    if usage.ocsp_signing {
+        log::debug!("{}Certificate Status Signing: true", make_indent(indent));
+    }
+    for oid in &usage.other {
+        log::debug!("{}Other: {}", make_indent(indent), oid);
     }
 }

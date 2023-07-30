@@ -9,7 +9,7 @@ pub struct DataCursor {
 impl DataCursor {
     #[must_use]
     pub fn new(data: Vec<u8>) -> Self {
-        DataCursor {
+        Self {
             inner: Cursor::new(data),
         }
     }
@@ -24,7 +24,7 @@ impl DataCursor {
         P: AsRef<Path>,
     {
         let data = std::fs::read(path)?;
-        Ok(DataCursor::new(data))
+        Ok(Self::new(data))
     }
 
     /// Reads a u8 and writes it to the output
@@ -32,7 +32,7 @@ impl DataCursor {
     /// # Errors
     ///
     /// Returns an [`IOError`](crate::Error::Io) if unable to read or write enough bytes
-    pub fn copy_byte(&mut self, output: &mut DataCursor) -> crate::Result<()> {
+    pub fn copy_byte(&mut self, output: &mut Self) -> crate::Result<()> {
         let mut buffer = [0; 1];
         self.inner.read_exact(&mut buffer)?;
         output.write_all(&buffer)?;

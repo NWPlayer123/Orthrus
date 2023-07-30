@@ -11,8 +11,8 @@ pub enum VirtualNode {
 
 impl VirtualNode {
     #[must_use]
-    pub fn new_directory(name: String) -> Self {
-        VirtualNode::Directory(VirtualDirectory { _name: name })
+    pub const fn new_directory(name: String) -> Self {
+        Self::Directory(VirtualDirectory { _name: name })
     }
 }
 

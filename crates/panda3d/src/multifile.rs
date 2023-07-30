@@ -111,11 +111,7 @@ impl Multifile {
 
     #[must_use]
     pub fn current_version(&self) -> String {
-        format!(
-            "{}.{}",
-            Multifile::CURRENT_MAJOR_VER,
-            Multifile::CURRENT_MINOR_VER
-        )
+        format!("{}.{}", Self::CURRENT_MAJOR_VER, Self::CURRENT_MINOR_VER)
     }
 
     #[must_use]
@@ -129,7 +125,7 @@ impl Multifile {
         data.seek(SeekFrom::Start(offset))?;
 
         //handle special case where it can start with hashtags
-        let header_text = Multifile::parse_header_prefix(&mut data)?;
+        let header_text = Self::parse_header_prefix(&mut data)?;
         if !header_text.is_empty() {
             log::info!("Multifile pre-header:\n{}\n", header_text);
         }
@@ -138,9 +134,9 @@ impl Multifile {
         let mut magic = [0u8; 6];
         data.read_exact(&mut magic)?;
 
-        if magic != Multifile::MAGIC {
+        if magic != Self::MAGIC {
             let error = Error::InvalidMagic {
-                expected: format!("{:?}", std::str::from_utf8(&Multifile::MAGIC)?),
+                expected: format!("{:?}", std::str::from_utf8(&Self::MAGIC)?),
                 got: format!("{:?}", std::str::from_utf8(&magic)?),
             };
             log::error!("{}", error.to_string());
@@ -154,8 +150,8 @@ impl Multifile {
         };
         log::info!("Multifile version v{}", self.version());
 
-        if self.version.major != Multifile::CURRENT_MAJOR_VER
-            || self.version.minor > Multifile::CURRENT_MINOR_VER
+        if self.version.major != Self::CURRENT_MAJOR_VER
+            || self.version.minor > Self::CURRENT_MINOR_VER
         {
             let error = Error::UnknownVersion {
                 expected: self.current_version(),
@@ -280,7 +276,7 @@ struct Subfile {
 impl Subfile {
     #[must_use]
     pub fn new() -> Self {
-        Subfile {
+        Self {
             offset: 0,
             data_length: 0,
             flags: SubfileFlags::empty(),
