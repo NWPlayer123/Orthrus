@@ -31,26 +31,23 @@
 //!       time in a loop.**
 //!     * For however many bytes need to be copied, copy one byte from (output - back) to output.
 use std::io::prelude::*;
-use std::io::SeekFrom;
 use std::path::Path;
 
 use orthrus_helper::{DataCursor, Result};
 
 /// Loads the file at `path` and tries to decompress it as a Yaz0 file.
-///
+/// 
 /// # Errors
-///
 /// Returns an [IOError](orthrus_helper::Error::Io) if `path` does not exist, or read/write fails.
-///
+/// 
 /// # Panics
-///
 /// Panics if the Yaz0 stream is malformed and tries to read past file bounds.
 pub fn decompress_from_path<P>(path: P) -> Result<DataCursor>
 where
     P: AsRef<Path>,
 {
     //acquire file data, return an error if we can't
-    let mut input = DataCursor::new_from_file(path)?;
+    let mut input = DataCursor::from_path(path)?;
 
     //read header from the buffer
     let _magic = input.read_u32_be()?; //"Yaz0"
@@ -72,25 +69,20 @@ where
 /// This function makes no guarantees about the validity of the Yaz0 stream. It requires that input
 /// is a valid Yaz0 file including the header, and that output is large enough to write the
 /// decompressed data into.
-///
+/// 
 /// # Errors
-///
 /// Returns a [`std::io::Error`] if read/write fails.
-///
+/// 
 /// # Panics
-///
 /// Panics if the Yaz0 stream is malformed and it tries to read past file bounds.
 fn decompress_into(input: &mut DataCursor, output: &mut DataCursor) -> Result<()> {
     let mut mask: u8 = 0;
     let mut flags: u8 = 0;
 
-    //align input to start of compressed Yaz0 stream
-    input.seek(SeekFrom::Start(0x10))?;
-    //get size of output buffer for our loop, align to start of buffer
-    let output_size: u64 = output.seek(SeekFrom::End(0))?;
-    output.seek(SeekFrom::Start(0))?;
+    input.set_position(0x10);
+    output.set_position(0);
 
-    while output.stream_position()? < output_size {
+    while output.position() < output.len() {
         //out of flag bits for RLE, load in a new byte
         if mask == 0 {
             mask = 1 << 7;
@@ -101,19 +93,19 @@ fn decompress_into(input: &mut DataCursor, output: &mut DataCursor) -> Result<()
             //do RLE copy
             let code = input.read_u16_be()?;
 
-            let back = u64::from((code & 0xFFF) + 1);
+            let back = usize::from((code & 0xFFF) + 1);
             let size = match code >> 12 {
-                0 => u64::from(input.read_u8()?) + 0x12,
-                n => u64::from(n) + 2,
+                0 => usize::from(input.read_u8()?) + 0x12,
+                n => usize::from(n) + 2,
             };
 
             //the ranges can overlap so we need to copy byte-by-byte
             let mut temp = [0u8; 1];
-            let position = output.stream_position()?;
+            let position = output.position();
             for n in position..position + size {
-                output.seek(SeekFrom::Start(n - back))?;
+                output.set_position(n - back);
                 temp[0] = output.read_u8()?;
-                output.seek(SeekFrom::Start(n))?;
+                output.set_position(n);
                 output.write_all(&temp)?;
             }
         } else {

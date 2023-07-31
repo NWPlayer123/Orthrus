@@ -1,5 +1,4 @@
 use std::io::prelude::*;
-use std::io::SeekFrom;
 use std::path::Path;
 
 use enumflags2::{bitflags, BitFlag, BitFlags};
@@ -103,7 +102,7 @@ impl Multifile {
             if line.starts_with('#') {
                 header_prefix.push_str(&line);
             } else {
-                input.seek(SeekFrom::Current(0 - len as i64))?;
+                input.set_position(input.position() - len);
                 return Ok(header_prefix);
             }
         }
@@ -119,10 +118,10 @@ impl Multifile {
         format!("{}.{}", self.version.major, self.version.minor)
     }
 
-    pub fn open_read(&mut self, path: &Path, offset: u64) -> Result<()> {
+    pub fn open_read(&mut self, path: &Path, offset: usize) -> Result<()> {
         //acquire file data
-        let mut data = DataCursor::new_from_file(path)?;
-        data.seek(SeekFrom::Start(offset))?;
+        let mut data = DataCursor::from_path(path)?;
+        data.set_position(offset);
 
         //handle special case where it can start with hashtags
         let header_text = Self::parse_header_prefix(&mut data)?;
@@ -220,15 +219,15 @@ impl Multifile {
             log::debug!(""); //new line to make it easier to read
 
             if subfile.flags.contains(SubfileFlags::Signature) {
-                data.seek(SeekFrom::Start(subfile.offset.into()))?;
+                data.set_position(subfile.offset as usize);
 
                 let mut certificate = DataCursor::new(vec![0u8; subfile.length as usize]);
-                data.read_exact(certificate.as_mut_slice())?;
+                data.read_exact(certificate.as_mut())?;
                 let signature_length = certificate.read_u32_le()?;
-                certificate.seek(SeekFrom::Current(signature_length.into()))?;
+                certificate.set_position(certificate.position() + signature_length as usize);
                 let num_certificates = certificate.read_u32_le()?;
 
-                let mut certificate_data = certificate.as_slice();
+                let mut certificate_data = certificate.as_ref();
                 for certificate_number in 1..=num_certificates {
                     log::debug!("Certificate {}", certificate_number);
                     let (rest, cert) = X509Certificate::from_der(certificate_data)?;
@@ -238,7 +237,7 @@ impl Multifile {
                 }
             }
 
-            data.seek(SeekFrom::Start(next_index.into()))?;
+            data.set_position(next_index as usize);
             next_index = data.read_u32_le()? * self.scale_factor;
         }
         Ok(())

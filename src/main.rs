@@ -88,7 +88,7 @@ fn main() -> Result<()> {
                     0 => {
                         let file = yaz0::decompress_from_path(data.input)?;
                         let mut output = File::create(&data.output)?;
-                        output.write_all(file.get_ref())?;
+                        output.write_all(file.as_ref())?;
                     }
                     _ => unreachable!("Oops! Forgot to cover all operations."),
                 }
