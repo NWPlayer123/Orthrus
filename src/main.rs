@@ -1,6 +1,5 @@
 use std::fs::File;
 use std::io::prelude::*;
-use std::path::Path;
 
 use orthrus_helper::{time, Result};
 use owo_colors::OwoColorize;
@@ -54,10 +53,7 @@ fn setup_logger(verbose: usize) -> Result<()> {
         .level(level_filter)
         .chain(std::io::stdout());
 
-    base_config
-        .chain(file_config)
-        .chain(stdout_config)
-        .apply()?;
+    base_config.chain(file_config).chain(stdout_config).apply()?;
 
     match time::get_local_offset() {
         Ok(_) => {
@@ -101,8 +97,7 @@ fn main() -> Result<()> {
                 if let Some(index) = exactly_one_true(&[data.extract]) {
                     match index {
                         0 => {
-                            let mut multifile = panda3d::Multifile::new();
-                            multifile.open_read(Path::new(&data.input), 0)?;
+                            let _multifile = panda3d::Multifile::from_path(data.input, 0)?;
                         }
                         _ => unreachable!("Oops! Forgot to cover all operations."),
                     }

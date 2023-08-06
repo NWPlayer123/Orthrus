@@ -8,3 +8,4 @@ newline_style = "Windows"
 reorder_impl_items = true
 group_imports = "StdExternalCrate"
 use_field_init_shorthand = true
+chain_width = 90

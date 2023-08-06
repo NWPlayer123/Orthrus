@@ -3,28 +3,31 @@ use x509_parser::nom;
 
 #[derive(Error, Debug)]
 pub enum Error {
-    #[error("I/O error: {0}")]
+    #[error(transparent)]
     Io(#[from] std::io::Error),
 
-    #[error("UTF-8 error: {0}")]
+    #[error(transparent)]
+    IntError(#[from] core::num::TryFromIntError),
+
+    #[error(transparent)]
     Utf8(#[from] std::str::Utf8Error),
 
-    #[error("time::IndeterminateOffset error: {0}")]
+    #[error(transparent)]
     TimeInvalidOffset(#[from] time::error::IndeterminateOffset),
 
-    #[error("time::Format error: {0}")]
+    #[error(transparent)]
     TimeInvalidFormat(#[from] time::error::Format),
 
-    #[error("time::ComponentRange error: {0}")]
+    #[error(transparent)]
     TimeInvalidRange(#[from] time::error::ComponentRange),
 
-    #[error("log::SetLoggerError error: {0}")]
+    #[error(transparent)]
     LogInvalidLogger(#[from] log::SetLoggerError),
 
-    #[error("x509_parser::error::X509Error: {0}")]
+    #[error(transparent)]
     X509Error(#[from] x509_parser::error::X509Error),
 
-    #[error("x509_parser::nom Error: {0}")]
+    #[error(transparent)]
     X509NomError(x509_parser::error::X509Error),
 
     #[error("Invalid magic number: expected {expected}, got {got}")]

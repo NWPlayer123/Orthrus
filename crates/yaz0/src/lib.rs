@@ -36,16 +36,15 @@ use std::path::Path;
 use orthrus_helper::{DataCursor, Result};
 
 /// Loads the file at `path` and tries to decompress it as a Yaz0 file.
-/// 
+///
 /// # Errors
-/// Returns an [IOError](orthrus_helper::Error::Io) if `path` does not exist, or read/write fails.
-/// 
+/// This function will return an error if `path` does not exist, if it lacks permission to read
+/// the `metadata` of `path`, if unable to convert the filesize to usize, or if
+/// [`read_exact`](DataCursor::read_exact) is unable to complete.
+///
 /// # Panics
 /// Panics if the Yaz0 stream is malformed and tries to read past file bounds.
-pub fn decompress_from_path<P>(path: P) -> Result<DataCursor>
-where
-    P: AsRef<Path>,
-{
+pub fn decompress_from_path<P: AsRef<Path>>(path: P) -> Result<DataCursor> {
     //acquire file data, return an error if we can't
     let mut input = DataCursor::from_path(path)?;
 
@@ -69,12 +68,13 @@ where
 /// This function makes no guarantees about the validity of the Yaz0 stream. It requires that input
 /// is a valid Yaz0 file including the header, and that output is large enough to write the
 /// decompressed data into.
-/// 
+///
 /// # Errors
 /// Returns a [`std::io::Error`] if read/write fails.
-/// 
+///
 /// # Panics
 /// Panics if the Yaz0 stream is malformed and it tries to read past file bounds.
+#[inline(never)]
 fn decompress_into(input: &mut DataCursor, output: &mut DataCursor) -> Result<()> {
     let mut mask: u8 = 0;
     let mut flags: u8 = 0;

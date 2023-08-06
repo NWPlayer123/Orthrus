@@ -1,8 +1,49 @@
-use itertools::Itertools;
+use core::fmt;
+use core::fmt::Write;
+
 use x509_parser::der_parser::Oid;
 use x509_parser::prelude::*;
 use x509_parser::public_key::PublicKey;
 use x509_parser::signature_algorithm::SignatureAlgorithm;
+use ouroboros::self_referencing;
+
+#[self_referencing]
+pub struct Certificate {
+    der_buf: Box<[u8]>,
+    #[borrows(der_buf)]
+    #[covariant]
+    cert: X509Certificate<'this>,
+}
+
+impl Certificate {
+    pub fn from_der(der: &[u8]) -> crate::Result<Self> {
+
+        let (rest, _cert) = X509Certificate::from_der(der)?;
+        let der_buf = der[..(der.len() - rest.len())].into();
+
+        CertificateTryBuilder {
+            der_buf,
+            cert_builder: |buf| match X509Certificate::from_der(buf) {
+                Ok((_rest, cert)) => Ok(cert),
+                Err(err) => Err(err.into())
+            }
+        }.try_build()
+    }
+
+    pub fn cert(&self) -> &X509Certificate<'_> {
+        self.borrow_cert()
+    }
+
+    pub fn len(&self) -> usize {
+        self.borrow_der_buf().len()
+    }
+}
+
+impl fmt::Debug for Certificate {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.borrow_cert().fmt(f)
+    }
+}
 
 fn make_indent(indent: usize) -> String {
     "    ".repeat(indent)
@@ -10,18 +51,24 @@ fn make_indent(indent: usize) -> String {
 
 fn octet_string(data: &[u8]) -> String {
     data.iter()
-        .map(|b| format!("{b:02X}"))
-        .collect::<Vec<_>>()
-        .join(":")
+        .fold(String::new(), |mut output, b| {
+            write!(&mut output, "{b:02X}:").unwrap();
+            output
+        })
+        .trim_end_matches(':')
+        .to_string()
 }
 
 fn hex_string(data: &[u8]) -> Vec<String> {
-    data.iter()
-        .map(|b| format!("{b:02X}"))
-        .collect_vec()
-        .chunks(16)
-        .map(|chunk| chunk.join(":"))
-        .collect_vec()
+    data.chunks(16)
+        .map(|chunk| {
+            chunk.iter().fold(String::new(), |mut output, b| {
+                write!(&mut output, "{b:02X}:").unwrap();
+                output
+            })
+        })
+        .map(|line| format!("{:16}", line.trim_end_matches(':')))
+        .collect()
 }
 
 fn format_oid(oid: &Oid) -> String {

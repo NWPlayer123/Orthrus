@@ -7,9 +7,12 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-time = { version = "0.3", features = ["local-offset", "formatting", "macros"] }
-x509-parser = { version = "0.15", features = ["validate", "verify"] }
 log = { version = "0.4", features = ["std"] }
+time = { version = "0.3", features = ["formatting", "local-offset", "macros"] }
+x509-parser = { version = "0.15", features = ["validate", "verify"] }
+
+bitflags = "2.3"
+compact_str = "0.7"
 hashbrown = "0.14"
+ouroboros = "0.17"
 thiserror = "1.0"
-itertools = "0.11"

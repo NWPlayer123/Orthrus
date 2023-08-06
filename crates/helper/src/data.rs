@@ -8,6 +8,7 @@ use std::path::Path;
 /// In the future, `DataCursor` will be rewritten with
 /// [const_generics](https://github.com/rust-lang/project-const-generics) to reduce boilerplate,
 /// along with improving the ergonomics of reading and writing.
+#[derive(Default)]
 pub struct DataCursor {
     data: Box<[u8]>,
     pos: usize,
@@ -24,11 +25,14 @@ impl DataCursor {
     /// Constructs a new `DataCursor` using the specified `path`.
     ///
     /// # Errors
-    /// This function will return an error if `path` does not exist, if it lacks permission to read
-    /// the `metadata` of `path`, or if [`read_exact`](Read::read_exact) is unable to complete.
+    /// This function will return an error if:
+    /// * `path` does not exist
+    /// * lacking permission to read metadata
+    /// * unable to convert the filesize to usize
+    /// * [`read_exact`](DataCursor::read_exact) fails
     pub fn from_path<P: AsRef<Path>>(path: P) -> crate::Result<Self> {
         let mut file = File::open(path)?;
-        let size = file.metadata()?.len() as usize;
+        let size = usize::try_from(file.metadata()?.len())?;
         let mut data = vec![0u8; size].into_boxed_slice();
         file.read_exact(&mut data)?;
         Ok(Self { data, pos: 0 })
@@ -266,7 +270,8 @@ impl DataCursor {
         Ok(f64::from_le_bytes(buffer))
     }
 
-    pub fn position(&self) -> usize {
+    #[must_use]
+    pub const fn position(&self) -> usize {
         self.pos
     }
 
@@ -274,10 +279,17 @@ impl DataCursor {
         self.pos = pos;
     }
 
-    pub fn len(&self) -> usize {
+    #[must_use]
+    pub const fn len(&self) -> usize {
         self.data.len()
     }
 
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    #[must_use]
     pub fn remaining_slice(&self) -> &[u8] {
         let len = self.pos.min(self.data.len());
         &self.data[len..]

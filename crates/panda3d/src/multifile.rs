@@ -1,21 +1,30 @@
+use core::fmt;
+use core::str::from_utf8;
 use std::io::prelude::*;
 use std::path::Path;
 
-use enumflags2::{bitflags, BitFlag, BitFlags};
-use orthrus_helper::certificate::print_x509_info;
-use orthrus_helper::vfs::VirtualNode;
+use bitflags::bitflags;
+use compact_str::CompactString;
+use orthrus_helper::certificate::{print_x509_info, Certificate};
+use orthrus_helper::vfs::{Metadata, VirtualFolder};
 use orthrus_helper::{time, DataCursor, Error, Result};
-use x509_parser::prelude::*;
 
 /// This struct is mainly for readability in place of an unnamed tuple
+#[derive(PartialEq)]
 struct Version {
     major: i16,
     minor: i16,
 }
 
-/// # Multifile format
+impl fmt::Display for Version {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}.{}", self.major, self.minor)
+    }
+}
+
 /// A Multifile is a container format used by `Panda3D` to distribute assets, similar to a .zip.
 ///
+/// # Multifile format
 /// The Multifile specification (currently v1.1, little-endian) is as follows:
 ///
 /// | Offset | Field | Type | Length | Notes |
@@ -62,183 +71,123 @@ struct Version {
 /// containing all certificates. The way it is meant to be read is to repeatedly call `d2i_X509` or
 /// an equivalent function that allows you to get the remaining bytes after parsing a certificate.
 pub struct Multifile {
-    _root: VirtualNode,
+    root: VirtualFolder<Subfile>,
     version: Version,
     scale_factor: u32,
     timestamp: u32,
 }
 
 impl Multifile {
-    const CURRENT_MAJOR_VER: i16 = 1;
-    const CURRENT_MINOR_VER: i16 = 1;
+    const CURRENT_VERSION: Version = Version { major: 1, minor: 1 };
     const MAGIC: [u8; 6] = *b"pmf\0\n\r";
-
-    #[must_use]
-    pub fn new() -> Self {
-        Self {
-            _root: VirtualNode::new_directory("/".to_string()),
-            version: Version { major: 0, minor: 0 },
-            scale_factor: 1,
-            timestamp: 0,
-        }
-    }
 
     /// Parses a `Panda3D` Multifile pre-header, which allows for comment lines starting with '#'.
     ///
-    /// Returns either a [String] containing the header comment data, or an [`io::Error`] if it
-    /// reaches EOF before finding the Multifile magic ("pmf\0\n\r").
+    /// Returns either a [String] containing the header comment data, or an [`IOError`](Error::Io)
+    /// if it reaches EOF before finding the Multifile magic ("pmf\0\n\r").
     fn parse_header_prefix(input: &mut DataCursor) -> Result<String> {
         let mut header_prefix = String::new();
+        let mut line = String::new();
+
         loop {
-            let mut line = String::new();
-            let len = input.read_line(&mut line)?;
+            if input.read_u8()? == b'#' {
+                let len = input.read_line(&mut line)?;
+                if len == 0 {
+                    return Err(Error::EndOfFile);
+                }
 
-            // reached EOF
-            if len == 0 {
-                return Err(Error::EndOfFile);
-            }
-
-            // check if this is a header comment, otherwise return comment data
-            if line.starts_with('#') {
+                header_prefix.push('#');
                 header_prefix.push_str(&line);
+
+                line.clear();
             } else {
-                input.set_position(input.position() - len);
+                input.set_position(input.position() - 1);
                 return Ok(header_prefix);
             }
         }
     }
 
-    #[must_use]
-    pub fn current_version(&self) -> String {
-        format!("{}.{}", Self::CURRENT_MAJOR_VER, Self::CURRENT_MINOR_VER)
-    }
-
-    #[must_use]
-    pub fn version(&self) -> String {
-        format!("{}.{}", self.version.major, self.version.minor)
-    }
-
-    pub fn open_read(&mut self, path: &Path, offset: usize) -> Result<()> {
-        //acquire file data
+    pub fn from_path<P: AsRef<Path>>(path: P, offset: usize) -> Result<Self> {
+        // Acquire file data
         let mut data = DataCursor::from_path(path)?;
         data.set_position(offset);
 
-        //handle special case where it can start with hashtags
+        // Check if there's any pre-header
         let header_text = Self::parse_header_prefix(&mut data)?;
         if !header_text.is_empty() {
-            log::info!("Multifile pre-header:\n{}\n", header_text);
+            log::info!("Multifile Pre-Header:\n{}\n", header_text);
         }
 
-        //check Multifile magic
+        // Parse Multifile data
+        let mut multifile = Self::default();
+        multifile.read_index(&mut data)?;
+
+        // Print the actual filesystem out to debug
+        multifile.root.debug_display(0);
+
+        Ok(multifile)
+    }
+
+    pub fn read_index(&mut self, input: &mut DataCursor) -> Result<()> {
+        // Parse the Multifile header
         let mut magic = [0u8; 6];
-        data.read_exact(&mut magic)?;
+        input.read_exact(&mut magic)?;
 
         if magic != Self::MAGIC {
             let error = Error::InvalidMagic {
-                expected: format!("{:?}", std::str::from_utf8(&Self::MAGIC)?),
-                got: format!("{:?}", std::str::from_utf8(&magic)?),
+                expected: format!("{:?}", from_utf8(&Self::MAGIC)?),
+                got: format!("{:?}", from_utf8(&magic)?),
             };
-            log::error!("{}", error.to_string());
+            log::error!("{}", error);
             return Err(error);
         }
 
-        //start reading header
+        // Latest version is v1.1
         self.version = Version {
-            major: data.read_i16_le()?,
-            minor: data.read_i16_le()?,
+            major: input.read_i16_le()?,
+            minor: input.read_i16_le()?,
         };
-        log::info!("Multifile version v{}", self.version());
 
-        if self.version.major != Self::CURRENT_MAJOR_VER
-            || self.version.minor > Self::CURRENT_MINOR_VER
-        {
+        if self.version != Self::CURRENT_VERSION {
             let error = Error::UnknownVersion {
-                expected: self.current_version(),
-                got: self.version(),
+                expected: Self::CURRENT_VERSION.to_string(),
+                got: self.version.to_string(),
             };
-            log::error!("{}", error.to_string());
+            log::error!("{}", error);
             return Err(error);
         }
 
-        self.scale_factor = data.read_u32_le()?;
-        log::info!("Scale factor (for >4GB files): {}", self.scale_factor);
+        log::info!("Multifile v{}", self.version);
 
+        // Only print scale factor if it's bigger than 1 since that's the norm
+        self.scale_factor = input.read_u32_le()?;
+        if self.scale_factor > 1 {
+            log::info!("Scale Factor: {}", self.scale_factor);
+        }
+
+        // Timestamp added in v1.1
         if self.version.minor >= 1 {
-            self.timestamp = data.read_u32_le()?;
+            self.timestamp = input.read_u32_le()?;
             log::info!(
-                "File Unix timestamp: {} {}",
-                self.timestamp,
-                time::format_timestamp(i64::from(self.timestamp))?
+                "Last Modified: {} ({})",
+                time::format_timestamp(self.timestamp.into())?,
+                self.timestamp
             );
         }
 
-        //Subfile loop, separate function probably
-        let mut next_index = data.read_u32_le()? * self.scale_factor;
+        // Loop through each Subfile, using next_index as a linked list
+        let mut next_index = input.read_u32_le()? * self.scale_factor;
         while next_index != 0 {
-            let mut subfile = Subfile::new();
-
-            subfile.offset = data.read_u32_le()? * self.scale_factor;
-            subfile.data_length = data.read_u32_le()?;
-            subfile.flags = BitFlags::<SubfileFlags>::from_bits_truncate(data.read_u16_le()?);
-            log::debug!(
-                "Data offset: {:#X} | Data Length: {:#X} | Subfile flags: {}",
-                subfile.offset,
-                subfile.data_length,
-                subfile.flags
-            );
-
-            if subfile
-                .flags
-                .intersects(SubfileFlags::Compressed | SubfileFlags::Encrypted)
-            {
-                subfile.length = data.read_u32_le()?;
-                log::debug!(
-                    "Subfile is compressed or encrypted! Original length: {}",
-                    subfile.length
-                );
-            } else {
-                subfile.length = subfile.data_length;
-            }
-
-            let timestamp: u32 = data.read_u32_le()?;
-            //if the subfile timestamp is 0, use the global timestamp
-            if timestamp == 0 {
-                subfile.timestamp = self.timestamp;
-            }
-
-            let name_length = data.read_u16_le()?;
-            subfile.filename.reserve_exact(name_length.into());
-
-            for _ in 0..name_length {
-                subfile.filename.push((255 - data.read_u8()?) as char);
-            }
-
-            if !subfile.filename.is_empty() {
-                log::debug!("Subfile name: {}", subfile.filename);
-            }
-            log::debug!(""); //new line to make it easier to read
+            let mut subfile = Subfile::from_data(input, self)?;
 
             if subfile.flags.contains(SubfileFlags::Signature) {
-                data.set_position(subfile.offset as usize);
-
-                let mut certificate = DataCursor::new(vec![0u8; subfile.length as usize]);
-                data.read_exact(certificate.as_mut())?;
-                let signature_length = certificate.read_u32_le()?;
-                certificate.set_position(certificate.position() + signature_length as usize);
-                let num_certificates = certificate.read_u32_le()?;
-
-                let mut certificate_data = certificate.as_ref();
-                for certificate_number in 1..=num_certificates {
-                    log::debug!("Certificate {}", certificate_number);
-                    let (rest, cert) = X509Certificate::from_der(certificate_data)?;
-                    certificate_data = rest;
-                    print_x509_info(&cert)?;
-                    log::debug!("");
-                }
+                subfile.parse_signature()?;
+            } else {
+                //self.root.insert(&subfile.filename, subfile);
             }
 
-            data.set_position(next_index as usize);
-            next_index = data.read_u32_le()? * self.scale_factor;
+            input.set_position(next_index as usize);
+            next_index = input.read_u32_le()? * self.scale_factor;
         }
         Ok(())
     }
@@ -246,42 +195,140 @@ impl Multifile {
 
 impl Default for Multifile {
     fn default() -> Self {
-        Self::new()
+        Self {
+            root: VirtualFolder::default(),
+            version: Self::CURRENT_VERSION,
+            scale_factor: 1,
+            timestamp: 0,
+        }
     }
 }
 
-#[bitflags]
-#[repr(u16)]
-#[derive(Copy, Clone, Debug)]
-enum SubfileFlags {
-    Deleted = 1 << 0,
-    IndexInvalid = 1 << 1,
-    DataInvalid = 1 << 2,
-    Compressed = 1 << 3,
-    Encrypted = 1 << 4,
-    Signature = 1 << 5,
-    Text = 1 << 6,
+bitflags! {
+    #[derive(Debug, PartialEq, Default)]
+    struct SubfileFlags: u16 {
+        const Deleted = 1 << 0;
+        const IndexInvalid = 1 << 1;
+        const DataInvalid = 1 << 2;
+        const Compressed = 1 << 3;
+        const Encrypted = 1 << 4;
+        const Signature = 1 << 5;
+        const Text = 1 << 6;
+    }
 }
 
+impl Metadata for SubfileFlags {}
+
+impl core::fmt::Display for SubfileFlags {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        if self.is_empty() {
+            write!(f, "")
+        } else {
+            write!(f, "{}", &self.0)
+        }
+    }
+}
+
+#[derive(Default)]
 struct Subfile {
-    offset: u32,
-    data_length: u32,
-    flags: BitFlags<SubfileFlags, u16>,
-    length: u32,
+    filename: CompactString,
+    data: DataCursor,
     timestamp: u32,
-    filename: String,
+    flags: SubfileFlags,
 }
 
 impl Subfile {
-    #[must_use]
-    pub fn new() -> Self {
-        Self {
-            offset: 0,
-            data_length: 0,
-            flags: SubfileFlags::empty(),
-            length: 0,
-            timestamp: 0,
-            filename: String::new(),
+    pub fn from_data(data: &mut DataCursor, multifile: &Multifile) -> Result<Self> {
+        let mut subfile = Self::default();
+        subfile.read_index(data, multifile)?;
+        Ok(subfile)
+    }
+
+    /// This function takes a [`DataCursor`] to read data from and the parent [`Multifile`] for
+    /// global settings, and populates the `Subfile` data.
+    pub fn read_index(&mut self, input: &mut DataCursor, multifile: &Multifile) -> Result<()> {
+        let offset = input.read_u32_le()? * multifile.scale_factor;
+        let data_length = input.read_u32_le()?;
+        self.flags = SubfileFlags::from_bits_truncate(input.read_u16_le()?);
+
+        let mut length = 0;
+        if self.flags.intersects(SubfileFlags::Compressed | SubfileFlags::Encrypted) {
+            length = input.read_u32_le()?;
+            log::debug!("Subfile is compressed or encrypted! Original length: {length}");
+        } else {
+            length = data_length;
         }
+
+        self.timestamp = input.read_u32_le()?;
+        if self.timestamp == 0 {
+            self.timestamp = multifile.timestamp;
+        }
+
+        let name_length = input.read_u16_le()?;
+        self.filename.reserve(name_length.into());
+
+        for _ in 0..name_length {
+            self.filename.push((255 - input.read_u8()?) as char);
+        }
+
+        log::info!(
+            "Offset: {offset:>#8X} | Length: {data_length:>#8X}{}{}",
+            if self.filename.is_empty() {
+                String::new()
+            } else {
+                format!(" | Filename: {}", self.filename)
+            },
+            if self.flags.is_empty() {
+                String::new()
+            } else {
+                format!(" | Subfile flags: {}", self.flags)
+            }
+        );
+
+        self.read_data(input, offset as usize, length as usize)?;
+
+        Ok(())
+    }
+
+    pub fn read_data(
+        &mut self,
+        input: &mut DataCursor,
+        offset: usize,
+        length: usize,
+    ) -> Result<()> {
+        input.set_position(offset);
+
+        self.data = DataCursor::new(vec![0u8; length]);
+        self.data.read_exact(input.as_mut())?;
+
+        Ok(())
+    }
+
+    pub fn parse_signature(&mut self) -> Result<Vec<Certificate>> {
+        // Signature begins with u32 length, u8[] data
+        let signature_length = self.data.read_u32_le()?;
+        self.data.set_position(self.data.position() + signature_length as usize);
+
+        // Next is number of certificates, followed by raw data blob
+        let num_certificates = self.data.read_u32_le()?;
+
+        let data_blob = self.data.remaining_slice().to_vec();
+        let mut certificates = Vec::new();
+        let mut offset = 0;
+
+        for certificate_number in 1..=num_certificates {
+            log::debug!("Certificate {}", certificate_number);
+
+            certificates.push(Certificate::from_der(&data_blob[offset..])?);
+
+            print_x509_info(certificates.last().unwrap().cert())?;
+            log::debug!("");
+
+            // Move the offset for the next certificate
+            offset += certificates.last().unwrap().len();
+        }
+
+        self.data.set_position(0);
+        Ok(certificates)
     }
 }
