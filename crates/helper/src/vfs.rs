@@ -3,8 +3,6 @@ use core::fmt;
 use compact_str::CompactString;
 use hashbrown::HashMap;
 
-pub trait Metadata: fmt::Display + bitflags::Flags {}
-
 pub enum VirtualNode<T> {
     File(VirtualFile<T>),
     Folder(VirtualFolder<T>),
@@ -26,42 +24,19 @@ impl<T> VirtualFile<T> {
 }
 
 impl<T> VirtualFolder<T> {
-    pub fn insert(&mut self, path: &str, data: T) {
-        let mut components = path.split('/').peekable();
+    pub fn create_file<'a>(&mut self, mut path: std::iter::Peekable<impl Iterator<Item = &'a str>>, data: T) {
+        if let Some(segment) = path.next() {
+            if path.peek().is_some() {
+                let folder_node = self.nodes.entry(segment.into())
+                    .or_insert_with(|| VirtualNode::Folder(VirtualFolder {
+                        nodes: HashMap::new(),
+                    }));
 
-        match components.next() {
-            Some(component) => {
-                // If we are not at the end of the path, insert into a subdirectory
-                if components.peek().is_some() {
-                    // Get the existing directory or create a new one
-                    let directory =
-                        self.nodes.entry(component.to_string().into()).or_insert_with(|| {
-                            VirtualNode::Folder(Self {
-                                //name: component.into(),
-                                nodes: HashMap::new(),
-                            })
-                        });
-
-                    // Recursively insert into the subdirectory
-                    if let VirtualNode::Folder(ref mut directory) = directory {
-                        directory
-                            .insert(components.collect::<Vec<_>>().join("/").as_str(), data);
-                    } else {
-                        // Unexpected: this should be a directory, but it's a file
-                        panic!("Path component is a file when it should be a directory");
-                    }
+                if let VirtualNode::Folder(ref mut folder) = folder_node {
+                    folder.create_file(path, data);
                 }
-                // We are at the end of the path, insert the file
-                else {
-                    self.nodes.insert(
-                        component.into(),
-                        VirtualNode::File(VirtualFile { data }),
-                    );
-                }
-            }
-            None => {
-                // Path is empty, nothing to insert
-                panic!("Empty path");
+            } else {
+                self.nodes.insert(segment.into(), VirtualNode::File(VirtualFile { data }));
             }
         }
     }

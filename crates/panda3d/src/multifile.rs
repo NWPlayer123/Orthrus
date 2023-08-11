@@ -6,7 +6,7 @@ use std::path::Path;
 use bitflags::bitflags;
 use compact_str::CompactString;
 use orthrus_helper::certificate::{print_x509_info, Certificate};
-use orthrus_helper::vfs::{Metadata, VirtualFolder};
+use orthrus_helper::vfs::VirtualFolder;
 use orthrus_helper::{time, DataCursor, Error, Result};
 
 /// This struct is mainly for readability in place of an unnamed tuple
@@ -51,7 +51,7 @@ impl fmt::Display for Version {
 /// | 14 | Original length | u32 | 4 | Only in the Subfile header if the Subfile is compressed or encrypted! This is the length of the data after being decompressed/decrypted. |
 /// | 18 | Unix timestamp | u32 | 4 | The date the Subfile was last modified. If it's 0, use the Multifile timestamp. |
 /// | 20 | Name length | u16 | 2 | Length of the Subfile's name. Read this many more bytes. |
-/// | 22 | Subfile path | char\[length\] | length | This is the path to the actual Subfile, used as part of a Virtual Filesystem. Obfuscated, convert each character as (255 - x). |
+/// | 22 | Subfile path | char\[len\] | len | This is the path to the actual Subfile, used as part of a Virtual Filesystem. Obfuscated, convert each character as (255 - x). |
 ///
 /// ## Subfile Flags
 /// | Flag | Value | Notes |
@@ -129,6 +129,8 @@ impl Multifile {
     }
 
     pub fn read_index(&mut self, input: &mut DataCursor) -> Result<()> {
+        log::trace!("Reading Index, Offset {:#X}", input.position());
+
         // Parse the Multifile header
         let mut magic = [0u8; 6];
         input.read_exact(&mut magic)?;
@@ -175,15 +177,21 @@ impl Multifile {
             );
         }
 
+        log::trace!("Starting Subfile Parse!");
         // Loop through each Subfile, using next_index as a linked list
         let mut next_index = input.read_u32_le()? * self.scale_factor;
         while next_index != 0 {
-            let mut subfile = Subfile::from_data(input, self)?;
+            log::trace!(
+                "Reading Subfile Header at Offset {:#X}, Next Index at {:#X}",
+                input.position(),
+                next_index
+            );
+            let (mut subfile, filename) = Subfile::from_data(input, self)?;
 
             if subfile.flags.contains(SubfileFlags::Signature) {
                 subfile.parse_signature()?;
             } else {
-                //self.root.insert(&subfile.filename, subfile);
+                self.root.create_file(filename.split("/").peekable(), subfile);
             }
 
             input.set_position(next_index as usize);
@@ -191,6 +199,8 @@ impl Multifile {
         }
         Ok(())
     }
+
+    //pub fn extract<P: AsRef<Path>>(&self, output: P) {}
 }
 
 impl Default for Multifile {
@@ -217,8 +227,6 @@ bitflags! {
     }
 }
 
-impl Metadata for SubfileFlags {}
-
 impl core::fmt::Display for SubfileFlags {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         if self.is_empty() {
@@ -231,27 +239,33 @@ impl core::fmt::Display for SubfileFlags {
 
 #[derive(Default)]
 struct Subfile {
-    filename: CompactString,
     data: DataCursor,
     timestamp: u32,
     flags: SubfileFlags,
 }
 
 impl Subfile {
-    pub fn from_data(data: &mut DataCursor, multifile: &Multifile) -> Result<Self> {
+    pub fn from_data(
+        data: &mut DataCursor,
+        multifile: &Multifile,
+    ) -> Result<(Self, CompactString)> {
         let mut subfile = Self::default();
-        subfile.read_index(data, multifile)?;
-        Ok(subfile)
+        let filename = subfile.read_index(data, multifile)?;
+        Ok((subfile, filename))
     }
 
     /// This function takes a [`DataCursor`] to read data from and the parent [`Multifile`] for
     /// global settings, and populates the `Subfile` data.
-    pub fn read_index(&mut self, input: &mut DataCursor, multifile: &Multifile) -> Result<()> {
+    pub fn read_index(
+        &mut self,
+        input: &mut DataCursor,
+        multifile: &Multifile,
+    ) -> Result<CompactString> {
         let offset = input.read_u32_le()? * multifile.scale_factor;
         let data_length = input.read_u32_le()?;
         self.flags = SubfileFlags::from_bits_truncate(input.read_u16_le()?);
 
-        let mut length = 0;
+        let length;
         if self.flags.intersects(SubfileFlags::Compressed | SubfileFlags::Encrypted) {
             length = input.read_u32_le()?;
             log::debug!("Subfile is compressed or encrypted! Original length: {length}");
@@ -265,18 +279,19 @@ impl Subfile {
         }
 
         let name_length = input.read_u16_le()?;
-        self.filename.reserve(name_length.into());
+        let mut filename = CompactString::default();
+        filename.reserve(name_length.into());
 
         for _ in 0..name_length {
-            self.filename.push((255 - input.read_u8()?) as char);
+            filename.push((255 - input.read_u8()?) as char);
         }
 
         log::info!(
             "Offset: {offset:>#8X} | Length: {data_length:>#8X}{}{}",
-            if self.filename.is_empty() {
+            if filename.is_empty() {
                 String::new()
             } else {
-                format!(" | Filename: {}", self.filename)
+                format!(" | Filename: {}", filename)
             },
             if self.flags.is_empty() {
                 String::new()
@@ -287,7 +302,7 @@ impl Subfile {
 
         self.read_data(input, offset as usize, length as usize)?;
 
-        Ok(())
+        Ok(filename)
     }
 
     pub fn read_data(
@@ -296,11 +311,11 @@ impl Subfile {
         offset: usize,
         length: usize,
     ) -> Result<()> {
+        log::trace!("Reading data! Offset {:#X}, Length {:#X}", offset, length);
         input.set_position(offset);
 
         self.data = DataCursor::new(vec![0u8; length]);
-        self.data.read_exact(input.as_mut())?;
-
+        input.read_exact(self.data.as_mut())?;
         Ok(())
     }
 
@@ -317,12 +332,12 @@ impl Subfile {
         let mut offset = 0;
 
         for certificate_number in 1..=num_certificates {
-            log::debug!("Certificate {}", certificate_number);
+            //log::debug!("Certificate {}", certificate_number);
 
             certificates.push(Certificate::from_der(&data_blob[offset..])?);
 
             print_x509_info(certificates.last().unwrap().cert())?;
-            log::debug!("");
+            //log::debug!("");
 
             // Move the offset for the next certificate
             offset += certificates.last().unwrap().len();

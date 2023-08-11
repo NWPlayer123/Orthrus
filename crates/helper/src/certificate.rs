@@ -30,12 +30,19 @@ impl Certificate {
         }.try_build()
     }
 
+    #[must_use]
     pub fn cert(&self) -> &X509Certificate<'_> {
         self.borrow_cert()
     }
 
+    #[must_use]
     pub fn len(&self) -> usize {
         self.borrow_der_buf().len()
+    }
+
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 }
 
