@@ -7,7 +7,7 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-orthrus-helper = { version = "0.2.0", path = "../helper" }
+orthrus-core = { version = "0.2.0", path = "../core" }
 
 x509-parser = { version = "0.15", features = ["validate", "verify"] }
 

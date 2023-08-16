@@ -1,9 +1,10 @@
 use std::fs::File;
 use std::io::prelude::*;
 
-use orthrus_helper::{time, Result};
+use orthrus_core::{time, Result};
+use orthrus_panda3d as panda3d;
+use orthrus_yaz0::Yaz0;
 use owo_colors::OwoColorize;
-use {orthrus_panda3d as panda3d, orthrus_yaz0 as yaz0};
 
 pub mod menu;
 use menu::{exactly_one_true, Modules, Panda3DModules};
@@ -82,9 +83,9 @@ fn main() -> Result<()> {
             if let Some(index) = exactly_one_true(&[data.decompress]) {
                 match index {
                     0 => {
-                        let file = yaz0::decompress_from_path(data.input)?;
+                        let file = Yaz0::from_path(data.input)?;
                         let mut output = File::create(&data.output)?;
-                        output.write_all(file.as_ref())?;
+                        output.write_all(file.data.as_ref())?;
                     }
                     _ => unreachable!("Oops! Forgot to cover all operations."),
                 }

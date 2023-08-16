@@ -5,9 +5,10 @@ use std::path::Path;
 
 use bitflags::bitflags;
 use compact_str::CompactString;
-use orthrus_helper::certificate::{print_x509_info, Certificate};
-use orthrus_helper::vfs::VirtualFolder;
-use orthrus_helper::{time, DataCursor, Error, Result};
+use orthrus_core::certificate::{print_x509_info, Certificate};
+use orthrus_core::prelude::*;
+use orthrus_core::time;
+use orthrus_core::vfs::VirtualFolder;
 
 /// This struct is mainly for readability in place of an unnamed tuple
 #[derive(PartialEq)]
@@ -109,7 +110,7 @@ impl Multifile {
 
     pub fn from_path<P: AsRef<Path>>(path: P, offset: usize) -> Result<Self> {
         // Acquire file data
-        let mut data = DataCursor::from_path(path)?;
+        let mut data = DataCursor::from_path(path, Endian::Little)?;
         data.set_position(offset);
 
         // Check if there's any pre-header
@@ -137,8 +138,7 @@ impl Multifile {
 
         if magic != Self::MAGIC {
             let error = Error::InvalidMagic {
-                expected: format!("{:?}", from_utf8(&Self::MAGIC)?),
-                got: format!("{:?}", from_utf8(&magic)?),
+                expected: format!("{:?}", from_utf8(&Self::MAGIC)?).into()
             };
             log::error!("{}", error);
             return Err(error);
@@ -146,14 +146,13 @@ impl Multifile {
 
         // Latest version is v1.1
         self.version = Version {
-            major: input.read_i16_le()?,
-            minor: input.read_i16_le()?,
+            major: input.read_i16()?,
+            minor: input.read_i16()?,
         };
 
         if self.version != Self::CURRENT_VERSION {
             let error = Error::UnknownVersion {
-                expected: Self::CURRENT_VERSION.to_string(),
-                got: self.version.to_string(),
+                expected: Self::CURRENT_VERSION.to_string().into(),
             };
             log::error!("{}", error);
             return Err(error);
@@ -162,14 +161,14 @@ impl Multifile {
         log::info!("Multifile v{}", self.version);
 
         // Only print scale factor if it's bigger than 1 since that's the norm
-        self.scale_factor = input.read_u32_le()?;
+        self.scale_factor = input.read_u32()?;
         if self.scale_factor > 1 {
             log::info!("Scale Factor: {}", self.scale_factor);
         }
 
         // Timestamp added in v1.1
         if self.version.minor >= 1 {
-            self.timestamp = input.read_u32_le()?;
+            self.timestamp = input.read_u32()?;
             log::info!(
                 "Last Modified: {} ({})",
                 time::format_timestamp(self.timestamp.into())?,
@@ -179,7 +178,7 @@ impl Multifile {
 
         log::trace!("Starting Subfile Parse!");
         // Loop through each Subfile, using next_index as a linked list
-        let mut next_index = input.read_u32_le()? * self.scale_factor;
+        let mut next_index = input.read_u32()? * self.scale_factor;
         while next_index != 0 {
             log::trace!(
                 "Reading Subfile Header at Offset {:#X}, Next Index at {:#X}",
@@ -195,7 +194,7 @@ impl Multifile {
             }
 
             input.set_position(next_index as usize);
-            next_index = input.read_u32_le()? * self.scale_factor;
+            next_index = input.read_u32()? * self.scale_factor;
         }
         Ok(())
     }
@@ -261,24 +260,24 @@ impl Subfile {
         input: &mut DataCursor,
         multifile: &Multifile,
     ) -> Result<CompactString> {
-        let offset = input.read_u32_le()? * multifile.scale_factor;
-        let data_length = input.read_u32_le()?;
-        self.flags = SubfileFlags::from_bits_truncate(input.read_u16_le()?);
+        let offset = input.read_u32()? * multifile.scale_factor;
+        let data_length = input.read_u32()?;
+        self.flags = SubfileFlags::from_bits_truncate(input.read_u16()?);
 
         let length;
         if self.flags.intersects(SubfileFlags::Compressed | SubfileFlags::Encrypted) {
-            length = input.read_u32_le()?;
+            length = input.read_u32()?;
             log::debug!("Subfile is compressed or encrypted! Original length: {length}");
         } else {
             length = data_length;
         }
 
-        self.timestamp = input.read_u32_le()?;
+        self.timestamp = input.read_u32()?;
         if self.timestamp == 0 {
             self.timestamp = multifile.timestamp;
         }
 
-        let name_length = input.read_u16_le()?;
+        let name_length = input.read_u16()?;
         let mut filename = CompactString::default();
         filename.reserve(name_length.into());
 
@@ -314,18 +313,18 @@ impl Subfile {
         log::trace!("Reading data! Offset {:#X}, Length {:#X}", offset, length);
         input.set_position(offset);
 
-        self.data = DataCursor::new(vec![0u8; length]);
+        self.data = DataCursor::new(vec![0u8; length], Endian::Little);
         input.read_exact(self.data.as_mut())?;
         Ok(())
     }
 
     pub fn parse_signature(&mut self) -> Result<Vec<Certificate>> {
         // Signature begins with u32 length, u8[] data
-        let signature_length = self.data.read_u32_le()?;
+        let signature_length = self.data.read_u32()?;
         self.data.set_position(self.data.position() + signature_length as usize);
 
         // Next is number of certificates, followed by raw data blob
-        let num_certificates = self.data.read_u32_le()?;
+        let num_certificates = self.data.read_u32()?;
 
         let data_blob = self.data.remaining_slice().to_vec();
         let mut certificates = Vec::new();

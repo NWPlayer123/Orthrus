@@ -11,3 +11,7 @@ Cargo.lock
 
 # log file when running orthrus (may change to logs/*)
 output.log
+logs/*
+
+# Files for in-development testing
+data/*

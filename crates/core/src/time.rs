@@ -11,7 +11,7 @@ pub const TIME_FORMAT: &[FormatItem] =
 ///
 /// Returns [`TimeInvalidOffset`](crate::Error::TimeInvalidOffset) if unable to determine the
 /// current time zone.
-pub fn current_time() -> crate::Result<String> {
+pub fn current_time() -> time::Result<String> {
     let time = OffsetDateTime::now_local()?;
     let formatted = time.format(TIME_FORMAT)?;
     Ok(formatted)
@@ -23,7 +23,7 @@ pub fn current_time() -> crate::Result<String> {
 ///
 /// Returns [`TimeInvalidRange`](crate::Error::TimeInvalidRange) if unable to convert the timestamp
 /// to a valid date.
-pub fn format_timestamp(timestamp: i64) -> crate::Result<String> {
+pub fn format_timestamp(timestamp: i64) -> time::Result<String> {
     let time = OffsetDateTime::from_unix_timestamp(timestamp)?;
     let formatted = time.format(TIME_FORMAT)?;
     Ok(formatted)
@@ -35,6 +35,6 @@ pub fn format_timestamp(timestamp: i64) -> crate::Result<String> {
 /// # Errors
 /// Returns a [`TimeInvalidOffset`](crate::Error::TimeInvalidOffset) if unable to get the local
 /// offset.
-pub fn get_local_offset() -> crate::Result<UtcOffset> {
+pub fn get_local_offset() -> time::Result<UtcOffset> {
     Ok(UtcOffset::local_offset_at(OffsetDateTime::UNIX_EPOCH)?)
 }

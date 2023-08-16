@@ -24,13 +24,18 @@ impl<T> VirtualFile<T> {
 }
 
 impl<T> VirtualFolder<T> {
-    pub fn create_file<'a>(&mut self, mut path: std::iter::Peekable<impl Iterator<Item = &'a str>>, data: T) {
+    pub fn create_file<'a>(
+        &mut self,
+        mut path: std::iter::Peekable<impl Iterator<Item = &'a str>>,
+        data: T,
+    ) {
         if let Some(segment) = path.next() {
             if path.peek().is_some() {
-                let folder_node = self.nodes.entry(segment.into())
-                    .or_insert_with(|| VirtualNode::Folder(VirtualFolder {
+                let folder_node = self.nodes.entry(segment.into()).or_insert_with(|| {
+                    VirtualNode::Folder(VirtualFolder {
                         nodes: HashMap::new(),
-                    }));
+                    })
+                });
 
                 if let VirtualNode::Folder(ref mut folder) = folder_node {
                     folder.create_file(path, data);

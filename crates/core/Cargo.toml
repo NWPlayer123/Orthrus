@@ -1,8 +1,8 @@
 [package]
-name = "orthrus-helper"
+name = "orthrus-core"
 version = "0.2.0"
 edition = "2021"
-description = "Helper module for Orthrus"
+description = "Provides core functionality for Orthrus"
 license.workspace = true
 repository.workspace = true
 
