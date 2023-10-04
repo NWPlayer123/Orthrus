@@ -1,11 +1,11 @@
 use core::fmt;
 use core::fmt::Write;
 
+use ouroboros::self_referencing;
 use x509_parser::der_parser::Oid;
 use x509_parser::prelude::*;
 use x509_parser::public_key::PublicKey;
 use x509_parser::signature_algorithm::SignatureAlgorithm;
-use ouroboros::self_referencing;
 
 #[self_referencing]
 pub struct Certificate {
@@ -17,7 +17,6 @@ pub struct Certificate {
 
 impl Certificate {
     pub fn from_der(der: &[u8]) -> crate::Result<Self> {
-
         let (rest, _cert) = X509Certificate::from_der(der)?;
         let der_buf = der[..(der.len() - rest.len())].into();
 
@@ -25,9 +24,10 @@ impl Certificate {
             der_buf,
             cert_builder: |buf| match X509Certificate::from_der(buf) {
                 Ok((_rest, cert)) => Ok(cert),
-                Err(err) => Err(err.into())
-            }
-        }.try_build()
+                Err(err) => Err(err.into()),
+            },
+        }
+        .try_build()
     }
 
     #[must_use]
@@ -50,10 +50,6 @@ impl fmt::Debug for Certificate {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.borrow_cert().fmt(f)
     }
-}
-
-fn make_indent(indent: usize) -> String {
-    "    ".repeat(indent)
 }
 
 fn octet_string(data: &[u8]) -> String {
@@ -82,72 +78,83 @@ fn format_oid(oid: &Oid) -> String {
     x509_parser::oid_registry::format_oid(oid, oid_registry())
 }
 
-/// This function prints all relevant information from an [X.509 Certificate](X509Certificate) to
-/// [`log::debug`] using the specified indentation.
+/// This function parses  all relevant information from an [X.509 Certificate](X509Certificate) and
+/// returns a [`String`] with the formatted data.
 ///
 /// # Errors
 /// Will return an [`X509Error`](crate::Error::X509Error) if unable to parse the [To Be Signed
 /// Certificate](print_x509_tbs) or [Signature Algorithm](print_x509_signature_algorithm).
-pub fn print_x509_info(cert: &X509Certificate) -> crate::Result<()> {
+pub fn print_x509_info(cert: &X509Certificate) -> crate::Result<String> {
     let indent = 1;
-    print_x509_tbs(&cert.tbs_certificate, indent)?;
+    let mut output = String::new();
+    let mut indentation = "    ".repeat(indent);
 
-    print_x509_signature_algorithm(&cert.signature_algorithm, indent)?;
+    output.push_str(&print_x509_tbs(&cert.tbs_certificate, indent)?);
 
-    log::debug!("{}Signature Value:", make_indent(indent));
+    output.push_str(&print_x509_signature_algorithm(
+        &cert.signature_algorithm,
+        indent,
+    )?);
+
+    output.push_str(&format!("{indentation}Signature Value:\n"));
+    indentation += "    ";
     for line in hex_string(&cert.signature_value.data) {
-        log::debug!("{}{}", make_indent(indent + 1), line);
+        output.push_str(&format!("{indentation}{line}\n"));
     }
 
-    Ok(())
+    Ok(output)
 }
 
-/// This function prints all relevant information from a [To Be Signed Certificate](TbsCertificate)
-/// to [`log::debug`] using the specified indentation.
+/// This function parses all relevant information from a [To Be Signed Certificate](TbsCertificate)
+/// and returns a [`String`] with the formatted data.
 ///
 /// # Errors
 /// Will return an [`X509Error`](crate::Error::X509Error) if unable to parse the [Signature
 /// Algorithm](print_x509_signature_algorithm), [Validity](print_x509_validity), or [Public Key
 /// Info](print_x509_public_key_info).
-pub fn print_x509_tbs(cert: &TbsCertificate, indent: usize) -> crate::Result<()> {
-    log::debug!("{}To Be Signed:", make_indent(indent));
+pub fn print_x509_tbs(cert: &TbsCertificate, indent: usize) -> crate::Result<String> {
+    let mut output = String::new();
+    let mut indentation = "    ".repeat(indent);
+
+    output.push_str(&format!("{indentation}To Be Signed:\n"));
+    indentation += "    ";
+
     let version = cert.version;
+    output.push_str(&format!("{indentation}Version: {version}\n"));
 
-    log::debug!("{}Version: {}", make_indent(indent + 1), version);
-
-    log::debug!(
-        "{}Serial Number: {}",
-        make_indent(indent + 1),
+    output.push_str(&format!(
+        "{indentation}Serial Number: {}\n",
         octet_string(cert.raw_serial())
-    );
+    ));
 
-    print_x509_signature_algorithm(&cert.signature, indent + 1)?;
+    output.push_str(&print_x509_signature_algorithm(
+        &cert.signature,
+        indent + 1,
+    )?);
 
-    log::debug!("{}Subject: {}", make_indent(indent + 1), cert.subject);
+    output.push_str(&format!("{indentation}Subject: {}\n", cert.subject));
 
-    log::debug!("{}Issuer:  {}", make_indent(indent + 1), cert.issuer);
+    output.push_str(&format!("{indentation}Issuer:  {}\n", cert.issuer));
 
-    print_x509_validity(&cert.validity, indent + 1)?;
+    output.push_str(&print_x509_validity(&cert.validity, indent + 1)?);
 
-    print_x509_public_key_info(&cert.subject_pki, indent + 1)?;
+    output.push_str(&print_x509_public_key_info(&cert.subject_pki, indent + 1)?);
 
     if version == X509Version::V2 || version == X509Version::V3 {
         if let Some(unique_id) = &cert.issuer_uid {
-            log::debug!(
-                "{}Issuer Unique ID: {}",
-                make_indent(indent + 1),
+            output.push_str(&format!(
+                "{indentation}Issuer Unique ID: {}\n",
                 octet_string(&unique_id.0.data)
-            );
+            ));
         }
         if let Some(unique_id) = &cert.subject_uid {
-            log::debug!(
-                "{}Subject Unique ID: {}",
-                make_indent(indent + 1),
+            output.push_str(&format!(
+                "{indentation}Subject Unique ID: {}\n",
                 octet_string(&unique_id.0.data)
-            );
+            ));
         }
         if version == X509Version::V3 {
-            log::debug!("{}Extensions:", make_indent(indent + 1));
+            output.push_str(&format!("{indentation}Extensions:\n"));
 
             let mut extensions = cert.extensions().to_vec();
             extensions.sort_by(|a, b| {
@@ -155,15 +162,16 @@ pub fn print_x509_tbs(cert: &TbsCertificate, indent: usize) -> crate::Result<()>
                     .cmp(&get_extension_order(b.parsed_extension()))
             });
             for extension in extensions {
-                print_x509_extension(&extension, indent + 2);
+                output.push_str(&print_x509_extension(&extension, indent + 2));
             }
         }
     }
-    Ok(())
+
+    Ok(output)
 }
 
-/// This function converts an [`AlgorithmIdentifier`] to a [`SignatureAlgorithm`] and prints all
-/// relevant information to [`log::debug`] using the specified indentation.
+/// This function converts an [`AlgorithmIdentifier`] to a [`SignatureAlgorithm`] and returns a
+/// [`String`] with the formatted data.
 ///
 /// # Errors
 /// Will return an [`X509Error`](crate::Error::X509Error) if it fails to convert to a
@@ -172,185 +180,209 @@ pub fn print_x509_tbs(cert: &TbsCertificate, indent: usize) -> crate::Result<()>
 pub fn print_x509_signature_algorithm(
     algo: &AlgorithmIdentifier,
     indent: usize,
-) -> crate::Result<()> {
+) -> crate::Result<String> {
+    let mut output = String::new();
+    let mut indentation = "    ".repeat(indent);
+
     match SignatureAlgorithm::try_from(algo)? {
         SignatureAlgorithm::RSA => {
-            log::debug!("{}Signature Algorithm: RSA", make_indent(indent));
+            output.push_str(&format!("{indentation}Signature Algorithm: RSA\n"));
         }
         SignatureAlgorithm::DSA => {
-            log::debug!("{}Signature Algorithm: DSA", make_indent(indent));
+            output.push_str(&format!("{indentation}Signature Algorithm: DSA\n"));
         }
         SignatureAlgorithm::ECDSA => {
-            log::debug!("{}Signature Algorithm: ECDSA", make_indent(indent));
+            output.push_str(&format!("{indentation}Signature Algorithm: ECDSA\n"));
         }
         SignatureAlgorithm::ED25519 => {
-            log::debug!("{}Signature Algorithm: ED25519", make_indent(indent));
+            output.push_str(&format!("{indentation}Signature Algorithm: ED25519\n"));
         }
         SignatureAlgorithm::RSASSA_PSS(params) => {
-            log::debug!("{}Signature Algorithm: RSASSA-PSS", make_indent(indent));
-            log::debug!(
-                "{}Hash Algorithm: {}",
-                make_indent(indent + 1),
+            output.push_str(&format!("{indentation}Signature Algorithm: RSASSA-PSS\n"));
+            indentation += "    ";
+
+            output.push_str(&format!(
+                "{indentation}Hash Algorithm: {}\n",
                 format_oid(params.hash_algorithm_oid())
-            );
+            ));
+
             let mask_gen = params.mask_gen_algorithm()?;
-            log::debug!(
-                "{}Mask Generation Function: {}/{}",
-                make_indent(indent + 1),
+            output.push_str(&format!(
+                "{indentation}Mask Generation Function: {}/{}\n",
                 format_oid(&mask_gen.mgf),
                 format_oid(&mask_gen.hash)
-            );
-            log::debug!(
-                "{}Salt Length: {}",
-                make_indent(indent + 1),
+            ));
+
+            output.push_str(&format!(
+                "{indentation}Salt Length: {}\n",
                 params.salt_length()
-            );
+            ));
         }
         SignatureAlgorithm::RSAAES_OAEP(params) => {
-            log::debug!("{}Signature Algorithm: RSASSA-OAEP", make_indent(indent));
-            log::debug!(
-                "{}Hash Algorithm: {}",
-                make_indent(indent + 1),
+            output.push_str(&format!("{indentation}Signature Algorithm: RSASSA-OAEP\n"));
+            indentation += "    ";
+
+            output.push_str(&format!(
+                "{indentation}Hash Algorithm: {}\n",
                 format_oid(params.hash_algorithm_oid())
-            );
+            ));
+
             let mask_gen = params.mask_gen_algorithm()?;
-            log::debug!(
-                "{}Mask Generation Function: {}/{}",
-                make_indent(indent + 1),
+            output.push_str(&format!(
+                "{indentation}Mask Generation Function: {}/{}\n",
                 format_oid(&mask_gen.mgf),
                 format_oid(&mask_gen.hash)
-            );
-            log::debug!(
-                "{}P Source Function: {}",
-                make_indent(indent + 1),
+            ));
+
+            output.push_str(&format!(
+                "{indentation}P Source Function: {}\n",
                 format_oid(&params.p_source_alg().algorithm)
-            );
+            ));
         }
     }
-    Ok(())
+
+    Ok(output)
 }
 
-/// This function and prints all [Validity] information to [`log::debug`] using the specified
-/// indentation.
+/// This function parses all [Validity] information and returns a [`String`] with the formatted
+/// data.
 ///
 /// # Errors
 /// Returns [`TimeInvalidRange`](crate::Error::TimeInvalidRange) if unable to convert the timestamp
 /// to a valid date.
-pub fn print_x509_validity(valid: &Validity, indent: usize) -> crate::Result<()> {
-    log::debug!("{}Validity:", make_indent(indent));
-    log::debug!(
-        "{}Not Before: {}",
-        make_indent(indent + 1),
+pub fn print_x509_validity(valid: &Validity, indent: usize) -> crate::Result<String> {
+    let mut output = String::new();
+    let mut indentation = "    ".repeat(indent);
+
+    output.push_str(&format!("{indentation}Validity:\n"));
+    indentation += "    ";
+    output.push_str(&format!(
+        "{indentation}Not Before: {}\n",
         crate::time::format_timestamp(valid.not_before.timestamp())?
-    );
-    log::debug!(
-        "{}Not After:  {}",
-        make_indent(indent + 1),
+    ));
+    output.push_str(&format!(
+        "{indentation}Not After:  {}\n",
         crate::time::format_timestamp(valid.not_after.timestamp())?
-    );
-    log::debug!(
-        "{}[Still Valid: {}]",
-        make_indent(indent + 1),
+    ));
+    output.push_str(&format!(
+        "{indentation}[Still Valid: {}]\n",
         valid.is_valid()
-    );
-    Ok(())
+    ));
+
+    Ok(output)
 }
 
-/// This function parses an [`AlgorithmIdentifier`] and prints the Object Identifier and Parameters
-/// to [`log::debug`] using the specified indentation.
-pub fn print_x509_digest_algorithm(algo: &AlgorithmIdentifier, indent: usize) {
+/// This function parses an [`AlgorithmIdentifier`] and returns a [`String`] with the formatted
+/// data.
+pub fn print_x509_digest_algorithm(algo: &AlgorithmIdentifier, indent: usize) -> String {
+    let mut output = String::new();
+    let indentation = "    ".repeat(indent);
+
     let temp = format_oid(&algo.algorithm);
-    log::debug!("{}Object Identifier: {}", make_indent(indent), temp);
+    output.push_str(&format!("{indentation}Object Identifier: {temp}\n"));
     if let Some(params) = &algo.parameters {
         if params.data.is_empty() {
-            log::debug!(
-                "{}Algorithm Parameter: {}",
-                make_indent(indent),
+            output.push_str(&format!(
+                "{indentation}Algorithm Parameter: {}\n",
                 params.tag()
-            );
+            ));
         } else {
-            log::debug!(
-                "{}Algorithm Parameter: {} {:?}",
-                make_indent(indent),
+            output.push_str(&format!(
+                "{indentation}Algorithm Parameter: {} {:?}\n",
                 params.tag(),
                 params.data
-            );
+            ));
         }
     }
+
+    output
 }
 
-/// This function parses a [`SubjectPublicKeyInfo`] and prints all relevant information to
-/// [`log::debug`] using the specified indentation.
+/// This function parses a [`SubjectPublicKeyInfo`] and returns a [`String`] with the formatted
+/// data.
 ///
 /// # Errors
 /// Will return an [`X509Error`](crate::Error::X509Error) if it fails to parse the public key info.
-pub fn print_x509_public_key_info(info: &SubjectPublicKeyInfo, indent: usize) -> crate::Result<()> {
-    log::debug!("{}Subject Public Key Info:", make_indent(indent));
-    print_x509_digest_algorithm(&info.algorithm, indent + 1);
+pub fn print_x509_public_key_info(
+    info: &SubjectPublicKeyInfo,
+    indent: usize,
+) -> crate::Result<String> {
+    let mut output = String::new();
+    let mut indentation = "    ".repeat(indent);
+
+    output.push_str(&format!("{indentation}Subject Public Key Info:\n"));
+    output.push_str(&print_x509_digest_algorithm(&info.algorithm, indent + 1));
     match info.parsed()? {
         PublicKey::RSA(rsa) => {
-            log::debug!(
-                "{}RSA Public Key: ({} bit, {:#X} exponent)",
-                make_indent(indent + 1),
+            indentation += "    ";
+            output.push_str(&format!(
+                "{indentation}RSA Public Key: ({} bit, {:#X} exponent)\n",
                 rsa.key_size(),
                 rsa.try_exponent()?
-            );
+            ));
+            indentation += "    ";
             for line in hex_string(rsa.modulus) {
-                log::debug!("{}{}", make_indent(indent + 2), line);
+                output.push_str(&format!("{indentation}{line}\n"));
             }
         }
         PublicKey::EC(ec) => {
-            log::debug!(
-                "{}EC Public Key: ({} bit)",
-                make_indent(indent + 1),
+            indentation += "    ";
+            output.push_str(&format!(
+                "{indentation}EC Public Key: ({} bit)\n",
                 ec.key_size()
-            );
+            ));
+            indentation += "    ";
             for line in hex_string(ec.data()) {
-                log::debug!("{}{}", make_indent(indent + 2), line);
+                output.push_str(&format!("{indentation}{line}\n"));
             }
         }
         PublicKey::DSA(y) => {
-            log::debug!(
-                "{}DSA Public Key: ({} bit)",
-                make_indent(indent + 1),
+            indentation += "    ";
+            output.push_str(&format!(
+                "{indentation}DSA Public Key: ({} bit)\n",
                 8 * y.len()
-            );
+            ));
+            indentation += "    ";
             for line in hex_string(y) {
-                log::debug!("{}{}", make_indent(indent + 2), line);
+                output.push_str(&format!("{indentation}{line}\n"));
             }
         }
         PublicKey::GostR3410(y) => {
-            log::debug!(
-                "{}GOST R 34.10-94 Public Key: ({} bit)",
-                make_indent(indent + 1),
+            indentation += "    ";
+            output.push_str(&format!(
+                "{indentation}GOST R 34.10-94 Public Key: ({} bit)\n",
                 8 * y.len()
-            );
+            ));
+            indentation += "    ";
             for line in hex_string(y) {
-                log::debug!("{}{}", make_indent(indent + 2), line);
+                output.push_str(&format!("{indentation}{line}\n"));
             }
         }
         PublicKey::GostR3410_2012(y) => {
-            log::debug!(
-                "{}GOST R 34.10-2012 Public Key: ({} bit)",
-                make_indent(indent + 1),
+            indentation += "    ";
+            output.push_str(&format!(
+                "{indentation}GOST R 34.10-2012 Public Key: ({} bit)\n",
                 8 * y.len()
-            );
+            ));
+            indentation += "    ";
             for line in hex_string(y) {
-                log::debug!("{}{}", make_indent(indent + 2), line);
+                output.push_str(&format!("{indentation}{line}\n"));
             }
         }
         PublicKey::Unknown(b) => {
-            log::debug!(
-                "{}Unknown Key Type! ({} bit)",
-                make_indent(indent + 1),
+            indentation += "    ";
+            output.push_str(&format!(
+                "{indentation}Unknown Key Type! ({} bit)\n",
                 8 * b.len()
-            );
+            ));
+            indentation += "    ";
             for line in hex_string(b) {
-                log::debug!("{}{}", make_indent(indent + 2), line);
+                output.push_str(&format!("{indentation}{line}\n"));
             }
         }
     }
-    Ok(())
+
+    Ok(output)
 }
 
 #[must_use]
@@ -413,110 +445,130 @@ pub const fn get_extension_order(ext: &ParsedExtension) -> usize {
     }
 }
 
-/// Parses an [`X509Extension`] and prints all relevant information to [`log::debug`] using the
-/// specified indentation.
+/// Parses an [`X509Extension`] and returns a [`String`] with the formatted data.
 ///
 /// Currently, it only supports [`AuthorityKeyIdentifier`],
 /// [`SubjectKeyIdentifier`](ParsedExtension::SubjectKeyIdentifier), [`KeyUsage`],
 /// [`BasicConstraints`], and [`ExtendedKeyUsage`], it will print the debug output of any other
 /// extension.
-pub fn print_x509_extension(extension: &X509Extension, indent: usize) {
+pub fn print_x509_extension(extension: &X509Extension, indent: usize) -> String {
     let parsed = extension.parsed_extension();
-    log::debug!(
-        "{}[critical:{}] {}",
-        make_indent(indent),
+    let mut output = String::new();
+    let mut indentation = "    ".repeat(indent);
+
+    output.push_str(&format!(
+        "{indentation}[critical:{}] {}\n",
         extension.critical,
         get_extension_name(parsed)
-    );
+    ));
 
     match parsed {
         ParsedExtension::AuthorityKeyIdentifier(identifier) => {
-            print_x509_authority_key_identifier(identifier, indent + 1);
+            output.push_str(&print_x509_authority_key_identifier(identifier, indent + 1));
         }
         ParsedExtension::SubjectKeyIdentifier(identifier) => {
-            print_x509_subject_key_identifier(identifier, indent + 1);
+            output.push_str(&print_x509_subject_key_identifier(identifier, indent + 1));
         }
         ParsedExtension::KeyUsage(usage) => {
-            print_x509_key_usage(usage, indent + 1);
+            output.push_str(&print_x509_key_usage(usage, indent + 1));
         }
         ParsedExtension::BasicConstraints(constraints) => {
-            print_x509_basic_constraints(constraints, indent + 1);
+            output.push_str(&print_x509_basic_constraints(constraints, indent + 1));
         }
         ParsedExtension::ExtendedKeyUsage(usage) => {
-            print_x509_extended_key_usage(usage, indent + 1);
+            output.push_str(&print_x509_extended_key_usage(usage, indent + 1));
         }
         x => {
-            log::debug!("{}{:?}", make_indent(indent + 1), x);
+            indentation += "    ";
+            output.push_str(&format!("{indentation}{x:?}\n"));
         }
     }
+
+    output
 }
 
-fn print_x509_authority_key_identifier(identifier: &AuthorityKeyIdentifier, indent: usize) {
+fn print_x509_authority_key_identifier(
+    identifier: &AuthorityKeyIdentifier,
+    indent: usize,
+) -> String {
+    let mut output = String::new();
+    let indentation = "    ".repeat(indent);
+
     if let Some(key_id) = &identifier.key_identifier {
-        log::debug!(
-            "{}Identifier: {}",
-            make_indent(indent),
+        output.push_str(&format!(
+            "{indentation}Identifier: {}\n",
             octet_string(key_id.0)
-        );
+        ));
     }
     if let Some(issuer) = &identifier.authority_cert_issuer {
         for name in issuer {
-            log::debug!("{}Issuer: {}", make_indent(indent), name);
+            output.push_str(&format!("{indentation}Issuer: {name}\n"));
         }
     }
     if let Some(serial) = identifier.authority_cert_serial {
-        log::debug!("{}Serial: {}", make_indent(indent), octet_string(serial));
+        output.push_str(&format!("{indentation}Serial: {}\n", octet_string(serial)));
     }
+
+    output
 }
 
-fn print_x509_subject_key_identifier(identifier: &KeyIdentifier, indent: usize) {
-    log::debug!(
-        "{}Identifier: {}",
-        make_indent(indent),
+fn print_x509_subject_key_identifier(identifier: &KeyIdentifier, indent: usize) -> String {
+    format!(
+        "{}Identifier: {}\n",
+        "    ".repeat(indent),
         octet_string(identifier.0)
-    );
+    )
 }
 
-fn print_x509_key_usage(usage: &KeyUsage, indent: usize) {
-    log::debug!("{}Key Usage: {}", make_indent(indent), usage);
+fn print_x509_key_usage(usage: &KeyUsage, indent: usize) -> String {
+    format!("{}Key Usage: {usage}\n", "    ".repeat(indent))
 }
 
-fn print_x509_basic_constraints(constraints: &BasicConstraints, indent: usize) {
-    log::debug!(
-        "{}Certificate Authority: {}",
-        make_indent(indent),
+fn print_x509_basic_constraints(constraints: &BasicConstraints, indent: usize) -> String {
+    let mut output = String::new();
+    let indentation = "    ".repeat(indent);
+
+    output.push_str(&format!(
+        "{indentation}Certificate Authority: {}\n",
         constraints.ca
-    );
+    ));
     if constraints.ca {
         if let Some(value) = constraints.path_len_constraint {
-            log::debug!("{}Certification Path Limit: {}", make_indent(indent), value);
+            output.push_str(&format!("{indentation}Certification Path Limit: {value}\n"));
         }
     }
+
+    output
 }
 
-fn print_x509_extended_key_usage(usage: &ExtendedKeyUsage, indent: usize) {
+fn print_x509_extended_key_usage(usage: &ExtendedKeyUsage, indent: usize) -> String {
+    let mut output = String::new();
+    let indentation = "    ".repeat(indent);
+
     if usage.any {
-        log::debug!("{}Any: true", make_indent(indent));
+        output.push_str(&format!("{indentation}Any: true\n"));
     }
     if usage.server_auth {
-        log::debug!("{}Server Authentication: true", make_indent(indent));
+        output.push_str(&format!("{indentation}Server Authentication: true\n"));
     }
     if usage.client_auth {
-        log::debug!("{}Client Authentication: true", make_indent(indent));
+        output.push_str(&format!("{indentation}Client Authentication: true\n"));
     }
     if usage.code_signing {
-        log::debug!("{}Code Signing: true", make_indent(indent));
+        output.push_str(&format!("{indentation}Code Signing: true\n"));
     }
     if usage.email_protection {
-        log::debug!("{}Email Protection: true", make_indent(indent));
+        output.push_str(&format!("{indentation}Email Protection: true\n"));
     }
     if usage.time_stamping {
-        log::debug!("{}Time Stamping: true", make_indent(indent));
+        output.push_str(&format!("{indentation}Time Stamping: true\n"));
     }
     if usage.ocsp_signing {
-        log::debug!("{}Certificate Status Signing: true", make_indent(indent));
+        output.push_str(&format!("{indentation}Certificate Status Signing: true\n"));
     }
     for oid in &usage.other {
-        log::debug!("{}Other: {}", make_indent(indent), oid);
+        output.push_str(&format!("{indentation}Other: {oid}\n"));
     }
+
+    output
 }

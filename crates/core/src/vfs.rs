@@ -1,75 +1,88 @@
 use core::fmt;
 
+use crate::DataCursor;
 use compact_str::CompactString;
 use hashbrown::HashMap;
 
-pub enum VirtualNode<T> {
-    File(VirtualFile<T>),
-    Folder(VirtualFolder<T>),
+pub enum VirtualNode {
+    File(VirtualFile),
+    Folder(VirtualFolder),
 }
 
-pub struct VirtualFile<T> {
-    data: T,
+pub struct VirtualFile {
+    data: DataCursor,
+    metadata: u32,
+    timestamp: u32,
 }
 
 #[derive(Default)]
-pub struct VirtualFolder<T> {
-    nodes: HashMap<CompactString, VirtualNode<T>>,
+pub struct VirtualFolder {
+    folders: HashMap<CompactString, VirtualFolder>,
+    files: HashMap<CompactString, VirtualFile>,
 }
 
-impl<T> VirtualFile<T> {
-    pub const fn new(data: T) -> Self {
-        Self { data }
+impl VirtualFile {
+    pub const fn new(data: DataCursor, metadata: u32, timestamp: u32) -> Self {
+        Self {
+            data,
+            metadata: 0,
+            timestamp: 0,
+        }
     }
 }
 
-impl<T> VirtualFolder<T> {
+impl VirtualFolder {
     pub fn create_file<'a>(
         &mut self,
         mut path: std::iter::Peekable<impl Iterator<Item = &'a str>>,
-        data: T,
+        file: VirtualFile,
     ) {
         if let Some(segment) = path.next() {
             if path.peek().is_some() {
-                let folder_node = self.nodes.entry(segment.into()).or_insert_with(|| {
-                    VirtualNode::Folder(VirtualFolder {
-                        nodes: HashMap::new(),
-                    })
-                });
+                let folder_node =
+                    self.folders.entry(segment.into()).or_insert_with(|| VirtualFolder {
+                        folders: HashMap::new(),
+                        files: HashMap::new(),
+                    });
 
-                if let VirtualNode::Folder(ref mut folder) = folder_node {
-                    folder.create_file(path, data);
+                if let folder = folder_node {
+                    folder.create_file(path, file);
                 }
             } else {
-                self.nodes.insert(segment.into(), VirtualNode::File(VirtualFile { data }));
+                self.files.insert(segment.into(), file);
             }
         }
     }
 
-    pub fn debug_display(&self, indent: usize) {
-        for (name, node) in self.nodes.iter() {
+    fn debug_display(&self, indent: usize) -> String {
+        let mut result = String::new();
+
+        for (name, node) in &self.folders {
             let indentation = "  ".repeat(indent);
             match node {
-                VirtualNode::File(file) => log::debug!("{}{}: {}", indentation, name, file),
+                VirtualNode::File(file) => {
+                    result.push_str(&format!("{indentation}{name}: {file}\n"));
+                }
                 VirtualNode::Folder(folder) => {
-                    log::debug!("{}{}: {{", indentation, name);
-                    folder.debug_display(indent + 1);
-                    log::debug!("{}}}", indentation);
+                    result.push_str(&format!("{indentation}{name}: {{\n"));
+                    result.push_str(&folder.debug_display(indent + 1));
+                    result.push_str(&format!("{indentation}}}\n"));
                 }
             }
         }
+
+        result
     }
 }
 
-impl<T> fmt::Display for VirtualFile<T> {
+impl fmt::Display for VirtualFile {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "File")
     }
 }
 
-impl<T> fmt::Display for VirtualFolder<T> {
-    fn fmt(&self, _: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.debug_display(0);
-        Ok(())
+impl fmt::Display for VirtualFolder {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.debug_display(0))
     }
 }

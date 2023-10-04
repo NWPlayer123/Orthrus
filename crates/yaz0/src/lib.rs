@@ -28,11 +28,11 @@
 //!     * **Note that the count can overlap with the destination, and needs to be copied one byte at
 //!       a time.**
 //!     * Copy that amount of bytes from back in the buffer to the current location.
-use std::path::Path;
 use core::str::from_utf8;
+use std::io::prelude::*;
+use std::path::Path;
 
 use orthrus_core::prelude::*;
-use std::io::prelude::*;
 
 #[derive(Default)]
 pub struct Yaz0 {
@@ -60,7 +60,7 @@ impl Yaz0 {
 
         if magic != Self::MAGIC {
             let error = crate::Error::InvalidMagic {
-                expected: format!("{:?}", from_utf8(&Self::MAGIC)?).into()
+                expected: format!("{:?}", from_utf8(&Self::MAGIC)?).into(),
             };
             log::error!("{}", error);
             return Err(error);

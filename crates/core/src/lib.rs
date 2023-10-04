@@ -1,3 +1,4 @@
+//#![feature(const_slice_index)]
 pub mod certificate;
 pub mod data;
 pub mod error;

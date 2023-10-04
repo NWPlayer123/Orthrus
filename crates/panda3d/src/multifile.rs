@@ -72,7 +72,7 @@ impl fmt::Display for Version {
 /// containing all certificates. The way it is meant to be read is to repeatedly call `d2i_X509` or
 /// an equivalent function that allows you to get the remaining bytes after parsing a certificate.
 pub struct Multifile {
-    root: VirtualFolder<Subfile>,
+    root: VirtualFolder,
     version: Version,
     scale_factor: u32,
     timestamp: u32,
@@ -124,7 +124,7 @@ impl Multifile {
         multifile.read_index(&mut data)?;
 
         // Print the actual filesystem out to debug
-        multifile.root.debug_display(0);
+        log::debug!("{}", multifile.root);
 
         Ok(multifile)
     }
@@ -138,7 +138,7 @@ impl Multifile {
 
         if magic != Self::MAGIC {
             let error = Error::InvalidMagic {
-                expected: format!("{:?}", from_utf8(&Self::MAGIC)?).into()
+                expected: format!("{:?}", from_utf8(&Self::MAGIC)?).into(),
             };
             log::error!("{}", error);
             return Err(error);
@@ -190,7 +190,7 @@ impl Multifile {
             if subfile.flags.contains(SubfileFlags::Signature) {
                 subfile.parse_signature()?;
             } else {
-                self.root.create_file(filename.split("/").peekable(), subfile);
+                self.root.create_file(filename.split('/').peekable(), subfile);
             }
 
             input.set_position(next_index as usize);
@@ -290,7 +290,7 @@ impl Subfile {
             if filename.is_empty() {
                 String::new()
             } else {
-                format!(" | Filename: {}", filename)
+                format!(" | Filename: {filename}")
             },
             if self.flags.is_empty() {
                 String::new()
@@ -331,15 +331,16 @@ impl Subfile {
         let mut offset = 0;
 
         for certificate_number in 1..=num_certificates {
-            //log::debug!("Certificate {}", certificate_number);
+            let certificate = Certificate::from_der(&data_blob[offset..])?;
 
-            certificates.push(Certificate::from_der(&data_blob[offset..])?);
+            log::debug!(
+                "Certificate {}\n{}",
+                certificate_number,
+                print_x509_info(certificate.cert())?
+            );
 
-            print_x509_info(certificates.last().unwrap().cert())?;
-            //log::debug!("");
-
-            // Move the offset for the next certificate
-            offset += certificates.last().unwrap().len();
+            offset += certificate.len();
+            certificates.push(certificate);
         }
 
         self.data.set_position(0);

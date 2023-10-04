@@ -48,7 +48,8 @@ fn setup_logger(verbose: usize) -> Result<()> {
                     log::Level::Debug => record.level().blue().to_string(),
                     log::Level::Trace => record.level().purple().to_string(),
                 };
-                out.finish(format_args!("{level:>16} {message}"));
+                let formatted_message = format!("{}", message).replace('\n', "\n      ");
+                out.finish(format_args!("{level:>16} {formatted_message}"));
             },
         )
         .level(level_filter)

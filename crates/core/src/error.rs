@@ -1,8 +1,8 @@
+use compact_str::CompactString;
 use thiserror::Error;
 use x509_parser::nom;
 
 use crate::data::DataCursorError;
-use compact_str::CompactString;
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -45,7 +45,7 @@ impl From<nom::Err<x509_parser::error::X509Error>> for Error {
 
 impl From<x509_parser::error::X509Error> for Error {
     fn from(value: x509_parser::error::X509Error) -> Self {
-        Self::X509Error(value.into())
+        Self::X509Error(value)
     }
 }
 
