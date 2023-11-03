@@ -9,8 +9,8 @@ repository.workspace = true
 [dependencies]
 orthrus-core = { version = "0.2.0", path = "../core" }
 
+compact_str = { version = "0.7", default-features = false }
 x509-parser = { version = "0.15", features = ["validate", "verify"] }
 
 bitflags = "2.3"
-compact_str = "0.7"
 log = "0.4"

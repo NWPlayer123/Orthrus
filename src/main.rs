@@ -3,7 +3,7 @@ use std::io::prelude::*;
 
 use orthrus_core::{time, Result};
 use orthrus_panda3d as panda3d;
-use orthrus_yaz0::Yaz0;
+use orthrus_yaz0 as yaz0;
 use owo_colors::OwoColorize;
 
 pub mod menu;
@@ -80,13 +80,13 @@ fn main() -> Result<()> {
     setup_logger(args.verbose)?;
 
     match args.nested {
-        Modules::Yaz0(data) => {
-            if let Some(index) = exactly_one_true(&[data.decompress]) {
+        Modules::Yaz0(params) => {
+            if let Some(index) = exactly_one_true(&[params.decompress]) {
                 match index {
                     0 => {
-                        let file = Yaz0::from_path(data.input)?;
-                        let mut output = File::create(&data.output)?;
-                        output.write_all(file.data.as_ref())?;
+                        let data = yaz0::decompress_from_path(params.input)?;
+                        let mut output = File::create(params.output)?;
+                        output.write_all(&data)?;
                     }
                     _ => unreachable!("Oops! Forgot to cover all operations."),
                 }
@@ -99,7 +99,7 @@ fn main() -> Result<()> {
                 if let Some(index) = exactly_one_true(&[data.extract]) {
                     match index {
                         0 => {
-                            let _multifile = panda3d::Multifile::from_path(data.input, 0)?;
+                            panda3d::Multifile::extract_from_path(data.input, data.output.unwrap_or(".".to_string()), 0)?;
                         }
                         _ => unreachable!("Oops! Forgot to cover all operations."),
                     }

@@ -1,4 +1,63 @@
 use core::fmt;
+use std::io::prelude::*;
+use std::path::Path;
+use compact_str::format_compact;
+
+use orthrus_core::prelude::*;
+
+/// This struct is mainly for readability in place of an unnamed tuple
+#[derive(PartialEq)]
+struct Version {
+    major: i16,
+    minor: i16,
+}
+
+impl fmt::Display for Version {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}.{}", self.major, self.minor)
+    }
+}
+
+pub struct Multifile {}
+
+impl Multifile {
+    const CURRENT_VERSION: Version = Version { major: 1, minor: 1 };
+    const MAGIC: &str = "pmf\0\n\r";
+
+    pub fn extract_from_path<P: AsRef<Path> + fmt::Display>(
+        input: P,
+        output: P,
+        offset: usize,
+    ) -> Result<()> {
+        log::info!("Loading Multifile at {input}");
+        let data = DataCursor::from_path(input, Endian::Little)?;
+        Self::extract_from(data, output, offset)
+    }
+
+    pub fn extract_from<P: AsRef<Path> + fmt::Display>(
+        mut input: DataCursor,
+        output: P,
+        offset: usize,
+    ) -> Result<()> {
+        log::info!("Extracting Multifile to {output}, using offset {offset}");
+
+        let mut magic = [0u8; 6];
+        input.read_exact(&mut magic)?;
+
+        if magic != Self::MAGIC.as_bytes() {
+            let error = Error::InvalidMagic {
+                expected: format_compact!("{:?}", Self::MAGIC),
+            };
+            log::error!("{error}");
+            return Err(error);
+        }
+
+        Ok(())
+    }
+}
+
+/*
+use core::fmt;
 use core::str::from_utf8;
 use std::io::prelude::*;
 use std::path::Path;
@@ -8,7 +67,7 @@ use compact_str::CompactString;
 use orthrus_core::certificate::{print_x509_info, Certificate};
 use orthrus_core::prelude::*;
 use orthrus_core::time;
-use orthrus_core::vfs::VirtualFolder;
+//use orthrus_core::vfs::VirtualFolder;
 
 /// This struct is mainly for readability in place of an unnamed tuple
 #[derive(PartialEq)]
@@ -72,7 +131,7 @@ impl fmt::Display for Version {
 /// containing all certificates. The way it is meant to be read is to repeatedly call `d2i_X509` or
 /// an equivalent function that allows you to get the remaining bytes after parsing a certificate.
 pub struct Multifile {
-    root: VirtualFolder,
+    //root: VirtualFolder,
     version: Version,
     scale_factor: u32,
     timestamp: u32,
@@ -124,7 +183,7 @@ impl Multifile {
         multifile.read_index(&mut data)?;
 
         // Print the actual filesystem out to debug
-        log::debug!("{}", multifile.root);
+        //log::debug!("{}", multifile.root);
 
         Ok(multifile)
     }
@@ -185,12 +244,12 @@ impl Multifile {
                 input.position(),
                 next_index
             );
-            let (mut subfile, filename) = Subfile::from_data(input, self)?;
+            let (mut subfile, _filename) = Subfile::from_data(input, self)?;
 
             if subfile.flags.contains(SubfileFlags::Signature) {
                 subfile.parse_signature()?;
             } else {
-                self.root.create_file(filename.split('/').peekable(), subfile);
+                //self.root.create_file(filename.split('/').peekable(), subfile);
             }
 
             input.set_position(next_index as usize);
@@ -205,7 +264,7 @@ impl Multifile {
 impl Default for Multifile {
     fn default() -> Self {
         Self {
-            root: VirtualFolder::default(),
+            //root: VirtualFolder::default(),
             version: Self::CURRENT_VERSION,
             scale_factor: 1,
             timestamp: 0,
@@ -347,3 +406,4 @@ impl Subfile {
         Ok(certificates)
     }
 }
+*/

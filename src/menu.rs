@@ -68,6 +68,10 @@ pub struct MultifileData {
     #[argp(option, short = 'i')]
     #[argp(description = "Multifile to be processed")]
     pub input: String,
+
+    #[argp(option, short = 'o')]
+    #[argp(description = "Directory to extract to")]
+    pub output: Option<String>,
 }
 
 #[must_use]

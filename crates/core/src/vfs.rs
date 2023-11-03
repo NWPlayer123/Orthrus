@@ -1,8 +1,12 @@
+//This file still heavily WIP while I decide what to do to "generalize" across many different formats.
+
+/*
 use core::fmt;
 
 use crate::DataCursor;
 use compact_str::CompactString;
 use hashbrown::HashMap;
+
 
 pub enum VirtualNode {
     File(VirtualFile),
@@ -86,3 +90,4 @@ impl fmt::Display for VirtualFolder {
         write!(f, "{}", self.debug_display(0))
     }
 }
+*/

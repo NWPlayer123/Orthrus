@@ -2,6 +2,7 @@ use core::mem::size_of;
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
+use core::ops::Deref;
 
 use thiserror::Error;
 
@@ -45,11 +46,17 @@ impl DataCursor {
     /// Creates a new `DataCursor` using the provided path and endianness.
     ///
     /// # Errors
-    /// This function will return an error if `path` does not exist, the user lacks permissions
-    /// to read the file, or reading the file fails.
+    /// This function will return an error if `path` does not exist, if unable to read file
+    /// metadata, or if reading the file fails.
     pub fn from_path<P: AsRef<Path>>(path: P, endian: Endian) -> std::io::Result<Self> {
         let mut file = File::open(path)?;
-        let size = usize::try_from(file.metadata()?.len()).unwrap();
+        let filesize = file.metadata()?.len();
+        let size = usize::try_from(filesize).map_err(|_| {
+            std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "File is too large to read into memory",
+            )
+        })?;
         let mut bytes = vec![0u8; size];
         file.read_exact(&mut bytes)?;
         Ok(Self::new(bytes, endian))
@@ -564,8 +571,10 @@ impl From<Vec<u8>> for DataCursor {
     }
 }
 
-impl AsRef<[u8]> for DataCursor {
-    fn as_ref(&self) -> &[u8] {
+impl Deref for DataCursor {
+    type Target = [u8];
+
+    fn deref(&self) -> &Self::Target {
         &self.data
     }
 }

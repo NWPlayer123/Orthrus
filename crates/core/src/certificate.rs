@@ -1,3 +1,5 @@
+//TODO: need to re-evaluate x509-parser to allow for no_std
+
 use core::fmt;
 use core::fmt::Write;
 

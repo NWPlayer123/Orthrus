@@ -1,6 +1,8 @@
 use time::format_description::FormatItem;
 use time::macros::format_description;
-use time::{OffsetDateTime, UtcOffset};
+use time::OffsetDateTime;
+#[cfg(feature = "std")]
+use time::UtcOffset;
 
 pub const TIME_FORMAT: &[FormatItem] =
     format_description!("[year]-[month]-[day] [hour]:[minute]:[second]");
@@ -12,7 +14,16 @@ pub const TIME_FORMAT: &[FormatItem] =
 /// Returns [`TimeInvalidOffset`](crate::Error::TimeInvalidOffset) if unable to determine the
 /// current time zone.
 pub fn current_time() -> time::Result<String> {
-    let time = OffsetDateTime::now_local()?;
+    let time = {
+        #[cfg(feature = "std")]
+        {
+            OffsetDateTime::now_local()?
+        }
+        #[cfg(not(feature = "std"))]
+        {
+            OffsetDateTime::now_utc()
+        }
+    };
     let formatted = time.format(TIME_FORMAT)?;
     Ok(formatted)
 }
@@ -35,6 +46,7 @@ pub fn format_timestamp(timestamp: i64) -> time::Result<String> {
 /// # Errors
 /// Returns a [`TimeInvalidOffset`](crate::Error::TimeInvalidOffset) if unable to get the local
 /// offset.
+#[cfg(feature = "std")]
 pub fn get_local_offset() -> time::Result<UtcOffset> {
     Ok(UtcOffset::local_offset_at(OffsetDateTime::UNIX_EPOCH)?)
 }

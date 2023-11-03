@@ -7,12 +7,17 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-log = { version = "0.4", features = ["std"] }
-time = { version = "0.3", features = ["formatting", "local-offset", "macros"] }
-x509-parser = { version = "0.15", features = ["validate", "verify"] }
+compact_str = { version = "0.7", default-features = false }
+time = { version = "0.3", features = ["macros"] }
+x509-parser = { version = "0.15", features = ["validate", "verify"], optional = true }
 
-bitflags = "2.3"
-compact_str = "0.7"
+bitflags = "2.4"
 hashbrown = "0.14"
-ouroboros = "0.17"
+log = "0.4"
+ouroboros = "0.18"
 thiserror = "1.0"
+
+[features]
+#TODO: work on no_std support
+default = ["std"]
+std = ["time/local-offset", "x509-parser"]
