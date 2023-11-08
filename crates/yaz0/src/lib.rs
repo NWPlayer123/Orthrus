@@ -134,7 +134,7 @@ fn decompress_into(input: &mut DataCursor, output: &mut DataCursor) -> Result<()
                 n => usize::from(n) + 2,
             };
 
-            output.copy_range_within(output.position() - back, size)?;
+            output.copy_within(output.position() - back, size)?;
         } else {
             //copy one byte
             input.copy_byte_to(output)?;

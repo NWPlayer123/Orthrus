@@ -7,6 +7,7 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+snafu = { version = "0.7", default-features = false }
 compact_str = { version = "0.7", default-features = false }
 time = { version = "0.3", features = ["macros"] }
 x509-parser = { version = "0.15", features = ["validate", "verify"], optional = true }
@@ -20,4 +21,4 @@ thiserror = "1.0"
 [features]
 #TODO: work on no_std support
 default = ["std"]
-std = ["time/local-offset", "x509-parser"]
+std = ["time/local-offset", "snafu/std", "x509-parser"]
