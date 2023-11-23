@@ -1,9 +1,10 @@
 use core::fmt;
 use std::io::prelude::*;
 use std::path::Path;
-use compact_str::format_compact;
 
 use orthrus_core::prelude::*;
+use orthrus_core::{data, time};
+use snafu::prelude::*;
 
 /// This struct is mainly for readability in place of an unnamed tuple
 #[derive(PartialEq)]
@@ -18,40 +19,160 @@ impl fmt::Display for Version {
     }
 }
 
+#[derive(Debug, Snafu)]
+pub enum MultifileError {
+    #[snafu(display("Unable to find file/folder!"))]
+    NotFound,
+    #[snafu(display("Unexpected End-Of-File!"))]
+    EndOfFile,
+    #[snafu(display("Invalid End Size!"))]
+    InvalidSize,
+    #[snafu(display("Unable to convert timestamp!"))]
+    InvalidTimestamp,
+    #[snafu(display("Invalid Magic! Expected {expected:?}"))]
+    InvalidMagic { expected: [u8; 6] },
+    #[snafu(display("Unknown Multifile Version! Expected v{major}.{minor}"))]
+    UnknownVersion { major: i16, minor: i16 },
+}
+
+#[cfg(feature = "std")]
+impl From<std::io::Error> for MultifileError {
+    fn from(error: std::io::Error) -> Self {
+        match error.kind() {
+            std::io::ErrorKind::NotFound => MultifileError::NotFound,
+            std::io::ErrorKind::UnexpectedEof => MultifileError::EndOfFile,
+            _ => panic!("Unexpected std::io::error! Something has gone horribly wrong"),
+        }
+    }
+}
+
+impl From<data::Error> for MultifileError {
+    fn from(error: data::Error) -> Self {
+        match error {
+            data::Error::EndOfFile => MultifileError::EndOfFile,
+            data::Error::InvalidSize => MultifileError::InvalidSize,
+        }
+    }
+}
+
+impl From<time::Error> for MultifileError {
+    fn from(error: time::Error) -> Self {
+        match error {
+            time::Error::ComponentRange(_) => MultifileError::EndOfFile,
+            time::Error::IndeterminateOffset(_) => MultifileError::InvalidTimestamp,
+            _ => panic!("Unexpected time::error! Something has gone horribly wrong"),
+        }
+    }
+}
+
 pub struct Multifile {}
 
+/// This is a test, thanks
 impl Multifile {
     const CURRENT_VERSION: Version = Version { major: 1, minor: 1 };
-    const MAGIC: &str = "pmf\0\n\r";
+    const MAGIC: [u8; 6] = *b"pmf\0\n\r";
 
-    pub fn extract_from_path<P: AsRef<Path> + fmt::Display>(
-        input: P,
-        output: P,
-        offset: usize,
-    ) -> Result<()> {
-        log::info!("Loading Multifile at {input}");
-        let data = DataCursor::from_path(input, Endian::Little)?;
-        Self::extract_from(data, output, offset)
+    /// Parses a `Panda3D` Multifile pre-header, which allows for comment lines starting with '#'.
+    ///
+    /// Returns either a [String] containing the header comment data, or an [`IOError`](Error::Io)
+    /// if it reaches EOF before finding the Multifile magic ("pmf\0\n\r").
+
+    ///This function tries to read a pre-header, if any, which allows for comment lines starting
+    /// with '#'.
+    /*fn parse_header_prefix(input: &[u8]) -> Result<&[u8], MultifileError> {
+        let mut header_prefix = String::new();
+        let mut line = String::new();
+
+        loop {
+            if input.read_u8()? == b'#' {
+                let len = input.read_line(&mut line)?;
+                if len == 0 {
+                    return Err(MultifileError::EndOfFile);
+                }
+
+                header_prefix.push('#');
+                header_prefix.push_str(&line);
+
+                line.clear();
+            } else {
+                input.set_position(input.position() - 1);
+                return Ok(header_prefix);
+            }
+        }
+    }*/
+
+    #[cfg(feature = "std")]
+    pub fn extract_from_path<P>(input: P, output: P, offset: usize) -> Result<(), MultifileError>
+    where
+        P: AsRef<Path> + fmt::Display,
+    {
+        log::info!("Reading Multifile from {input}");
+        let data = std::fs::read(input)?;
+        Self::extract_from(&data, output, offset)
     }
 
-    pub fn extract_from<P: AsRef<Path> + fmt::Display>(
-        mut input: DataCursor,
-        output: P,
-        offset: usize,
-    ) -> Result<()> {
+    /// This function is designed to run as a single pass. For more general use, see
+    /// [`extract`](Multifile::extract).
+    #[cfg(feature = "std")]
+    pub fn extract_from<P>(input: &[u8], output: P, offset: usize) -> Result<(), MultifileError>
+    where
+        P: AsRef<Path> + fmt::Display,
+    {
         log::info!("Extracting Multifile to {output}, using offset {offset}");
 
-        let mut magic = [0u8; 6];
-        input.read_exact(&mut magic)?;
+        let mut data = DataCursor::new(input, Endian::Little);
 
-        if magic != Self::MAGIC.as_bytes() {
-            let error = Error::InvalidMagic {
-                expected: format_compact!("{:?}", Self::MAGIC),
+        let mut magic = [0u8; 6];
+        data.read_exact(&mut magic).map_err(|_| MultifileError::EndOfFile)?;
+
+        if magic != Self::MAGIC {
+            let error = MultifileError::InvalidMagic {
+                expected: Self::MAGIC,
             };
             log::error!("{error}");
             return Err(error);
         }
 
+        // Latest version is v1.1
+        let version = Version {
+            major: data.read_i16()?,
+            minor: data.read_i16()?,
+        };
+
+        if version != Self::CURRENT_VERSION {
+            let error = MultifileError::UnknownVersion {
+                major: Self::CURRENT_VERSION.major,
+                minor: Self::CURRENT_VERSION.minor,
+            };
+            log::error!("{error}");
+            return Err(error);
+        }
+
+        log::info!("Multifile v{version}");
+
+        // Only print scale factor if it's bigger than 1 since that's the norm
+        let scale_factor = data.read_u32()?;
+        if scale_factor > 1 {
+            log::info!("Scale Factor: {scale_factor}");
+        }
+
+        // Timestamp added in v1.1
+        if version.minor >= 1 {
+            let timestamp = data.read_u32()?;
+            log::info!(
+                "Last Modified: {} ({timestamp})",
+                time::format_timestamp(timestamp.into())?
+            );
+        }
+
+        Ok(())
+    }
+
+    /// This function
+    pub fn extract<P: AsRef<Path> + fmt::Display>(
+        &mut self,
+        _output: P,
+    ) -> Result<(), MultifileError> {
         Ok(())
     }
 }

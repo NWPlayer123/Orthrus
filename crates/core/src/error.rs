@@ -1,3 +1,5 @@
+
+/*
 use compact_str::CompactString;
 use thiserror::Error;
 use x509_parser::nom;
@@ -56,3 +58,4 @@ impl From<time::error::Error> for Error {
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
+*/

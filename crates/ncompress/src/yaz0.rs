@@ -30,12 +30,76 @@
 //!     * **Note that the count can overlap with the destination, and needs to be copied one byte at
 //!       a time.**
 //!     * Copy that amount of bytes from back in the buffer to the current position.
+
+//This is needed for macros
+#![allow(unused_assignments)]
 use core::fmt::Display;
-use core::str::from_utf8;
-use std::io::prelude::*;
 use std::path::Path;
 
 use orthrus_core::prelude::*;
+use snafu::prelude::*;
+
+#[derive(Debug, Snafu)]
+pub enum Error {
+    #[snafu(display("Unable to find file/folder!"))]
+    NotFound,
+    #[snafu(display("Unexpected End-Of-File!"))]
+    EndOfFile,
+    #[snafu(display("Invalid End Size!"))]
+    InvalidSize,
+    #[snafu(display("Invalid Magic! Expected {expected:?}"))]
+    InvalidMagic { expected: [u8; 4] },
+}
+pub type Result<T> = core::result::Result<T, Error>;
+
+#[cfg(feature = "std")]
+impl From<std::io::Error> for Error {
+    fn from(error: std::io::Error) -> Self {
+        match error.kind() {
+            std::io::ErrorKind::NotFound => Error::NotFound,
+            std::io::ErrorKind::UnexpectedEof => Error::EndOfFile,
+            _ => panic!("Unexpected std::io::error! Something has gone horribly wrong"),
+        }
+    }
+}
+
+impl From<data::Error> for Error {
+    fn from(error: data::Error) -> Self {
+        match error {
+            data::Error::EndOfFile => Error::EndOfFile,
+            data::Error::InvalidSize => Error::InvalidSize,
+        }
+    }
+}
+
+macro_rules! read_u8 {
+    ($data:expr, $pos:expr) => {{
+        let value = $data[$pos];
+        $pos += 1;
+        value
+    }};
+}
+
+macro_rules! read_u16 {
+    ($data:expr, $pos:expr) => {{
+        let value = u16::from_be_bytes([$data[$pos], $data[$pos + 1]]);
+        $pos += 2;
+        value
+    }};
+}
+
+macro_rules! read_u32 {
+    ($data:expr, $pos:expr) => {{
+        let value = u32::from_be_bytes([
+            $data[$pos],
+            $data[$pos + 1],
+            $data[$pos + 2],
+            $data[$pos + 3],
+        ]);
+        $pos += 4;
+        value
+    }};
+}
 
 /// Unique identifier that tells us if we're reading a Yaz0-compressed file
 pub const MAGIC: [u8; 4] = *b"Yaz0";
@@ -48,10 +112,11 @@ pub const MAGIC: [u8; 4] = *b"Yaz0";
 ///
 /// # Panics
 /// Panics if the Yaz0 stream is malformed and it tries to read past file bounds.
+#[cfg(feature = "std")]
 pub fn decompress_from_path<P: AsRef<Path> + Display>(path: P) -> Result<DataCursor> {
     log::info!("Loading Yaz0 file from {path}");
-    let input = DataCursor::from_path(&path, Endian::Big)?;
-    crate::decompress_from(input)
+    let input = std::fs::read(path)?;
+    self::decompress_from(&input)
 }
 
 /// Tries to decompress a [`DataCursor`] as a Yaz0 file.
@@ -62,21 +127,23 @@ pub fn decompress_from_path<P: AsRef<Path> + Display>(path: P) -> Result<DataCur
 ///
 /// # Panics
 /// Panics if the Yaz0 stream is malformed and it tries to read past file bounds.
-pub fn decompress_from(mut input: DataCursor) -> Result<DataCursor> {
+pub fn decompress_from(data: &[u8]) -> Result<DataCursor> {
     log::info!("Reading Yaz0 header");
-    let mut magic = [0u8; 4];
-    input.read_exact(&mut magic)?;
+    let mut pos: usize = 0;
 
-    if magic != crate::MAGIC {
+    let magic = &data[pos..pos + 4];
+    pos += 4;
+
+    if magic != self::MAGIC {
         let error = Error::InvalidMagic {
-            expected: format!("{:?}", from_utf8(&crate::MAGIC)?).into(),
+            expected: self::MAGIC,
         };
-        log::error!("{}", error);
+        log::error!("{error}");
         return Err(error);
     }
 
-    let dec_size = input.read_u32()?;
-    let alignment = input.read_u32()?; //0 on GC/Wii files
+    let dec_size = read_u32!(data, pos);
+    let alignment = read_u32!(data, pos); //0 on GC/Wii files
     log::info!(
         "Output Size: {dec_size:#X}{}",
         if alignment == 0 {
@@ -91,7 +158,7 @@ pub fn decompress_from(mut input: DataCursor) -> Result<DataCursor> {
 
     log::debug!("Starting Yaz0 decompression");
     //Perform the actual decompression
-    crate::decompress_into(&mut input, &mut output)?;
+    self::decompress_into(data, &mut output)?;
     log::debug!("Finished Yaz0 decompression");
 
     //If we've gotten this far, output contains valid decompressed data
@@ -110,34 +177,34 @@ pub fn decompress_from(mut input: DataCursor) -> Result<DataCursor> {
 /// # Panics
 /// Panics if the Yaz0 stream is malformed and it tries to read past file bounds.
 #[inline(never)]
-fn decompress_into(input: &mut DataCursor, output: &mut DataCursor) -> Result<()> {
+fn decompress_into(input: &[u8], output: &mut DataCursor) -> Result<()> {
     let mut mask: u8 = 0;
     let mut flags: u8 = 0;
 
-    input.set_position(0x10);
+    let mut inputpos: usize = 0x10;
     output.set_position(0);
 
     while output.position() < output.len() {
         //out of flag bits for RLE, load in a new byte
         if mask == 0 {
             mask = 1 << 7;
-            flags = input.read_u8()?;
+            flags = read_u8!(input, inputpos);
         }
 
         if (flags & mask) == 0 {
             //do RLE copy
-            let code = input.read_u16()?;
+            let code = read_u16!(input, inputpos);
 
             let back = usize::from((code & 0xFFF) + 1);
             let size = match code >> 12 {
-                0 => usize::from(input.read_u8()?) + 0x12,
+                0 => usize::from(read_u8!(input, inputpos)) + 0x12,
                 n => usize::from(n) + 2,
             };
 
             output.copy_within(output.position() - back, size)?;
         } else {
             //copy one byte
-            input.copy_byte_to(output)?;
+            output.write_u8(read_u8!(input, inputpos))?;
         }
 
         mask >>= 1;
@@ -148,3 +215,14 @@ fn decompress_into(input: &mut DataCursor, output: &mut DataCursor) -> Result<()
 // note to self: for compression algo, check if the min size is even possible (2), check max
 // (0x111), anywhere in the 0x1000 runback and then bisect until we find the minimum (0x88, 0x44,
 // 0xAA, etc)
+
+pub fn compress_from(input: &[u8]) -> Result<DataCursor> {
+    //Assume 0x10 header, every byte is a copy, and include flag bytes (rounded up)
+    let worst_possible_size: usize = 0x10 + input.len() + input.len().div_ceil(8);
+    let mut output = DataCursor::new(vec![0u8; worst_possible_size], Endian::Big);
+
+
+    //TODO: update once we know actual size
+    output = output.trim_elements(0)?;
+    Ok(output)
+}

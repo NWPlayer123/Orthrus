@@ -1,8 +1,8 @@
 [package]
-name = "orthrus-panda3d"
-version = "0.1.0"
+name = "orthrus-ncompress"
+version = "0.2.0"
 edition = "2021"
-description = "Orthrus module supporting the Panda3D engine"
+description = "Orthrus module supporting Nintendo compression formats"
 license.workspace = true
 repository.workspace = true
 
@@ -10,9 +10,6 @@ repository.workspace = true
 orthrus-core = { version = "0.2.0", path = "../core" }
 
 snafu = { version = "0.7", default-features = false }
-compact_str = { version = "0.7", default-features = false }
-
-bitflags = "2.3"
 log = "0.4"
 
 [features]

@@ -1,6 +1,6 @@
 //TODO: need to re-evaluate x509-parser to allow for no_std
 
-use core::fmt;
+/*use core::fmt;
 use core::fmt::Write;
 
 use ouroboros::self_referencing;
@@ -574,3 +574,4 @@ fn print_x509_extended_key_usage(usage: &ExtendedKeyUsage, indent: usize) -> Str
 
     output
 }
+*/

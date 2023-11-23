@@ -1,4 +1,5 @@
-//This file still heavily WIP while I decide what to do to "generalize" across many different formats.
+//This file still heavily WIP while I decide what to do to "generalize" across many different
+// formats.
 
 /*
 use core::fmt;

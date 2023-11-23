@@ -17,13 +17,18 @@ codegen-units = 1
 [dependencies]
 orthrus-core = { version = "0.2", path = "crates/core" }#, features = ["std"]
 orthrus-panda3d = { version = "0.1", path = "crates/panda3d" }
-orthrus-yaz0 = { version = "0.2", path = "crates/yaz0" }
+orthrus-ncompress = { version = "0.2", path = "crates/ncompress" }
 
+snafu = { version = "0.7", default-features = false }
 argp = "0.3"
 enable-ansi-support = "0.2"
 fern = "0.6"
 log = "0.4"
 owo-colors = "3.5"
+
+[features]
+default = ["std"]
+std = ["snafu/std"]
 
 [workspace]
 members = ["crates/*"]

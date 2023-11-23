@@ -1,52 +1,43 @@
 use time::format_description::FormatItem;
 use time::macros::format_description;
-use time::OffsetDateTime;
-#[cfg(feature = "std")]
-use time::UtcOffset;
+//re-export time::Error since we use it directly so other libraries can implement
+// From<time::Error>
+pub use time::Error;
+use time::{OffsetDateTime, UtcOffset};
 
 pub const TIME_FORMAT: &[FormatItem] =
     format_description!("[year]-[month]-[day] [hour]:[minute]:[second]");
 
-/// Gets the current time in the local time zone and returns a formatted [String].
+/// This function will return a formatted [String] of the current local time.
 ///
 /// # Errors
-///
-/// Returns [`TimeInvalidOffset`](crate::Error::TimeInvalidOffset) if unable to determine the
+/// Returns [`IndeterminateOffset`](time::Error::IndeterminateOffset) if unable to determine the
 /// current time zone.
 pub fn current_time() -> time::Result<String> {
-    let time = {
-        #[cfg(feature = "std")]
-        {
-            OffsetDateTime::now_local()?
-        }
-        #[cfg(not(feature = "std"))]
-        {
-            OffsetDateTime::now_utc()
-        }
-    };
-    let formatted = time.format(TIME_FORMAT)?;
+    let time = OffsetDateTime::now_local()?;
+    //Theoretically this should never fail
+    let formatted = time.format(TIME_FORMAT).unwrap();
     Ok(formatted)
 }
 
-/// Converts the timestamp into a valid date and returns a formatted [String].
+/// This function tries to convert a timestamp into a formatted [String].
 ///
 /// # Errors
-///
-/// Returns [`TimeInvalidRange`](crate::Error::TimeInvalidRange) if unable to convert the timestamp
-/// to a valid date.
+/// Returns [`ComponentRange`](time::Error::ComponentRange) if unable to convert the timestamp to a
+/// valid date.
 pub fn format_timestamp(timestamp: i64) -> time::Result<String> {
     let time = OffsetDateTime::from_unix_timestamp(timestamp)?;
-    let formatted = time.format(TIME_FORMAT)?;
+    //Theoretically this should never fail
+    let formatted = time.format(TIME_FORMAT).unwrap();
     Ok(formatted)
 }
 
-/// Returns the local offset compared to UTC. Useful for testing if the current system supports
-/// local time zones, or if the program needs to operate off UTC.
+/// This function tries to return the time zone offset. This is useful for testing if the current
+/// system supports local time, or if we can only use UTC.
 ///
 /// # Errors
-/// Returns a [`TimeInvalidOffset`](crate::Error::TimeInvalidOffset) if unable to get the local
-/// offset.
-#[cfg(feature = "std")]
+/// Returns [`IndeterminateOffset`](time::Error::IndeterminateOffset) if unable to determine the
+/// current time zone.
 pub fn get_local_offset() -> time::Result<UtcOffset> {
     Ok(UtcOffset::local_offset_at(OffsetDateTime::UNIX_EPOCH)?)
 }
