@@ -257,7 +257,6 @@ pub fn compress_from(input: &[u8], algo: CompressionAlgo, align: u32) -> Result<
 
 #[inline(never)]
 fn compress_into_mkw(input: &[u8], output: &mut [u8]) -> usize {
-    log::info!("Working on MKW compression!");
     let mut input_pos: usize;
     let mut output_pos: usize;
     let mut flag_byte_pos: usize;
@@ -272,12 +271,10 @@ fn compress_into_mkw(input: &[u8], output: &mut [u8]) -> usize {
         let mut first_match_offset: usize;
         let mut first_match_len: usize;
         (first_match_offset, first_match_len) = find_match(input, input_pos);
-        log::info!("First Match Offset: {}, First Match Length: {}", first_match_offset, first_match_len);
         if first_match_len > 2 {
             let second_match_offset: usize;
             let second_match_len: usize;
             (second_match_offset, second_match_len) = find_match(input, input_pos + 1);
-            log::info!("Second Match Offset: {}, Second Match Length: {}", second_match_offset, second_match_len);
             if first_match_len + 1 < second_match_len {
                 //TODO: merge this and the outer else?
                 output[flag_byte_pos] |= flag_byte_shift;
@@ -297,12 +294,10 @@ fn compress_into_mkw(input: &[u8], output: &mut [u8]) -> usize {
             first_match_offset = input_pos - first_match_offset - 1;
             if first_match_len < 18 {
                 first_match_offset |= (first_match_len - 2) << 12;
-                log::info!("Writing two byte RLE! {}, {}", first_match_offset, output_pos);
                 output[output_pos] = (first_match_offset >> 8) as u8;
                 output[output_pos + 1] = (first_match_offset) as u8;
                 output_pos += 2;
             } else {
-                log::info!("Writing three byte RLE! {}, {}, {}", first_match_offset, first_match_len, output_pos);
                 output[output_pos] = (first_match_offset >> 8) as u8;
                 output[output_pos + 1] = (first_match_offset) as u8;
                 output[output_pos + 2] = (first_match_len - 18) as u8;
@@ -330,7 +325,6 @@ fn compress_into_mkw(input: &[u8], output: &mut [u8]) -> usize {
 
 #[inline(never)]
 fn find_match(input: &[u8], input_pos: usize) -> (usize, usize) {
-    log::info!("Trying to find a match!");
     let mut window: usize = if input_pos > 4096 {
         input_pos - 4096
     } else {
@@ -378,11 +372,6 @@ fn find_match(input: &[u8], input_pos: usize) -> (usize, usize) {
 
 #[inline(never)]
 fn search_window(needle: &[u8], haystack: &[u8]) -> usize {
-    /*log::info!(
-        "needleSize: {}, haystackSize: {}",
-        needle.len(),
-        haystack.len()
-    );*/
     let mut it_haystack: usize;
     let mut it_needle: usize;
 
@@ -412,7 +401,6 @@ fn search_window(needle: &[u8], haystack: &[u8]) -> usize {
             it_haystack -= 1;
             it_needle -= 1;
         }
-        //log::info!("Returning {}", it_haystack + 1);
         return it_haystack + 1;
     }
 }
@@ -423,7 +411,6 @@ fn compute_skip_table(needle: &[u8]) -> [usize; 256] {
     for i in 0..needle.len() {
         table[needle[i] as usize] = needle.len() - i - 1;
     }
-    //log::info!("{table:?}");
     table
 }
 
