@@ -83,10 +83,20 @@ fn main() {
 
     match args.nested {
         Modules::Yaz0(params) => {
-            if let Some(index) = exactly_one_true(&[params.decompress]) {
+            if let Some(index) = exactly_one_true(&[params.decompress, params.compress]) {
                 match index {
                     0 => {
                         let data = yaz0::decompress_from_path(params.input).unwrap();
+                        let mut output = File::create(params.output).unwrap();
+                        output.write_all(&data).unwrap();
+                    }
+                    1 => {
+                        let data = yaz0::compress_from_path(
+                            params.input,
+                            yaz0::CompressionAlgo::MarioKartWii,
+                            0,
+                        )
+                        .unwrap();
                         let mut output = File::create(params.output).unwrap();
                         output.write_all(&data).unwrap();
                     }

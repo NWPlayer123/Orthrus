@@ -45,8 +45,10 @@ pub enum Error {
     NotFound,
     #[snafu(display("Unexpected End-Of-File!"))]
     EndOfFile,
-    #[snafu(display("Invalid End Size!"))]
+    #[snafu(display("Invalid Size Encountered!"))]
     InvalidSize,
+    #[snafu(display("File too large to fit into u32::MAX!"))]
+    FileTooBig,
     #[snafu(display("Invalid Magic! Expected {expected:?}"))]
     InvalidMagic { expected: [u8; 4] },
 }
@@ -212,17 +214,379 @@ fn decompress_into(input: &[u8], output: &mut DataCursor) -> Result<()> {
     Ok(())
 }
 
-// note to self: for compression algo, check if the min size is even possible (2), check max
-// (0x111), anywhere in the 0x1000 runback and then bisect until we find the minimum (0x88, 0x44,
-// 0xAA, etc)
+pub enum CompressionAlgo {
+    MarioKartWii, //eggCompress
+}
 
-pub fn compress_from(input: &[u8]) -> Result<DataCursor> {
+#[cfg(feature = "std")]
+pub fn compress_from_path<P: AsRef<Path> + Display>(
+    path: P,
+    algo: CompressionAlgo,
+    align: u32,
+) -> Result<DataCursor> {
+    log::info!("Loading binary file from {path}");
+    let input = std::fs::read(path)?;
+    self::compress_from(&input, algo, align)
+}
+
+/// This function compresses the input data using a given compression algorithm.
+///
+/// # Warnings
+/// Alignment should be zero on GameCube and Wii platforms, and non-zero on Wii U and Switch
+/// platforms. This function does not try to discern what platform the file is being compressed for,
+/// or if the alignment is valid.
+pub fn compress_from(input: &[u8], algo: CompressionAlgo, align: u32) -> Result<DataCursor> {
+    ensure!(input.len() <= u32::MAX as usize, FileTooBigSnafu);
+
     //Assume 0x10 header, every byte is a copy, and include flag bytes (rounded up)
     let worst_possible_size: usize = 0x10 + input.len() + input.len().div_ceil(8);
     let mut output = DataCursor::new(vec![0u8; worst_possible_size], Endian::Big);
 
+    //Don't try to write the header in the hot path
+    output.write_u32(u32::from_be_bytes(*b"Yaz0"))?; // "Yaz0" magic
+    output.write_u32(input.len() as u32)?; // Output size for decompression algo
+    output.write_u32(align)?; // Alignment, platform-specific
+    output.set_position(0x10);
 
-    //TODO: update once we know actual size
-    output = output.trim_elements(0)?;
-    Ok(output)
+    let output_size = match algo {
+        CompressionAlgo::MarioKartWii => compress_into_mkw(input, &mut output),
+    };
+
+    Ok(output.shrink_to(output_size as usize)?)
 }
+
+#[inline(never)]
+fn compress_into_mkw(input: &[u8], output: &mut [u8]) -> usize {
+    log::info!("Working on MKW compression!");
+    let mut input_pos: usize;
+    let mut output_pos: usize;
+    let mut flag_byte_pos: usize;
+    let mut flag_byte_shift: u8;
+
+    input_pos = 0;
+    output_pos = 0x11;
+    flag_byte_pos = 0x10;
+    flag_byte_shift = 0x80;
+
+    while input_pos < input.len() {
+        let mut first_match_offset: usize;
+        let mut first_match_len: usize;
+        (first_match_offset, first_match_len) = find_match(input, input_pos);
+        log::info!("First Match Offset: {}, First Match Length: {}", first_match_offset, first_match_len);
+        if first_match_len > 2 {
+            let second_match_offset: usize;
+            let second_match_len: usize;
+            (second_match_offset, second_match_len) = find_match(input, input_pos + 1);
+            log::info!("Second Match Offset: {}, Second Match Length: {}", second_match_offset, second_match_len);
+            if first_match_len + 1 < second_match_len {
+                //TODO: merge this and the outer else?
+                output[flag_byte_pos] |= flag_byte_shift;
+                flag_byte_shift >>= 1;
+                output[output_pos] = input[input_pos];
+                input_pos += 1;
+                output_pos += 1;
+                if flag_byte_shift == 0 {
+                    flag_byte_shift = 0x80;
+                    flag_byte_pos = output_pos;
+                    output[output_pos] = 0;
+                    output_pos += 1;
+                }
+                first_match_len = second_match_len;
+                first_match_offset = second_match_offset;
+            }
+            first_match_offset = input_pos - first_match_offset - 1;
+            if first_match_len < 18 {
+                first_match_offset |= (first_match_len - 2) << 12;
+                log::info!("Writing two byte RLE! {}, {}", first_match_offset, output_pos);
+                output[output_pos] = (first_match_offset >> 8) as u8;
+                output[output_pos + 1] = (first_match_offset) as u8;
+                output_pos += 2;
+            } else {
+                log::info!("Writing three byte RLE! {}, {}, {}", first_match_offset, first_match_len, output_pos);
+                output[output_pos] = (first_match_offset >> 8) as u8;
+                output[output_pos + 1] = (first_match_offset) as u8;
+                output[output_pos + 2] = (first_match_len - 18) as u8;
+                output_pos += 3;
+            }
+            input_pos += first_match_len;
+        } else {
+            output[flag_byte_pos] |= flag_byte_shift;
+            output[output_pos] = input[input_pos];
+            input_pos += 1;
+            output_pos += 1;
+        }
+
+        flag_byte_shift >>= 1;
+        if flag_byte_shift == 0 {
+            flag_byte_shift = 0x80;
+            flag_byte_pos = output_pos;
+            output[output_pos] = 0;
+            output_pos += 1;
+        }
+    }
+
+    output_pos
+}
+
+#[inline(never)]
+fn find_match(input: &[u8], input_pos: usize) -> (usize, usize) {
+    log::info!("Trying to find a match!");
+    let mut window: usize = if input_pos > 4096 {
+        input_pos - 4096
+    } else {
+        0
+    };
+    let mut window_size = 3;
+    let max_match_size = if (input.len() - input_pos) <= 273 {
+        input.len() - input_pos
+    } else {
+        273
+    };
+    if max_match_size < 3 {
+        return (0, 0);
+    }
+
+    let mut window_offset: usize = 0;
+    let mut found_match_offset: usize = 0; //potentially uninitialized in C++ version
+
+    while window < input_pos && {
+        window_offset = search_window(
+            &input[input_pos..input_pos + window_size],
+            &input[window..input_pos + window_size],
+        );
+        window_offset < input_pos - window
+    } {
+        while window_size < max_match_size {
+            if input[window + window_offset + window_size] != input[input_pos + window_size] {
+                break;
+            }
+            window_size += 1;
+        }
+        if window_size == max_match_size {
+            return (window + window_offset, max_match_size);
+        }
+        found_match_offset = window + window_offset;
+        window_size += 1;
+        window += window_offset + 1;
+    }
+
+    (
+        found_match_offset,
+        if window_size > 3 { window_size - 1 } else { 0 },
+    )
+}
+
+#[inline(never)]
+fn search_window(needle: &[u8], haystack: &[u8]) -> usize {
+    /*log::info!(
+        "needleSize: {}, haystackSize: {}",
+        needle.len(),
+        haystack.len()
+    );*/
+    let mut it_haystack: usize;
+    let mut it_needle: usize;
+
+    if needle.len() > haystack.len() {
+        return haystack.len();
+    }
+    let skip_table = compute_skip_table(needle);
+
+    it_haystack = needle.len() - 1;
+    'outer: loop {
+        while needle[needle.len() - 1] != haystack[it_haystack] {
+            it_haystack += skip_table[haystack[it_haystack] as usize];
+        }
+        it_haystack -= 1;
+        it_needle = needle.len() - 2;
+
+        let remaining_bytes: usize = it_needle;
+        for _ in 0..=remaining_bytes {
+            if haystack[it_haystack] != needle[it_needle] {
+                let mut skip: usize = skip_table[haystack[it_haystack] as usize];
+                if needle.len() - it_needle > skip {
+                    skip = needle.len() - it_needle;
+                }
+                it_haystack += skip;
+                continue 'outer;
+            }
+            it_haystack -= 1;
+            it_needle -= 1;
+        }
+        //log::info!("Returning {}", it_haystack + 1);
+        return it_haystack + 1;
+    }
+}
+
+#[inline(never)]
+fn compute_skip_table(needle: &[u8]) -> [usize; 256] {
+    let mut table = [needle.len(); 256];
+    for i in 0..needle.len() {
+        table[needle[i] as usize] = needle.len() - i - 1;
+    }
+    //log::info!("{table:?}");
+    table
+}
+
+/*
+#[inline(never)]
+fn compress_into_mkw(input: &[u8], output: &mut [u8]) -> usize {
+    let mut input_pos: usize;
+    let mut output_pos: usize;
+    let mut flag_byte_pos: usize;
+    let mut flag_byte_shift: u8;
+
+    input_pos = 0;
+    output_pos = 0x11;
+    flag_byte_pos = 0x10;
+    flag_byte_shift = 0x80;
+
+    while input_pos < input.len() {
+        let mut first_match_offset: usize;
+        let mut first_match_len: usize;
+        (first_match_offset, first_match_len) = find_match(input, input_pos);
+        if first_match_len > 2 {
+            let second_match_offset: usize;
+            let second_match_len: usize;
+            (second_match_offset, second_match_len) = find_match(input, input_pos + 1);
+            if first_match_len + 1 < second_match_len {
+                //TODO: merge this and the outer else?
+                output[flag_byte_pos] |= flag_byte_shift;
+                flag_byte_shift >>= 1;
+                output[output_pos] = input[input_pos];
+                input_pos += 1;
+                output_pos += 1;
+                if flag_byte_shift == 0 {
+                    flag_byte_shift = 0x80;
+                    flag_byte_pos = output_pos;
+                    output[output_pos] = 0;
+                    output_pos += 1;
+                }
+                first_match_len = second_match_len;
+                first_match_offset = second_match_offset;
+            }
+            first_match_offset = input_pos - first_match_offset - 1;
+            if first_match_offset < 18 {
+                first_match_offset |= (first_match_len - 2) << 12;
+                output[output_pos] = (first_match_offset >> 8) as u8;
+                output[output_pos + 1] = (first_match_offset) as u8;
+                output_pos += 2;
+            } else {
+                output[output_pos] = (first_match_offset >> 8) as u8;
+                output[output_pos + 1] = (first_match_offset) as u8;
+                output[output_pos + 2] = (first_match_len - 18) as u8;
+                output_pos += 3;
+            }
+            input_pos += first_match_len;
+        } else {
+            output[flag_byte_pos] |= flag_byte_shift;
+            output[output_pos] = input[input_pos];
+            input_pos += 1;
+            output_pos += 1;
+        }
+
+        flag_byte_shift >>= 1;
+        if flag_byte_shift == 0 {
+            flag_byte_shift = 0x80;
+            flag_byte_pos = output_pos;
+            output[output_pos] = 0;
+            output_pos += 1;
+        }
+    }
+
+    output_pos
+}
+
+#[inline(never)]
+fn find_match(input: &[u8], input_pos: usize) -> (usize, usize) {
+    let mut window: usize = if input_pos > 4096 {
+        input_pos - 4096
+    } else {
+        0
+    };
+    let mut window_size = 3;
+    let max_match_size = if (input.len() - input_pos) <= 273 {
+        input.len() - input_pos
+    } else {
+        273
+    };
+    if max_match_size < 3 {
+        return (0, 0);
+    }
+
+    let mut window_offset: usize = 0;
+    let mut found_match_offset: usize = 0; //potentially uninitialized in C++ version
+
+    while window < input_pos {
+        window_offset = search_window(
+            &input[input_pos..input_pos + window_size],
+            &input[window..input_pos + window_size],
+        );
+        if window_offset < input_pos - window {
+            while window_size < max_match_size {
+                if input[window + window_offset + window_size] != input[input_pos + window_size] {
+                    break;
+                }
+                window_size += 1;
+            }
+            if window_size == max_match_size {
+                return (window + window_offset, max_match_size);
+            }
+            found_match_offset = window + window_offset;
+            window_size += 1;
+            window += window_offset + 1;
+        }
+    }
+
+    (
+        found_match_offset,
+        if window_size > 3 { window_size - 1 } else { 0 },
+    )
+}
+
+#[inline(never)]
+fn search_window(needle: &[u8], haystack: &[u8]) -> usize {
+    let mut it_haystack: usize;
+    let mut it_needle: usize;
+
+    if needle.len() > haystack.len() {
+        return haystack.len();
+    }
+    let skip_table = compute_skip_table(needle);
+
+    it_haystack = needle.len() - 1;
+    loop {
+        loop {
+            if needle[needle.len() - 1] == haystack[it_haystack] {
+                break;
+            }
+            it_haystack += skip_table[haystack[it_haystack] as usize];
+        }
+        it_haystack -= 1;
+        it_needle = needle.len() - 2;
+
+        let remaining_bytes: usize = it_needle;
+        for _ in 0..=remaining_bytes {
+            if haystack[it_haystack] != needle[it_needle] {
+                let mut skip: usize = skip_table[haystack[it_haystack] as usize];
+                if needle.len() - it_needle > skip {
+                    skip = needle.len() - it_needle;
+                }
+                it_haystack += skip;
+                continue;
+            }
+            it_haystack -= 1;
+            it_needle -= 1;
+        }
+        return it_haystack + 1;
+    }
+}
+
+#[inline(never)]
+fn compute_skip_table(needle: &[u8]) -> [usize; 256] {
+    let mut table = [needle.len(); 256];
+    for i in 0..needle.len() {
+        table[needle[i] as usize] = needle.len() - i - 1;
+    }
+    table
+}
+*/

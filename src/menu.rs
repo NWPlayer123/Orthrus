@@ -31,6 +31,10 @@ pub struct Yaz0Data {
     #[argp(description = "Decompress a Yaz0-compressed file")]
     pub decompress: bool,
 
+    #[argp(switch, short = 'c')]
+    #[argp(description = "Compress a binary file using Yaz0")]
+    pub compress: bool,
+
     #[argp(option, short = 'i')]
     #[argp(description = "Input file to be processed")]
     pub input: String,

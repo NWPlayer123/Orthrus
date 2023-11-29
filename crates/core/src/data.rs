@@ -3,7 +3,7 @@ use alloc::boxed::Box;
 #[cfg(feature = "std")]
 use core::cmp::min;
 use core::mem::size_of;
-use core::ops::Deref;
+use core::ops::{Deref, DerefMut};
 use core::ptr;
 #[cfg(feature = "std")]
 use std::{fs::File, io::prelude::*, path::Path};
@@ -48,9 +48,7 @@ macro_rules! datacursor_read {
     ($self:ident, $t:ty) => {{
         const LENGTH: usize = size_of::<$t>();
         // Bounds check to ensure we're within the valid data range
-        if $self.len() < $self.pos + LENGTH {
-            return Err(Error::EndOfFile);
-        }
+        ensure!($self.len() >= $self.pos + LENGTH, EndOfFileSnafu);
 
         unsafe {
             // SAFETY: Box ensures that the pointer arithmetic here is safe
@@ -70,9 +68,7 @@ macro_rules! datacursor_write {
     ($self:ident, $value:expr, $t:ty) => {{
         const LENGTH: usize = size_of::<$t>();
         // Bounds check to ensure we're within the valid data range
-        if $self.len() < $self.pos + LENGTH {
-            return Err(Error::EndOfFile);
-        }
+        ensure!($self.len() >= $self.pos + LENGTH, EndOfFileSnafu);
 
         unsafe {
             // SAFETY: Box ensures that the pointer arithmetic here is safe
@@ -166,19 +162,17 @@ impl DataCursor {
         &self.data[self.pos..]
     }
 
-    /// This function tries to trim `n` elements from the end of the DataCursor, consuming it and
+    /// This function tries to resize the DataCursor to some new shorter length, consuming it and
     /// returning a new one.
-    /// 
+    ///
     /// # Errors
-    /// Returns [`InvalidSize`](Error::InvalidSize) if trying to trim more elements than exist.
-    pub fn trim_elements(self, n: usize) -> Result<DataCursor> {
-        //If trying to trim too many elements, don't try to modify self
-        if n > self.len() {
-            return Err(Error::InvalidSize);
-        }
+    /// Returns [`InvalidSize`](Error::InvalidSize) if not actually shrinking the length.
+    pub fn shrink_to(self, len: usize) -> Result<DataCursor> {
+        //Make sure the new size is actually smaller. Length is unsigned, so it can't be negative
+        ensure!(len < self.len(), InvalidSizeSnafu);
 
         let mut v = self.data.into_vec();
-        v.truncate(v.len() - n);
+        v.truncate(len);
         Ok(Self::new(v, self.endian))
     }
 
@@ -187,9 +181,10 @@ impl DataCursor {
     pub fn copy_byte_to(&mut self, output: &mut Self) -> Result<()> {
         const LENGTH: usize = size_of::<u8>();
         // Bounds check to ensure we're within the valid data range
-        if (output.len() < output.pos + LENGTH) || (self.len() < self.pos + LENGTH) {
-            return Err(Error::EndOfFile);
-        }
+        ensure!(
+            (output.len() >= output.pos + LENGTH) && (self.len() >= self.pos + LENGTH),
+            EndOfFileSnafu
+        );
 
         // SAFETY: Box ensures that the pointer arithmetic here is safe
         unsafe { *output.data.as_mut_ptr().add(output.pos) = *self.data.as_ptr().add(self.pos) };
@@ -205,9 +200,10 @@ impl DataCursor {
     #[inline]
     pub fn copy_within(&mut self, src: usize, length: usize) -> Result<()> {
         //Bounds check to ensure both the source slice and current slice are within data bounds.
-        if (self.len() < src + length) || (self.len() < self.pos + length) {
-            return Err(Error::EndOfFile);
-        }
+        ensure!(
+            (self.len() >= src + length) && (self.len() >= self.pos + length),
+            EndOfFileSnafu
+        );
 
         //If the ranges are not overlapping, use the faster copy method
         if (src <= self.pos + length) && (self.pos <= src + length) {
@@ -233,9 +229,7 @@ impl DataCursor {
     pub fn read_u8(&mut self) -> Result<u8> {
         const LENGTH: usize = size_of::<u8>();
         // Bounds check to ensure we're within the valid data range
-        if self.len() < self.pos + LENGTH {
-            return Err(Error::EndOfFile);
-        }
+        ensure!(self.len() >= self.pos + LENGTH, EndOfFileSnafu);
 
         // SAFETY: Box ensures that the pointer arithmetic here is safe
         let value = unsafe { *self.data.as_ptr().add(self.pos) };
@@ -248,9 +242,7 @@ impl DataCursor {
     pub fn write_u8(&mut self, value: u8) -> Result<()> {
         const LENGTH: usize = size_of::<u8>();
         // Bounds check to ensure we're within the valid data range
-        if self.len() < self.pos + LENGTH {
-            return Err(Error::EndOfFile);
-        }
+        ensure!(self.len() >= self.pos + LENGTH, EndOfFileSnafu);
 
         // SAFETY: Box ensures that the pointer arithmetic here is safe
         unsafe {
@@ -516,6 +508,12 @@ impl Deref for DataCursor {
 
     fn deref(&self) -> &Self::Target {
         &self.data
+    }
+}
+
+impl DerefMut for DataCursor {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.data
     }
 }
 
