@@ -162,6 +162,13 @@ impl DataCursor {
         &self.data[self.pos..]
     }
 
+    /// Consumes the DataCursor and returns the underlying data.
+    #[inline]
+    #[must_use]
+    pub fn into_inner(self) -> Box<[u8]> {
+        self.data
+    }
+
     /// This function tries to resize the DataCursor to some new shorter length, consuming it and
     /// returning a new one.
     ///
