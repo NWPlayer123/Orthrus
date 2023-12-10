@@ -1,4 +1,4 @@
-//! Adds support for the Yaz0 compression format, used on GameCube, Wii, Wii U, and Switch.
+//! Adds support for the Yaz0 compression format used for N64, GameCube, Wii, Wii U, and Switch.
 //!
 //! Because the Yaz0 format is so lightweight, this module is designed to not have any persistence.
 //! It takes in data, and will return the de/compressed data contained inside.
@@ -38,18 +38,20 @@
 //! # Usage
 //! This module offers (de)compression in various levels of complexity:
 //! ## Decompression
-//! * [`decompress_from_path`]: Provide a path and get the decompressed data back
-//! * [`decompress_from`]: Load the input data yourself, get decompressed data back
-//! * [`decompress_into`]: Load the input and output data yourself, run the decompression
+//! * [`decompress_from_path`]: Provide a path, get decompressed data back
+//! * [`decompress_from`]: Provide the input data, get decompressed data back
+//! * [`decompress`]: Provide the input data and output buffer, run the decompression algorithm
 //! ## Compression
-//! * [`compress_from_path`]: Provide a path and get the compressed data back
-//! * [`compress_from`]: Load the input data yourself, get compressed data back
+//! * [`compress_from_path`]: Provide a path, get compressed data back
+//! * [`compress_from`]: Provide the input data, get compressed data back
+//! * [`compress_n64`]: Provide the input data and output buffer, run the compression (older matching algorithm)
 
-use core::fmt::Display;
+#[cfg(not(feature = "std"))]
+use crate::no_std::*;
+
 #[cfg(feature = "std")]
-use std::path::Path;
+use std::{fmt::Display, path::Path};
 
-use orthrus_core::prelude::*;
 use snafu::prelude::*;
 
 /// Error conditions for when reading/writing Yaz0 files
@@ -90,15 +92,6 @@ impl From<std::io::Error> for Error {
     }
 }
 
-impl From<data::Error> for Error {
-    fn from(error: data::Error) -> Self {
-        match error {
-            data::Error::EndOfFile => Error::EndOfFile,
-            data::Error::InvalidSize => Error::InvalidSize,
-        }
-    }
-}
-
 /// Unique identifier that tells us if we're reading a Yaz0-compressed file
 pub const MAGIC: [u8; 4] = *b"Yaz0";
 
@@ -113,7 +106,7 @@ pub struct Yaz0Header {
 /// # Examples
 /// ```
 /// # use orthrus_ncompress::yaz0;
-/// let input = std::fs::read("../../examples/assets/tobudx.yaz0")?;
+/// let input = std::fs::read("../../examples/assets/tobudx.yaz0_n64")?;
 /// let header = yaz0::read_header(&input)?;
 /// assert_eq!(header.decompressed_size, 0x40000);
 /// assert_eq!(header.alignment, 0);
@@ -158,7 +151,7 @@ pub fn read_header(data: &[u8]) -> Result<Yaz0Header> {
 /// # Examples
 /// ```
 /// # use orthrus_ncompress::yaz0;
-/// let output = yaz0::decompress_from_path("../../examples/assets/tobudx.yaz0")?;
+/// let output = yaz0::decompress_from_path("../../examples/assets/tobudx.yaz0_n64")?;
 /// assert_eq!(output.len(), 0x40000);
 ///
 /// let expected = std::fs::read("../../examples/assets/tobudx.gb")?;
@@ -183,7 +176,7 @@ pub fn decompress_from_path<P: AsRef<Path> + Display>(path: P) -> Result<Box<[u8
 /// # Examples
 /// ```
 /// # use orthrus_ncompress::yaz0;
-/// let input = std::fs::read("../../examples/assets/tobudx.yaz0")?;
+/// let input = std::fs::read("../../examples/assets/tobudx.yaz0_n64")?;
 /// let output = yaz0::decompress_from(&input)?;
 /// assert_eq!(output.len(), 0x40000);
 ///
@@ -202,7 +195,7 @@ pub fn decompress_from(data: &[u8]) -> Result<Box<[u8]>> {
     let mut output = vec![0u8; header.decompressed_size as usize].into_boxed_slice();
 
     //Perform the actual decompression
-    self::decompress_into(data, &mut output)?;
+    self::decompress(data, &mut output)?;
 
     //If we've gotten this far, output contains valid decompressed data
     Ok(output)
@@ -213,10 +206,10 @@ pub fn decompress_from(data: &[u8]) -> Result<Box<[u8]>> {
 /// # Examples
 /// ```
 /// # use orthrus_ncompress::yaz0;
-/// let input = std::fs::read("../../examples/assets/tobudx.yaz0")?;
+/// let input = std::fs::read("../../examples/assets/tobudx.yaz0_n64")?;
 /// let header = yaz0::read_header(&input)?;
 /// let mut output = vec![0u8; header.decompressed_size as usize].into_boxed_slice();
-/// yaz0::decompress_into(&input, &mut output)?;
+/// yaz0::decompress(&input, &mut output)?;
 ///
 /// let expected = std::fs::read("../../examples/assets/tobudx.gb")?;
 /// assert_eq!(*output, *expected);
@@ -227,7 +220,7 @@ pub fn decompress_from(data: &[u8]) -> Result<Box<[u8]>> {
 /// This function will return [`EndOfFile`](Error::EndOfFile) if trying to read or write out of
 /// bounds.
 #[inline(never)]
-pub fn decompress_into(input: &[u8], output: &mut [u8]) -> Result<()> {
+pub fn decompress(input: &[u8], output: &mut [u8]) -> Result<()> {
     let mut input_pos: usize = 0x10;
     let mut output_pos: usize = 0x0;
     let mut mask: u8 = 0;
@@ -247,22 +240,12 @@ pub fn decompress_into(input: &[u8], output: &mut [u8]) -> Result<()> {
         //Check what kind of copy we're doing
         if (flags & mask) != 0 {
             //Copy one byte from the input stream
-            ensure!(
-                (input.len() > input_pos) && (output.len() > output_pos),
-                EndOfFileSnafu
-            );
-            unsafe {
-                *output.as_mut_ptr().add(output_pos) = *input.as_ptr().add(input_pos);
-            }
+            output[output_pos] = input[input_pos];
             output_pos += 1;
             input_pos += 1;
         } else {
             //RLE copy from previously in the buffer
-            ensure!(input.len() >= input_pos + 2, EndOfFileSnafu);
-            let code = unsafe {
-                let ptr = input.as_ptr().add(input_pos);
-                u16::from_be_bytes([*ptr.offset(0), *ptr.offset(1)])
-            };
+            let code = u16::from_be_bytes([input[input_pos], input[input_pos + 1]]);
             input_pos += 2;
 
             //Extract RLE information from the code byte, read another byte for size if we need to
@@ -270,32 +253,20 @@ pub fn decompress_into(input: &[u8], output: &mut [u8]) -> Result<()> {
             let back = usize::from((code & 0xFFF) + 1);
             let size = match code >> 12 {
                 0 => {
-                    ensure!(input.len() > input_pos, EndOfFileSnafu);
-                    let value = unsafe { *input.as_ptr().add(input_pos) };
+                    let value = input[input_pos];
                     input_pos += 1;
                     usize::from(value) + 0x12
                 }
                 n => usize::from(n) + 2,
             };
 
-            ensure!(
-                (output.len() >= output_pos - back + size) && (output.len() >= output_pos + size),
-                EndOfFileSnafu
-            );
             //If the ranges are not overlapping, use the faster copy method
             if (output_pos - back < output_pos + size) && (output_pos < output_pos - back + size) {
                 for n in 0..size {
-                    unsafe {
-                        *output.as_mut_ptr().add(output_pos + n) =
-                            *output.as_ptr().add(output_pos - back + n);
-                    }
+                    output[output_pos + n] = output[output_pos - back + n];
                 }
             } else {
-                unsafe {
-                    let src_ptr = output.as_ptr().add(output_pos - back);
-                    let dest_ptr = output.as_mut_ptr().add(output_pos);
-                    core::ptr::copy_nonoverlapping(src_ptr, dest_ptr, size);
-                }
+                output.copy_within(output_pos - back..output_pos - back + size, output_pos);
             }
             output_pos += size;
         }
@@ -307,28 +278,25 @@ pub fn decompress_into(input: &[u8], output: &mut [u8]) -> Result<()> {
 }
 
 pub enum CompressionAlgo {
-    MarioKartWii, //eggCompress
+    MatchingOld, //eggCompress
+    MatchingNew, //MK8
 }
 
-/// Loads a Yaz0 file and returns the decompressed data.
-///
+/// Loads a Yaz0 file and returns the compressed data.
+/// 
 /// # Examples
 /// ```
 /// # use orthrus_ncompress::yaz0;
-/// let output = yaz0::decompress_from_path("../../examples/assets/tobudx.yaz0")?;
-/// assert_eq!(output.len(), 0x40000);
+/// let output = yaz0::compress_from_path("../../examples/assets/tobudx.gb", yaz0::CompressionAlgo::MatchingOld, 0)?;
 ///
-/// let expected = std::fs::read("../../examples/assets/tobudx.gb")?;
+/// let expected = std::fs::read("../../examples/assets/tobudx.yaz0_n64")?;
 /// assert_eq!(*output, *expected);
 /// # Ok::<(), yaz0::Error>(())
 /// ```
 ///
 /// # Errors
-/// Returns:
-/// * [`NotFound`](Error::NotFound) if the path does not exist
-/// * [`PermissionDenied`](Error::PermissionDenied) if unable to open the file
-/// * [`InvalidMagic`](Error::InvalidMagic) if the header does not match a Yaz0 file
-/// * [`EndOfFile`](Error::EndOfFile) if trying to read or write out of bounds
+/// Returns [`FileTooBig`](Error::FileTooBig) if the input is too large for the filesize to be
+/// stored in the header.
 #[cfg(feature = "std")]
 pub fn compress_from_path<P>(path: P, algo: CompressionAlgo, align: u32) -> Result<Box<[u8]>>
 where
@@ -338,95 +306,126 @@ where
     self::compress_from(&input, algo, align)
 }
 
-/// This function compresses the input data using a given compression algorithm.
+/// Calculates the filesize for the largest possible file that can be created with Yaz0 compression.
+/// This consists of the 0x10 header, the length of the input file, and all flag bits needed,
+/// rounded up.
+pub const fn worst_possible_size(input_len: usize) -> usize {
+    0x10 + input_len + input_len.div_ceil(8)
+}
+
+/// Compresses the input data using a given compression algorithm.
+/// 
+/// # Examples
+/// ```
+/// # use orthrus_ncompress::yaz0;
+/// let input = std::fs::read("../../examples/assets/tobudx.gb")?;
+/// let output = yaz0::compress_from(&input, yaz0::CompressionAlgo::MatchingOld, 0)?;
+///
+/// let expected = std::fs::read("../../examples/assets/tobudx.yaz0_n64")?;
+/// assert_eq!(*output, *expected);
+/// # Ok::<(), yaz0::Error>(())
+/// ```
 ///
 /// # Warnings
-/// Alignment should be zero on GameCube and Wii platforms, and non-zero on Wii U and Switch
-/// platforms. This function does not try to discern what platform the file is being compressed for,
-/// or if the alignment is valid.
-pub fn compress_from(input: &[u8], algo: CompressionAlgo, align: u32) -> Result<Box<[u8]>> {
+/// Alignment should be zero for N64, GameCube, and Wii, and should be non-zero on Wii U and Switch.
+/// 
+/// # Errors
+/// Returns [`FileTooBig`](Error::FileTooBig) if the input is too large for the filesize to be
+/// stored in the header.
+pub fn compress_from(input: &[u8], algo: CompressionAlgo, _align: u32) -> Result<Box<[u8]>> {
     ensure!(input.len() <= u32::MAX as usize, FileTooBigSnafu);
 
     //Assume 0x10 header, every byte is a copy, and include flag bytes (rounded up)
-    let worst_possible_size: usize = 0x10 + input.len() + input.len().div_ceil(8);
-    let mut output = DataCursor::new(vec![0u8; worst_possible_size], Endian::Big);
-
-    //Don't try to write the header in the hot path
-    output.write_u32(u32::from_be_bytes(*b"Yaz0"))?; // "Yaz0" magic
-    output.write_u32(input.len() as u32)?; // Output size for decompression algo
-    output.write_u32(align)?; // Alignment, platform-specific
-    output.set_position(0x10);
+    let mut output = vec![0u8; worst_possible_size(input.len())];
 
     let output_size = match algo {
-        CompressionAlgo::MarioKartWii => compress_into_mkw(input, &mut output),
+        CompressionAlgo::MatchingOld => compress_n64(input, &mut output),
+        _ => panic!("MK8 not implemented yet!"),
     };
 
-    Ok(output.shrink_to(output_size as usize)?.into_inner())
+    output.truncate(output_size);
+
+    Ok(output.into_boxed_slice())
 }
 
-fn compress_into_mkw(input: &[u8], output: &mut DataCursor) -> usize {
-    let mut input_pos: usize;
-    let mut output_pos: usize;
-    let mut flag_byte_pos: usize;
-    let mut flag_byte_shift: u8;
-    let mut flag_byte: u8;
+/// Compresses a given input using the algorithm Nintendo used for older projects (i.e. before Wii U
+/// when alignment was added to the header), and returns the size of the compressed data. It should
+/// create identically compressed files to those from official Nintendo games.
+/// 
+/// # Examples
+/// ```
+/// # use orthrus_ncompress::yaz0;
+/// let input = std::fs::read("../../examples/assets/tobudx.gb")?;
+/// let mut output = vec![0u8; yaz0::worst_possible_size(input.len())];
+/// let output_size = yaz0::compress_n64(&input, &mut output);
+/// output.truncate(output_size);
+///
+/// let expected = std::fs::read("../../examples/assets/tobudx.yaz0_n64")?;
+/// assert_eq!(*output, *expected);
+/// # Ok::<(), yaz0::Error>(())
+/// ```
+pub fn compress_n64(input: &[u8], output: &mut [u8]) -> usize {
+    output[0..4].copy_from_slice(b"Yaz0");
+    output[4..8].copy_from_slice(&u32::to_be_bytes(input.len() as u32));
+    //Older files do not have alignment so this just leaves it as zero
 
-    input_pos = 0;
-    output_pos = 0x11;
-    flag_byte_pos = 0x10;
-    flag_byte_shift = 0x80;
-    flag_byte = 0;
+    let mut input_pos = 0;
+    let mut output_pos = 0x11;
+    let mut flag_byte_pos = 0x10;
+    let mut flag_byte_shift = 0x80;
 
     while input_pos < input.len() {
-        let mut first_match_offset: usize;
-        let mut first_match_len: usize;
-        (first_match_offset, first_match_len) = find_match(input, input_pos);
-        if first_match_len <= 2 {
-            //The longest match we found is less than two bytes, smaller to copy a byte
-            flag_byte |= flag_byte_shift;
+        let (mut group_offset, mut group_size) = find_match(input, input_pos);
+        if group_size <= 2 {
+            //If the group is less than two bytes, it's smaller to just copy a byte
+            output[flag_byte_pos] |= flag_byte_shift;
             output[output_pos] = input[input_pos];
             input_pos += 1;
             output_pos += 1;
         } else {
-            let second_match_offset: usize;
-            let second_match_len: usize;
-            (second_match_offset, second_match_len) = find_match(input, input_pos + 1);
-            if first_match_len + 1 < second_match_len {
-                flag_byte |= flag_byte_shift;
-                flag_byte_shift >>= 1;
+            //Check one byte after this, see if we can get a better match
+            let (new_offset, new_size) = find_match(input, input_pos + 1);
+            if group_size + 1 < new_size {
+                //If we did find a better match, copy a byte and then use the new slice
+                output[flag_byte_pos] |= flag_byte_shift;
                 output[output_pos] = input[input_pos];
                 input_pos += 1;
                 output_pos += 1;
+
+                //Check if we need to create a new flag byte
+                flag_byte_shift >>= 1;
                 if flag_byte_shift == 0 {
-                    output[flag_byte_pos] = flag_byte;
-                    flag_byte = 0;
                     flag_byte_shift = 0x80;
                     flag_byte_pos = output_pos;
                     output[output_pos] = 0;
                     output_pos += 1;
                 }
-                first_match_len = second_match_len;
-                first_match_offset = second_match_offset;
+
+                //Use the new slice for the lookback data
+                group_size = new_size;
+                group_offset = new_offset;
             }
-            first_match_offset = input_pos - first_match_offset - 1;
-            if first_match_len < 18 {
-                first_match_offset |= (first_match_len - 2) << 12;
-                output[output_pos] = (first_match_offset >> 8) as u8;
-                output[output_pos + 1] = (first_match_offset) as u8;
-                output_pos += 2;
-            } else {
-                output[output_pos] = (first_match_offset >> 8) as u8;
-                output[output_pos + 1] = (first_match_offset) as u8;
-                output[output_pos + 2] = (first_match_len - 18) as u8;
+
+            //Calculate the lookback offset
+            group_offset = input_pos - group_offset - 1;
+
+            //If we can't fit the size in the upper nibble, write a third byte for the length
+            if group_size >= 0x12 {
+                output[output_pos] = (group_offset >> 8) as u8;
+                output[output_pos + 1] = (group_offset) as u8;
+                output[output_pos + 2] = (group_size - 0x12) as u8;
                 output_pos += 3;
+            } else {
+                output[output_pos] = (((group_size - 2) << 4) | (group_offset >> 8)) as u8;
+                output[output_pos + 1] = (group_offset) as u8;
+                output_pos += 2;
             }
-            input_pos += first_match_len;
+            input_pos += group_size;
         }
 
+        //Check if we need to create a new flag byte
         flag_byte_shift >>= 1;
         if flag_byte_shift == 0 {
-            output[flag_byte_pos] = flag_byte;
-            flag_byte = 0;
             flag_byte_shift = 0x80;
             flag_byte_pos = output_pos;
             output[output_pos] = 0;
@@ -434,32 +433,33 @@ fn compress_into_mkw(input: &[u8], output: &mut DataCursor) -> usize {
         }
     }
 
-    if flag_byte != 0 {
-        output[flag_byte_pos] = flag_byte;
-    }
-
     output_pos
 }
 
+/// Maximum distance to look back in the buffer for a match (0xFFF for lower 3 nibbles + 1)
+const MAX_LOOKBACK: usize = 0x1000;
+/// Maximum number of bytes that can be copied from the lookback (0x12 threshold for a third byte +
+/// 0xFF from that byte)
+const MAX_COPY_SIZE: usize = 0x111;
+
+/// Finds the biggest match in the lookback window for the bytes at the current input position.
 fn find_match(input: &[u8], input_pos: usize) -> (usize, usize) {
-    let mut window: usize = if input_pos > 4096 {
-        input_pos - 4096
-    } else {
-        0
-    };
+    //Setup the initial location and size for the lookback window
+    let mut window = core::cmp::max(input_pos.saturating_sub(MAX_LOOKBACK), 0);
     let mut window_size = 3;
-    let max_match_size = if (input.len() - input_pos) <= 273 {
-        input.len() - input_pos
-    } else {
-        273
-    };
+
+    //This is the maximum we're able to copy in a single operation
+    let max_match_size = core::cmp::min(input.len().saturating_sub(input_pos), MAX_COPY_SIZE);
+
+    //If we can't copy more than two bytes (the size of the copy data) then don't bother looking
     if max_match_size < 3 {
         return (0, 0);
     }
 
-    let mut window_offset: usize = 0;
-    let mut found_match_offset: usize = 0; //potentially uninitialized in C++ version
+    let mut window_offset = 0;
+    let mut found_match_offset = 0;
 
+    //Look for a match while we're within the range of the lookback buffer
     while window < input_pos && {
         window_offset = search_window(
             &input[input_pos..input_pos + window_size],
@@ -467,243 +467,77 @@ fn find_match(input: &[u8], input_pos: usize) -> (usize, usize) {
         );
         window_offset < input_pos - window
     } {
-        while window_size < max_match_size {
-            if input[window + window_offset + window_size] != input[input_pos + window_size] {
-                break;
-            }
+        //Expand the needle as long as it still matches the spot we found in the haystack
+        while window_size < max_match_size
+            && input[window + window_offset + window_size] == input[input_pos + window_size]
+        {
             window_size += 1;
         }
+
+        //If we've hit the max match size, we can't find a bigger match so just return it
         if window_size == max_match_size {
             return (window + window_offset, max_match_size);
         }
+
         found_match_offset = window + window_offset;
-        window_size += 1;
         window += window_offset + 1;
+        window_size += 1;
     }
 
+    //Return the biggest match we found, potentially none
     (
         found_match_offset,
         if window_size > 3 { window_size - 1 } else { 0 },
     )
 }
 
-#[inline(never)]
+/// Searches for the needle in the haystack using a modified version of Horspool's algorithm, and
+/// returns the index of the first match
+#[inline(always)]
 fn search_window(needle: &[u8], haystack: &[u8]) -> usize {
-    let mut it_haystack: usize;
-    let mut it_needle: usize;
-
+    //Check if we can even find the needle
     if needle.len() > haystack.len() {
         return haystack.len();
     }
+
+    //Calculate the skip table for searching for end characters
     let skip_table = compute_skip_table(needle);
 
-    it_haystack = needle.len() - 1;
+    let mut haystack_index = needle.len() - 1;
     'outer: loop {
-        //SAFETY: needle.len() - 2 will always be within needle, haystack will always be larger,
-        //skip will always be bigger than u8::MAX
-        unsafe {
-            while *haystack.as_ptr().add(it_haystack) != *needle.as_ptr().add(needle.len() - 1) {
-                let index = *haystack.as_ptr().add(it_haystack) as usize;
-                it_haystack += *skip_table.as_ptr().add(index) as usize;
-            }
+        //Loop while we look for the last character of the needle, skipping through the haystack
+        while haystack[haystack_index] != needle[needle.len() - 1] {
+            haystack_index += skip_table[haystack[haystack_index] as usize] as usize;
         }
-        it_haystack -= 1;
-        it_needle = needle.len() - 2;
+        haystack_index -= 1;
 
-        for _ in 0..=it_needle {
-            //SAFETY: needle.len() - 2 will always be within needle, haystack will always be
-            // larger, skip will always be bigger than u8::MAX
-            unsafe {
-                let haystack_value = *haystack.as_ptr().add(it_haystack);
-                if haystack_value != *needle.as_ptr().add(it_needle) {
-                    let mut skip: usize =
-                        *skip_table.as_ptr().add(haystack_value as usize) as usize;
-                    if needle.len() - it_needle > skip {
-                        skip = needle.len() - it_needle;
-                    }
-                    it_haystack += skip;
-                    continue 'outer;
+        //Found a possible match with the end character, now check if the rest of the needle matches
+        for needle_index in (0..needle.len() - 1).rev() {
+            //If it doesn't, skip ahead and go back to searching for another end character
+            if haystack[haystack_index] != needle[needle_index] {
+                let mut skip: usize = skip_table[haystack[haystack_index] as usize] as usize;
+
+                if needle.len() - needle_index > skip {
+                    skip = needle.len() - needle_index;
                 }
+                haystack_index += skip;
+                continue 'outer;
             }
-            it_haystack -= 1;
-            it_needle -= 1;
+            haystack_index = haystack_index.wrapping_sub(1);
         }
-        return it_haystack + 1;
+        return haystack_index.wrapping_add(1);
     }
 }
 
+/// Creates the skip table for Horspool's algorithm which contains how much farther to look forward
+/// in the haystack in order for there to possibly be a match for the needle.
 #[inline(always)]
 fn compute_skip_table(needle: &[u8]) -> [u16; 256] {
     let mut table = [needle.len() as u16; 256];
+
     for i in 0..needle.len() {
-        unsafe {
-            let index = *needle.as_ptr().add(i) as usize;
-            *table.as_mut_ptr().add(index) = (needle.len() - i - 1) as u16;
-        }
+        table[needle[i] as usize] = (needle.len() - i - 1) as u16;
     }
+
     table
 }
-
-/*
-#[inline(never)]
-fn compress_into_mkw(input: &[u8], output: &mut [u8]) -> usize {
-    let mut input_pos: usize;
-    let mut output_pos: usize;
-    let mut flag_byte_pos: usize;
-    let mut flag_byte_shift: u8;
-
-    input_pos = 0;
-    output_pos = 0x11;
-    flag_byte_pos = 0x10;
-    flag_byte_shift = 0x80;
-
-    while input_pos < input.len() {
-        let mut first_match_offset: usize;
-        let mut first_match_len: usize;
-        (first_match_offset, first_match_len) = find_match(input, input_pos);
-        if first_match_len > 2 {
-            let second_match_offset: usize;
-            let second_match_len: usize;
-            (second_match_offset, second_match_len) = find_match(input, input_pos + 1);
-            if first_match_len + 1 < second_match_len {
-                //TODO: merge this and the outer else?
-                output[flag_byte_pos] |= flag_byte_shift;
-                flag_byte_shift >>= 1;
-                output[output_pos] = input[input_pos];
-                input_pos += 1;
-                output_pos += 1;
-                if flag_byte_shift == 0 {
-                    flag_byte_shift = 0x80;
-                    flag_byte_pos = output_pos;
-                    output[output_pos] = 0;
-                    output_pos += 1;
-                }
-                first_match_len = second_match_len;
-                first_match_offset = second_match_offset;
-            }
-            first_match_offset = input_pos - first_match_offset - 1;
-            if first_match_offset < 18 {
-                first_match_offset |= (first_match_len - 2) << 12;
-                output[output_pos] = (first_match_offset >> 8) as u8;
-                output[output_pos + 1] = (first_match_offset) as u8;
-                output_pos += 2;
-            } else {
-                output[output_pos] = (first_match_offset >> 8) as u8;
-                output[output_pos + 1] = (first_match_offset) as u8;
-                output[output_pos + 2] = (first_match_len - 18) as u8;
-                output_pos += 3;
-            }
-            input_pos += first_match_len;
-        } else {
-            output[flag_byte_pos] |= flag_byte_shift;
-            output[output_pos] = input[input_pos];
-            input_pos += 1;
-            output_pos += 1;
-        }
-
-        flag_byte_shift >>= 1;
-        if flag_byte_shift == 0 {
-            flag_byte_shift = 0x80;
-            flag_byte_pos = output_pos;
-            output[output_pos] = 0;
-            output_pos += 1;
-        }
-    }
-
-    output_pos
-}
-
-#[inline(never)]
-fn find_match(input: &[u8], input_pos: usize) -> (usize, usize) {
-    let mut window: usize = if input_pos > 4096 {
-        input_pos - 4096
-    } else {
-        0
-    };
-    let mut window_size = 3;
-    let max_match_size = if (input.len() - input_pos) <= 273 {
-        input.len() - input_pos
-    } else {
-        273
-    };
-    if max_match_size < 3 {
-        return (0, 0);
-    }
-
-    let mut window_offset: usize = 0;
-    let mut found_match_offset: usize = 0; //potentially uninitialized in C++ version
-
-    while window < input_pos {
-        window_offset = search_window(
-            &input[input_pos..input_pos + window_size],
-            &input[window..input_pos + window_size],
-        );
-        if window_offset < input_pos - window {
-            while window_size < max_match_size {
-                if input[window + window_offset + window_size] != input[input_pos + window_size] {
-                    break;
-                }
-                window_size += 1;
-            }
-            if window_size == max_match_size {
-                return (window + window_offset, max_match_size);
-            }
-            found_match_offset = window + window_offset;
-            window_size += 1;
-            window += window_offset + 1;
-        }
-    }
-
-    (
-        found_match_offset,
-        if window_size > 3 { window_size - 1 } else { 0 },
-    )
-}
-
-#[inline(never)]
-fn search_window(needle: &[u8], haystack: &[u8]) -> usize {
-    let mut it_haystack: usize;
-    let mut it_needle: usize;
-
-    if needle.len() > haystack.len() {
-        return haystack.len();
-    }
-    let skip_table = compute_skip_table(needle);
-
-    it_haystack = needle.len() - 1;
-    loop {
-        loop {
-            if needle[needle.len() - 1] == haystack[it_haystack] {
-                break;
-            }
-            it_haystack += skip_table[haystack[it_haystack] as usize];
-        }
-        it_haystack -= 1;
-        it_needle = needle.len() - 2;
-
-        let remaining_bytes: usize = it_needle;
-        for _ in 0..=remaining_bytes {
-            if haystack[it_haystack] != needle[it_needle] {
-                let mut skip: usize = skip_table[haystack[it_haystack] as usize];
-                if needle.len() - it_needle > skip {
-                    skip = needle.len() - it_needle;
-                }
-                it_haystack += skip;
-                continue;
-            }
-            it_haystack -= 1;
-            it_needle -= 1;
-        }
-        return it_haystack + 1;
-    }
-}
-
-#[inline(never)]
-fn compute_skip_table(needle: &[u8]) -> [usize; 256] {
-    let mut table = [needle.len(); 256];
-    for i in 0..needle.len() {
-        table[needle[i] as usize] = needle.len() - i - 1;
-    }
-    table
-}
-*/

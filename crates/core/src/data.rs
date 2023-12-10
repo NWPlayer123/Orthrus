@@ -1,5 +1,6 @@
+//This whole module is held up on safe transmute
 #[cfg(not(feature = "std"))]
-use alloc::boxed::Box;
+use crate::no_std::*;
 #[cfg(feature = "std")]
 use core::cmp::min;
 use core::mem::size_of;

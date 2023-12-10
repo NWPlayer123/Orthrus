@@ -13,11 +13,13 @@ pub const TIME_FORMAT: &[FormatItem] =
 /// # Errors
 /// Returns [`IndeterminateOffset`](time::Error::IndeterminateOffset) if unable to determine the
 /// current time zone.
-pub fn current_time() -> time::Result<String> {
-    let time = OffsetDateTime::now_local()?;
+pub fn current_time() -> String {
+    let time = match OffsetDateTime::now_local() {
+        Ok(local_time) => local_time,
+        Err(_) => OffsetDateTime::now_utc(),
+    };
     //Theoretically this should never fail
-    let formatted = time.format(TIME_FORMAT).unwrap();
-    Ok(formatted)
+    time.format(TIME_FORMAT).unwrap()
 }
 
 /// This function tries to convert a timestamp into a formatted [String].

@@ -6,7 +6,7 @@ use argp::FromArgs;
 pub struct Orthrus {
     #[argp(option, short = 'v', global, default = "4")]
     #[argp(
-        description = "Logging level (0 = FileOnly, 1 = Error, 2 = Warn, 3 = Info, 4 = Debug, 5 = Trace)"
+        description = "Logging level (0 = Off, 1 = Error, 2 = Warn, 3 = Info, 4 = Debug, 5 = Trace)"
     )]
     pub verbose: usize,
 

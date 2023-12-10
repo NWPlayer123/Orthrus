@@ -8,17 +8,17 @@ repository.workspace = true
 
 [dependencies]
 snafu = { version = "0.7", default-features = false }
-compact_str = { version = "0.7", default-features = false }
-time = { version = "0.3", features = ["macros", "local-offset"], optional = true }
-x509-parser = { version = "0.15", features = ["validate", "verify"], optional = true }
+time = { version = "0.3", features = ["formatting", "macros", "local-offset"], optional = true }
+# compact_str = { version = "0.7", default-features = false, optional = true }
+# x509-parser = { version = "0.15", features = ["validate", "verify"], optional = true }
 
-bitflags = "2.4"
-hashbrown = "0.14"
-log = "0.4"
-ouroboros = "0.18"
-thiserror = "1.0"
+# bitflags = { version = "2.4", optional = true }
+# hashbrown = { version = "0.14", optional = true }
+# log = { version = "0.4", optional = true }
+# ouroboros = { version = "0.18", optional = true }
+# thiserror = { version = "1.0", optional = true }
 
 [features]
-#TODO: work on no_std support
 default = ["std"]
-std = ["time", "snafu/std", "x509-parser"]
+std = ["snafu/std"]
+time = ["dep:time", "std"]

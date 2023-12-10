@@ -1,25 +1,19 @@
 //#![feature(const_slice_index)]
 
-//no_std
 #![cfg_attr(not(feature = "std"), no_std)]
+
 #[cfg(not(feature = "std"))]
-extern crate alloc;
-
-//std
-#[cfg(feature = "std")]
-#[path = ""]
-pub mod std_features {
-    pub mod certificate;
-    pub mod time;
-
-    pub use time::{current_time, format_timestamp, TIME_FORMAT};
+mod no_std {
+    extern crate alloc;
+    pub use alloc::boxed::Box;
+    pub use alloc::vec;
 }
-#[cfg(feature = "std")]
-pub use crate::std_features::*;
 
-//shared
+//Always have data enabled
 pub mod data;
-pub mod vfs;
+//These are all set behind feature flags
+#[cfg(all(feature = "time", feature = "std"))]
+pub mod time;
 
 pub mod prelude {
     pub use crate::data::{DataCursor, Endian};
@@ -27,6 +21,11 @@ pub mod prelude {
     //Force library users to specify the kind of error, in this case data::error
     pub mod data {
         pub use crate::data::Error;
+    }
+
+    #[cfg(all(feature = "time", feature = "std"))]
+    pub mod time {
+        pub use crate::time::*;
     }
 }
 pub use prelude::*;

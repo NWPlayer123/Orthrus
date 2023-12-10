@@ -1,85 +1,57 @@
 use std::fs::File;
 use std::io::prelude::*;
 
-use orthrus_core::time;
 use orthrus_ncompress::*;
 use orthrus_panda3d as panda3d;
 use owo_colors::OwoColorize;
+use log::{LevelFilter, Level};
+use env_logger::Builder;
 
 pub mod menu;
 use menu::{exactly_one_true, Modules, Panda3DModules};
 
-// Ideally I want this to function more like readable-log-formatter from Python but this works for
-// now
+fn color_level(level: log::Level) -> String {
+    match level {
+        Level::Error => level.red().to_string(),
+        Level::Warn => level.yellow().to_string(),
+        Level::Info => level.green().to_string(),
+        Level::Debug => level.blue().to_string(),
+        Level::Trace => level.purple().to_string(),
+    }
+}
 
-//TODO: rewrite to set file and stdout to same output, and if they're 0 just do nothing
-fn setup_logger(verbose: usize) -> Result<(), ()> {
-    //Allow flexible logging level
-    let level_filter = match verbose {
+const fn level_filter(verbose: usize) -> LevelFilter {
+    match verbose {
         0 => log::LevelFilter::Off,
         2 => log::LevelFilter::Warn,
         3 => log::LevelFilter::Info,
         4 => log::LevelFilter::Debug,
         5 => log::LevelFilter::Trace,
-        //default to highest
-        _ => log::LevelFilter::Error,
-    };
-
-    // initialize a base Dispatch we can apply our two profiles (output file and stdout) to
-    let base_config = fern::Dispatch::new();
-
-    let file_config = fern::Dispatch::new()
-        .format(
-            |out: fern::FormatCallback, message: &core::fmt::Arguments, record: &log::Record| {
-                out.finish(format_args!(
-                    "[{}] {:>5} {message}",
-                    time::current_time().unwrap(),
-                    record.level(), //display colors on console but not in the log file
-                ));
-            },
-        )
-        .chain(fern::log_file("output.log").unwrap());
-
-    let stdout_config = fern::Dispatch::new()
-        .format(
-            |out: fern::FormatCallback, message: &core::fmt::Arguments, record: &log::Record| {
-                let level = match record.level() {
-                    log::Level::Error => record.level().red().to_string(),
-                    log::Level::Warn => record.level().yellow().to_string(),
-                    log::Level::Info => record.level().green().to_string(),
-                    log::Level::Debug => record.level().blue().to_string(),
-                    log::Level::Trace => record.level().purple().to_string(),
-                };
-                let formatted_message = format!("{}", message).replace('\n', "\n      ");
-                out.finish(format_args!("{level:>16} {formatted_message}"));
-            },
-        )
-        .level(level_filter)
-        .chain(std::io::stdout());
-
-    base_config.chain(file_config).chain(stdout_config).apply().unwrap();
-
-    match time::get_local_offset() {
-        Ok(_) => {
-            log::info!("Successfully set up logging using local timestamps");
-        }
-        Err(_) => {
-            log::info!("Unable to acquire local offset, logging using UTC time!");
-        }
+        //default to off
+        _ => log::LevelFilter::Off,
     }
-
-    Ok(())
 }
 
 fn main() {
-    //Enable ANSI support on Windows, ignore it if it fails for now
-    enable_ansi_support::enable_ansi_support().unwrap();
-
     //Parse command line input
     let args: menu::Orthrus = argp::parse_args_or_exit(argp::DEFAULT);
 
-    //Setup log and fern so we can output logging messages
-    setup_logger(args.verbose).unwrap();
+    //This is needed for pretty colors on Windows
+    enable_ansi_support::enable_ansi_support().expect("Please update to a modern operating system.");
+
+    //Build up a logger with custom formatting and set it to the verbosity from the command line args
+    Builder::new()
+        .format(|buf, record| {
+            writeln!(
+                buf,
+                "[{}] {} {}",
+                orthrus_core::time::current_time(), // Use your custom time function
+                color_level(record.level()),          // Colored log level
+                record.args()   // Log message
+            )
+        })
+        .filter(None, level_filter(args.verbose))
+        .init();
 
     match args.nested {
         Modules::Yaz0(params) => {
@@ -93,7 +65,7 @@ fn main() {
                     1 => {
                         let data = yaz0::compress_from_path(
                             params.input,
-                            yaz0::CompressionAlgo::MarioKartWii,
+                            yaz0::CompressionAlgo::MatchingOld,
                             0,
                         )
                         .unwrap();
