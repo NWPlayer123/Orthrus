@@ -13,11 +13,10 @@ pub const TIME_FORMAT: &[FormatItem] =
 /// # Errors
 /// Returns [`IndeterminateOffset`](time::Error::IndeterminateOffset) if unable to determine the
 /// current time zone.
+#[must_use]
+#[inline]
 pub fn current_time() -> String {
-    let time = match OffsetDateTime::now_local() {
-        Ok(local_time) => local_time,
-        Err(_) => OffsetDateTime::now_utc(),
-    };
+    let time = OffsetDateTime::now_local().unwrap_or_else(|_| OffsetDateTime::now_utc());
     //Theoretically this should never fail
     time.format(TIME_FORMAT).unwrap()
 }
@@ -27,6 +26,7 @@ pub fn current_time() -> String {
 /// # Errors
 /// Returns [`ComponentRange`](time::Error::ComponentRange) if unable to convert the timestamp to a
 /// valid date.
+#[inline]
 pub fn format_timestamp(timestamp: i64) -> time::Result<String> {
     let time = OffsetDateTime::from_unix_timestamp(timestamp)?;
     //Theoretically this should never fail
@@ -40,6 +40,7 @@ pub fn format_timestamp(timestamp: i64) -> time::Result<String> {
 /// # Errors
 /// Returns [`IndeterminateOffset`](time::Error::IndeterminateOffset) if unable to determine the
 /// current time zone.
+#[inline]
 pub fn get_local_offset() -> time::Result<UtcOffset> {
     Ok(UtcOffset::local_offset_at(OffsetDateTime::UNIX_EPOCH)?)
 }

@@ -1,6 +1,4 @@
 //This whole module is held up on safe transmute
-#[cfg(not(feature = "std"))]
-use crate::no_std::*;
 #[cfg(feature = "std")]
 use core::cmp::min;
 use core::mem::size_of;
@@ -11,14 +9,18 @@ use std::{fs::File, io::prelude::*, path::Path};
 
 use snafu::prelude::*;
 
+#[cfg(not(feature = "std"))]
+use crate::no_std::*;
+
 #[derive(Debug, Snafu)]
+#[non_exhaustive]
 pub enum Error {
     #[snafu(display("Unexpected End-Of-File!"))]
     EndOfFile,
     #[snafu(display("Invalid End Size!"))]
     InvalidSize,
 }
-pub type Result<T> = core::result::Result<T, Error>;
+type Result<T> = core::result::Result<T, Error>;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Endian {
@@ -28,13 +30,15 @@ pub enum Endian {
 
 impl Default for Endian {
     #[cfg(target_endian = "little")]
+    #[inline]
     fn default() -> Self {
-        Endian::Little
+        Self::Little
     }
 
     #[cfg(target_endian = "big")]
+    #[inline]
     fn default() -> Self {
-        Endian::Big
+        Self::Big
     }
 }
 
@@ -87,7 +91,8 @@ macro_rules! datacursor_write {
 }
 
 impl DataCursor {
-    /// Creates a new `DataCursor` using the provided data and endianness.
+    /// Creates a new [`DataCursor`] using the provided data and endianness.
+    #[inline]
     pub fn new<I: Into<Box<[u8]>>>(data: I, endian: Endian) -> Self {
         Self {
             data: data.into(),
@@ -96,12 +101,13 @@ impl DataCursor {
         }
     }
 
-    /// Creates a new `DataCursor` using the provided path and endianness.
+    /// Creates a new [`DataCursor`] using the provided path and endianness.
     ///
     /// # Errors
     /// This function will return an error if `path` does not exist, if unable to read file
     /// metadata, or if reading the file fails.
     #[cfg(feature = "std")]
+    #[inline]
     pub fn from_path<P: AsRef<Path>>(path: P, endian: Endian) -> std::io::Result<Self> {
         let mut file = File::open(path)?;
         let filesize = file.metadata()?.len();
@@ -129,13 +135,13 @@ impl DataCursor {
         self.endian
     }
 
-    /// Sets the position of this `DataCursor`.
+    /// Sets the position of this [`DataCursor`].
     #[inline]
     pub fn set_position(&mut self, pos: usize) {
         self.pos = pos;
     }
 
-    /// Returns the current position of this `DataCursor`.
+    /// Returns the current position of this [`DataCursor`].
     #[inline]
     #[must_use]
     pub const fn position(&self) -> usize {
@@ -156,6 +162,14 @@ impl DataCursor {
         self.len() == 0
     }
 
+    /// Returns a slice from the current position to some additional length.
+    #[inline]
+    #[must_use]
+    pub fn get_slice(&self, length: usize) -> Result<&[u8]> {
+        ensure!(self.len() >= self.pos + length, EndOfFileSnafu);
+        Ok(&self.data[self.pos..self.pos + length])
+    }
+
     /// Returns the remaining data from the current position.
     #[inline]
     #[must_use]
@@ -163,19 +177,20 @@ impl DataCursor {
         &self.data[self.pos..]
     }
 
-    /// Consumes the DataCursor and returns the underlying data.
+    /// Consumes the [`DataCursor`] and returns the underlying data.
     #[inline]
     #[must_use]
     pub fn into_inner(self) -> Box<[u8]> {
         self.data
     }
 
-    /// This function tries to resize the DataCursor to some new shorter length, consuming it and
-    /// returning a new one.
+    /// This function tries to resize the [`DataCursor`] to some new shorter length, consuming it
+    /// and returning a new one.
     ///
     /// # Errors
     /// Returns [`InvalidSize`](Error::InvalidSize) if not actually shrinking the length.
-    pub fn shrink_to(self, len: usize) -> Result<DataCursor> {
+    #[inline]
+    pub fn shrink_to(self, len: usize) -> Result<Self> {
         //Make sure the new size is actually smaller. Length is unsigned, so it can't be negative
         ensure!(len < self.len(), InvalidSizeSnafu);
 
@@ -184,7 +199,7 @@ impl DataCursor {
         Ok(Self::new(v, self.endian))
     }
 
-    /// Reads a byte from this `DataCursor` and writes it to the output `DataCursor`.
+    /// Reads a byte from this [`DataCursor`] and writes it to the output [`DataCursor`].
     #[inline]
     pub fn copy_byte_to(&mut self, output: &mut Self) -> Result<()> {
         const LENGTH: usize = size_of::<u8>();
@@ -201,9 +216,9 @@ impl DataCursor {
         Ok(())
     }
 
-    /// Copies a number of bytes from elsewhere in the `DataCursor` to the current position.
+    /// Copies a number of bytes from elsewhere in the [`DataCursor`] to the current position.
     ///
-    /// `src` is an offset from the start of the `DataCursor`, `length` is the number of bytes to
+    /// `src` is an offset from the start of the [`DataCursor`], `length` is the number of bytes to
     /// copy.
     #[inline]
     pub fn copy_within(&mut self, src: usize, length: usize) -> Result<()> {
@@ -232,7 +247,7 @@ impl DataCursor {
         Ok(())
     }
 
-    /// Read one byte from the `DataCursor` and return it as a `u8`.
+    /// Read one byte from the [`DataCursor`] and return it as a `u8`.
     #[inline]
     pub fn read_u8(&mut self) -> Result<u8> {
         const LENGTH: usize = size_of::<u8>();
@@ -245,7 +260,7 @@ impl DataCursor {
         Ok(value)
     }
 
-    /// Write one byte from a `u8` into the `DataCursor`.
+    /// Write one byte from a `u8` into the [`DataCursor`].
     #[inline]
     pub fn write_u8(&mut self, value: u8) -> Result<()> {
         const LENGTH: usize = size_of::<u8>();
@@ -260,133 +275,133 @@ impl DataCursor {
         Ok(())
     }
 
-    /// Read one byte from the `DataCursor` and return it as an `i8`.
+    /// Read one byte from the [`DataCursor`] and return it as an `i8`.
     #[inline]
     pub fn read_i8(&mut self) -> Result<i8> {
         self.read_u8().map(|v| v as i8)
     }
 
-    /// Write one byte from an `i8` into the `DataCursor`.
+    /// Write one byte from an `i8` into the [`DataCursor`].
     #[inline]
     pub fn write_i8(&mut self, value: i8) -> Result<()> {
         self.write_u8(value as u8)
     }
 
-    /// Read two bytes from the `DataCursor` and return it as a `u16`.
+    /// Read two bytes from the [`DataCursor`] and return it as a `u16`.
     #[inline]
     pub fn read_u16(&mut self) -> Result<u16> {
         datacursor_read!(self, u16)
     }
 
-    /// Write two bytes from a `u16` into the `DataCursor`.
+    /// Write two bytes from a `u16` into the [`DataCursor`].
     #[inline]
     pub fn write_u16(&mut self, value: u16) -> Result<()> {
         datacursor_write!(self, value, u16)
     }
 
-    /// Read two bytes from the `DataCursor` and return it as an `i16`.
+    /// Read two bytes from the [`DataCursor`] and return it as an `i16`.
     #[inline]
     pub fn read_i16(&mut self) -> Result<i16> {
         datacursor_read!(self, i16)
     }
 
-    /// Write two bytes from an `i16` into the `DataCursor`.
+    /// Write two bytes from an `i16` into the [`DataCursor`].
     #[inline]
     pub fn write_i16(&mut self, value: i16) -> Result<()> {
         datacursor_write!(self, value, i16)
     }
 
-    /// Read four bytes from the `DataCursor` and return it as a `u32`.
+    /// Read four bytes from the [`DataCursor`] and return it as a `u32`.
     #[inline]
     pub fn read_u32(&mut self) -> Result<u32> {
         datacursor_read!(self, u32)
     }
 
-    /// Write four bytes from a `u32` into the `DataCursor`.
+    /// Write four bytes from a `u32` into the [`DataCursor`].
     #[inline]
     pub fn write_u32(&mut self, value: u32) -> Result<()> {
         datacursor_write!(self, value, u32)
     }
 
-    /// Read four bytes from the `DataCursor` and return it as an `i32`.
+    /// Read four bytes from the [`DataCursor`] and return it as an `i32`.
     #[inline]
     pub fn read_i32(&mut self) -> Result<i32> {
         datacursor_read!(self, i32)
     }
 
-    /// Write four bytes from an `i32` into the `DataCursor`.
+    /// Write four bytes from an `i32` into the [`DataCursor`].
     #[inline]
     pub fn write_i32(&mut self, value: i32) -> Result<()> {
         datacursor_write!(self, value, i32)
     }
 
-    /// Read eight bytes from the `DataCursor` and return it as a `u64`.
+    /// Read eight bytes from the [`DataCursor`] and return it as a `u64`.
     #[inline]
     pub fn read_u64(&mut self) -> Result<u64> {
         datacursor_read!(self, u64)
     }
 
-    /// Write eight bytes from a `u64` into the `DataCursor`.
+    /// Write eight bytes from a `u64` into the [`DataCursor`].
     #[inline]
     pub fn write_u64(&mut self, value: u64) -> Result<()> {
         datacursor_write!(self, value, u64)
     }
 
-    /// Read eight bytes from the `DataCursor` and return it as an `i64`.
+    /// Read eight bytes from the [`DataCursor`] and return it as an `i64`.
     #[inline]
     pub fn read_i64(&mut self) -> Result<i64> {
         datacursor_read!(self, i64)
     }
 
-    /// Write eight bytes from an `i64` into the `DataCursor`.
+    /// Write eight bytes from an `i64` into the [`DataCursor`].
     #[inline]
     pub fn write_i64(&mut self, value: i64) -> Result<()> {
         datacursor_write!(self, value, i64)
     }
 
-    /// Read sixteen bytes from the `DataCursor` and return it as a `u128`.
+    /// Read sixteen bytes from the [`DataCursor`] and return it as a `u128`.
     #[inline]
     pub fn read_u128(&mut self) -> Result<u128> {
         datacursor_read!(self, u128)
     }
 
-    /// Write sixteen bytes from a `u128` into the `DataCursor`.
+    /// Write sixteen bytes from a `u128` into the [`DataCursor`].
     #[inline]
     pub fn write_u128(&mut self, value: u128) -> Result<()> {
         datacursor_write!(self, value, u128)
     }
 
-    /// Read sixteen bytes from the `DataCursor` and return it as an `i128`.
+    /// Read sixteen bytes from the [`DataCursor`] and return it as an `i128`.
     #[inline]
     pub fn read_i128(&mut self) -> Result<i128> {
         datacursor_read!(self, i128)
     }
 
-    /// Write sixteen bytes from an `i128` into the `DataCursor`.
+    /// Write sixteen bytes from an `i128` into the [`DataCursor`].
     #[inline]
     pub fn write_i128(&mut self, value: i128) -> Result<()> {
         datacursor_write!(self, value, i128)
     }
 
-    /// Read four bytes from the `DataCursor` and return it as an `f32`.
+    /// Read four bytes from the [`DataCursor`] and return it as an `f32`.
     #[inline]
     pub fn read_f32(&mut self) -> Result<f32> {
-        datacursor_read!(self, u32).map(|v| f32::from_bits(v))
+        datacursor_read!(self, u32).map(f32::from_bits)
     }
 
-    /// Write four bytes from an `f32` into the `DataCursor`.
+    /// Write four bytes from an `f32` into the [`DataCursor`].
     #[inline]
     pub fn write_f32(&mut self, value: f32) -> Result<()> {
         datacursor_write!(self, value.to_bits(), u32)
     }
 
-    /// Read eight bytes from the `DataCursor` and return it as an `f64`.
+    /// Read eight bytes from the [`DataCursor`] and return it as an `f64`.
     #[inline]
     pub fn read_f64(&mut self) -> Result<f64> {
-        datacursor_read!(self, u64).map(|v| f64::from_bits(v))
+        datacursor_read!(self, u64).map(f64::from_bits)
     }
 
-    /// Write eight bytes from an `f64` into the `DataCursor`.
+    /// Write eight bytes from an `f64` into the [`DataCursor`].
     #[inline]
     pub fn write_f64(&mut self, value: f64) -> Result<()> {
         datacursor_write!(self, value.to_bits(), u64)
@@ -399,6 +414,7 @@ impl Read for DataCursor {
     ///
     /// # Errors
     /// This function is infallible and will not return an error under any circumstances.
+    #[inline]
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         let length = min(buf.len(), self.len() - self.pos);
         //Unroll buf.copy_from_slice() since we are guaranteed to be in bounds
@@ -417,6 +433,7 @@ impl Read for DataCursor {
     ///
     /// # Errors
     /// This function is infallible and will not return an error under any circumstances.
+    #[inline]
     fn read_to_end(&mut self, buf: &mut Vec<u8>) -> std::io::Result<usize> {
         let length = self.len() - self.pos;
         buf.extend_from_slice(&self.data[self.pos..]);
@@ -429,6 +446,7 @@ impl Read for DataCursor {
     /// # Errors
     /// This function will return [`UnexpectedEof`](std::io::ErrorKind::UnexpectedEof) if there
     /// isn't enough data to fill `buf`.
+    #[inline]
     fn read_exact(&mut self, buf: &mut [u8]) -> std::io::Result<()> {
         if buf.len() > self.len() - self.pos {
             return Err(std::io::Error::from(std::io::ErrorKind::UnexpectedEof));
@@ -453,6 +471,7 @@ impl Write for DataCursor {
     ///
     /// # Errors
     /// This function is infallible and will not return an error under any circumstances.
+    #[inline]
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         let len = min(buf.len(), self.len() - self.pos);
         self.data[self.pos..self.pos + len].copy_from_slice(&buf[..len]);
@@ -460,7 +479,8 @@ impl Write for DataCursor {
         Ok(len)
     }
 
-    /// `DataCursor` is held entirely in memory, so `flush` is a no-op.
+    /// [`DataCursor`] is held entirely in memory, so `flush` is a no-op.
+    #[inline]
     fn flush(&mut self) -> std::io::Result<()> {
         Ok(())
     }
@@ -470,6 +490,7 @@ impl Write for DataCursor {
     /// # Errors
     /// This function will return [`WriteZero`](std::io::ErrorKind::WriteZero) if there
     /// isn't enough data to fill `buf`.
+    #[inline]
     fn write_all(&mut self, buf: &[u8]) -> std::io::Result<()> {
         if self.pos + buf.len() > self.len() {
             Err(std::io::Error::from(std::io::ErrorKind::WriteZero))
@@ -481,16 +502,19 @@ impl Write for DataCursor {
 
 #[cfg(feature = "std")]
 impl BufRead for DataCursor {
+    #[inline]
     fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
         Ok(self.remaining_slice())
     }
 
+    #[inline]
     fn consume(&mut self, amt: usize) {
         self.pos += amt;
     }
 }
 
 impl From<Box<[u8]>> for DataCursor {
+    #[inline]
     fn from(value: Box<[u8]>) -> Self {
         Self {
             data: value,
@@ -502,6 +526,7 @@ impl From<Box<[u8]>> for DataCursor {
 
 #[cfg(feature = "std")]
 impl From<Vec<u8>> for DataCursor {
+    #[inline]
     fn from(value: Vec<u8>) -> Self {
         Self {
             data: value.into_boxed_slice(),
@@ -514,18 +539,21 @@ impl From<Vec<u8>> for DataCursor {
 impl Deref for DataCursor {
     type Target = [u8];
 
+    #[inline]
     fn deref(&self) -> &Self::Target {
         &self.data
     }
 }
 
 impl DerefMut for DataCursor {
+    #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.data
     }
 }
 
 impl AsMut<[u8]> for DataCursor {
+    #[inline]
     fn as_mut(&mut self) -> &mut [u8] {
         &mut self.data
     }

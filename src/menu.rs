@@ -3,21 +3,22 @@ use argp::FromArgs;
 /// Top-level command for argp to parse.
 #[derive(FromArgs, Debug)]
 #[argp(description = "A new way to modify games.")]
-pub struct Orthrus {
-    #[argp(option, short = 'v', global, default = "4")]
+pub(crate) struct Orthrus {
+    #[argp(option, short = 'v', global, default = "0")]
     #[argp(
         description = "Logging level (0 = Off, 1 = Error, 2 = Warn, 3 = Info, 4 = Debug, 5 = Trace)"
     )]
-    pub verbose: usize,
+    pub(crate) verbose: usize,
 
     #[argp(subcommand)]
-    pub nested: Modules,
+    pub(crate) nested: Modules,
 }
 
 /// These are all the "modules" that Orthrus supports via command line.
 #[derive(FromArgs, Debug)]
 #[argp(subcommand)]
-pub enum Modules {
+#[non_exhaustive]
+pub(crate) enum Modules {
     Yaz0(Yaz0Data),
     Panda3D(Panda3DOption),
 }
@@ -26,37 +27,38 @@ pub enum Modules {
 #[derive(FromArgs, Debug)]
 #[argp(subcommand, name = "yaz0")]
 #[argp(description = "Support for Nintendo's Yaz0 compression")]
-pub struct Yaz0Data {
+pub(crate) struct Yaz0Data {
     #[argp(switch, short = 'd')]
     #[argp(description = "Decompress a Yaz0-compressed file")]
-    pub decompress: bool,
+    pub(crate) decompress: bool,
 
     #[argp(switch, short = 'c')]
     #[argp(description = "Compress a binary file using Yaz0")]
-    pub compress: bool,
+    pub(crate) compress: bool,
 
     #[argp(option, short = 'i')]
     #[argp(description = "Input file to be processed")]
-    pub input: String,
+    pub(crate) input: String,
 
     #[argp(option, short = 'o')]
     #[argp(description = "Output file to write to")]
-    pub output: String,
+    pub(crate) output: String,
 }
 
 /// This is the command for the `Panda3D` module.
 #[derive(FromArgs, Debug)]
 #[argp(subcommand, name = "panda3d")]
 #[argp(description = "Support for the Panda3D Engine")]
-pub struct Panda3DOption {
+pub(crate) struct Panda3DOption {
     #[argp(subcommand)]
-    pub nested: Panda3DModules,
+    pub(crate) nested: Panda3DModules,
 }
 
 /// These are all supported files within `Panda3D`.
 #[derive(FromArgs, Debug)]
 #[argp(subcommand)]
-pub enum Panda3DModules {
+#[non_exhaustive]
+pub(crate) enum Panda3DModules {
     Multifile(MultifileData),
 }
 
@@ -64,24 +66,24 @@ pub enum Panda3DModules {
 #[derive(FromArgs, Debug)]
 #[argp(subcommand, name = "multifile")]
 #[argp(description = "Panda3D Multifile Archive")]
-pub struct MultifileData {
+pub(crate) struct MultifileData {
     #[argp(switch, short = 'x')]
     #[argp(description = "Extract all files from the Multifile")]
-    pub extract: bool,
+    pub(crate) extract: bool,
 
     #[argp(option, short = 'i')]
     #[argp(description = "Multifile to be processed")]
-    pub input: String,
+    pub(crate) input: String,
 
     #[argp(option, short = 'o')]
     #[argp(description = "Directory to extract to")]
-    pub output: Option<String>,
+    pub(crate) output: Option<String>,
 }
 
 #[must_use]
-pub fn exactly_one_true(bools: &[bool]) -> Option<usize> {
-    let mut count = 0;
-    let mut index = 0;
+pub(crate) fn exactly_one_true(bools: &[bool]) -> Option<usize> {
+    let mut count: usize = 0;
+    let mut index: usize = 0;
 
     for (i, &val) in bools.iter().enumerate() {
         if val {
@@ -90,13 +92,9 @@ pub fn exactly_one_true(bools: &[bool]) -> Option<usize> {
         }
 
         if count > 1 {
-            return None;
+            break;
         }
     }
 
-    if count == 1 {
-        Some(index)
-    } else {
-        None
-    }
+    (count == 1).then_some(index)
 }

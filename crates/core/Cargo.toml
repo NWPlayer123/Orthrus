@@ -8,17 +8,14 @@ repository.workspace = true
 
 [dependencies]
 snafu = { version = "0.7", default-features = false }
-time = { version = "0.3", features = ["formatting", "macros", "local-offset"], optional = true }
-# compact_str = { version = "0.7", default-features = false, optional = true }
-# x509-parser = { version = "0.15", features = ["validate", "verify"], optional = true }
 
-# bitflags = { version = "2.4", optional = true }
-# hashbrown = { version = "0.14", optional = true }
-# log = { version = "0.4", optional = true }
-# ouroboros = { version = "0.18", optional = true }
-# thiserror = { version = "1.0", optional = true }
+time = { version = "0.3", features = ["formatting", "macros", "local-offset"], optional = true }
+
+der = { version = "0.7", optional = true }
+x509-cert = { version = "0.2", optional = true }
 
 [features]
 default = ["std"]
 std = ["snafu/std"]
 time = ["dep:time", "std"]
+certificate = ["der", "x509-cert"]

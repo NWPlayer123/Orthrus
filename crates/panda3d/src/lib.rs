@@ -1,12 +1,14 @@
-pub mod multifile;
-pub use multifile::Multifile;
-/*use orthrus_helper::vfs::VirtualFileSystem;
-use std::io;
-use std::path::Path;
+// Here's all necessary no_std information as a nice prelude
+#![cfg_attr(not(feature = "std"), no_std)]
 
-fn load_multifile(path: &Path) -> io::Result<VirtualFileSystem> {
-    let vfs = VirtualFileSystem::new();
-    let mut file1 = Multifile::new();
-    file1.open_read(path, 0)?;
-    Ok(vfs)
-}*/
+#[cfg(not(feature = "std"))]
+mod no_std {
+    extern crate alloc;
+    pub use alloc::boxed::Box;
+    pub use alloc::string::String;
+    pub use alloc::vec;
+}
+
+pub mod multifile;
+
+pub mod prelude;

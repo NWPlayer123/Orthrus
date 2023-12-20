@@ -9,11 +9,13 @@ use compact_str::CompactString;
 use hashbrown::HashMap;
 
 
+#[non_exhaustive]
 pub enum VirtualNode {
     File(VirtualFile),
     Folder(VirtualFolder),
 }
 
+#[non_exhaustive]
 pub struct VirtualFile {
     data: DataCursor,
     metadata: u32,

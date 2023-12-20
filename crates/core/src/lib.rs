@@ -1,3 +1,14 @@
+//! This crate is used as a utilities library for common functionality across
+//! [Orthrus](https://crates.io/crates/orthrus) modules.
+//!
+//! By default, this crate only enables the data module, which contains
+//! [`DataCursor`](data::DataCursor), an in-memory fixed-length file that allows for efficient
+//! reading and writing of endian-specific data.
+//!
+//! Additionally, there is a time module, which provides convenient functions for handling
+//! timestamps and getting the current time, and a certificate module, which provides a custom X509
+//! implementation to allow for reading of consecutive X.509 certificates.
+
 //#![feature(const_slice_index)]
 
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -15,17 +26,7 @@ pub mod data;
 #[cfg(all(feature = "time", feature = "std"))]
 pub mod time;
 
-pub mod prelude {
-    pub use crate::data::{DataCursor, Endian};
+#[cfg(feature = "certificate")]
+pub mod certificate;
 
-    //Force library users to specify the kind of error, in this case data::error
-    pub mod data {
-        pub use crate::data::Error;
-    }
-
-    #[cfg(all(feature = "time", feature = "std"))]
-    pub mod time {
-        pub use crate::time::*;
-    }
-}
-pub use prelude::*;
+pub mod prelude;

@@ -1,4 +1,351 @@
+//! Adds support for the Multifile archive format used by the Panda3D engine.
+//!
+//! This module is designed to support both "standalone" or one-shot operations that don't require
+//! you to keep track of an object, and holding a Multifile in-memory for more complex operations.
+//!
+//! # Revisions
+//! * **Version 1.0**: Initial Multifile Support
+//! * **Version 1.1**: Added support for timestamps both for the Multifile as a whole, and
+//! individual Subfiles. Subfiles with a timestamp of zero will use the Multifile timestamp.
+//!
+//! # Format
+//! The Multifile format is designed as a header, and then a number of [`Subfile`]s connected via a
+//! linked list structure.
+//!
+//! It has primitive support for larger-than-32bit filesizes, using a "scale factor" that multiplies
+//! all offsets by a specific amount, which introduces extra padding to meet alignment requirements.
+//!
+//! It supports comment lines before the Multifile data using a '#' at the start which allows a
+//! Multifile to be ran directly from the command line on Unix systems.
+//!
+//! ## Multifile Header
+//! The header is as follows, in little-endian format:
+//!
+//! | Offset | Field | Type | Notes |
+//! |--------|-------|------|-------|
+//! | 0x0     | Magic number   | u8\[6] | Unique identifier ("pmf\\0\\n\\r") to let us know we're reading a Multifile. |
+//! | 0x4     | Major version  | u16    | Major version number for the Multifile revision (currently 1). |
+//! | 0x8     | Minor version  | u16    | Minor version number for the Multifile revision (currently 1). |
+//! | 0xC     | Scale factor   | u32    | Allows for scaling all file offsets to support larger-than-4GB files. |
+//! | \[0x10] | Unix timestamp | u32    | The time the Multifile was last modified ***(revision 1.1+)***. |
+//!
+//! ## Subfile Header
+//!
+//! Directly following the Multifile header is a Subfile header. The first "entry" of each header is
+//! an offset to the next header, which forms a linked list, with the last entry being a 0. All
+//! offsets are relative to the file start, and must be multiplied by the scale factor.
+//!
+//! *Note that the linked list is not treated as part of the Subfile header, it is only for
+//! navigating the Multifile, and is only included here for convenience.*
+//!
+//! | Offset | Field | Type | Notes |
+//! |--------|-------|------|-------|
+//! | -0x4    | Index offset    | u32        | Offset to the next header, relative to file start. ***Not part of the Subfile.*** |
+//! | 0x0     | Data offset     | u32        | Offset to the Subfile's data, relative to file start. |
+//! | 0x4     | Data length     | u32        | Length of the Subfile's data. |
+//! | 0x8     | File attributes | u16        | Bit-field of the Subfile's attributes, such as [compression or encryption](#subfile-flags). |
+//! | \[0xA]  | Original length | u32        | Length of the processed data. ***Only if [compressed or encrypted](#subfile-flags)***. |
+//! | \[0xE]  | Unix timestamp  | u32        | The time the Subfile was last modified ***(revision 1.1+)***. If zero, use Multifile timestamp. |
+//! | 0x12    | Filename length | u16        | Length of the Subfile's name in the next field. |
+//! | 0x14    | Subfile path    | char\[len] | Path to the Subfile, for use in a Virtual FileSystem. Obfuscated, convert as (255 - x). |
+//!
+//!
+//! ## Subfile Flags
+//! | Flags | Value | Notes |
+//! |-------|-------|-------|
+//! | `Deleted`      | 1 << 0 (1)  | The Subfile has been "deleted" from the Multifile, and should be ignored. |
+//! | `IndexInvalid` | 1 << 1 (2)  | The Subfile has a corrupt index entry. |
+//! | `DataInvalid`  | 1 << 2 (4)  | The Subfile has invalid data associated. |
+//! | `Compressed`   | 1 << 3 (8)  | The Subfile is compressed. |
+//! | `Encrypted`    | 1 << 4 (16) | The Subfile is encrypted. |
+//! | `Signature`    | 1 << 5 (32) | The Subfile is the certificate used to sign the Multifile. See [Certificate Format](#certificate-format) for details. |
+//! | `Text`         | 1 << 6 (64) | The Subfile contains text instead of binary data. |
+//!
+//! ## Certificate Format
+//! The Multifile certificate is a binary blob that can contain multiple certificates in a
+//! certificate chain, along with the actual signature of the Multifile.
+//!
+
+use der::Decode;
+
 use core::fmt;
+#[cfg(feature = "std")]
+use std::io::prelude::*;
+#[cfg(feature = "std")]
+use std::{
+    fs::File,
+    path::{Path, PathBuf},
+};
+
+use orthrus_core::prelude::*;
+use snafu::prelude::*;
+
+#[cfg(not(feature = "std"))]
+use crate::no_std::*;
+
+/// Error conditions for when working with Multifile archives.
+#[derive(Debug, Snafu)]
+#[non_exhaustive]
+pub enum Error {
+    /// Thrown when trying to open a file or folder that doesn't exist.
+    #[snafu(display("Unable to find file/folder!"))]
+    NotFound,
+    /// Thrown if reading/writing tries to go out of bounds.
+    #[snafu(display("Unexpected End-Of-File!"))]
+    EndOfFile,
+    /// Thrown when unable to open a file or folder.
+    #[snafu(display("No permissions to open file/folder!"))]
+    PermissionDenied,
+    /// Thrown if the header contains a magic number other than "pmf\0\n\r".
+    #[snafu(display("Invalid Magic! Expected {:?}.", Multifile::MAGIC))]
+    InvalidMagic,
+    /// Thrown if the header version is too new to be supported.
+    #[snafu(display(
+        "Unknown Multifile Version! Expected >= v{}.",
+        Multifile::CURRENT_VERSION
+    ))]
+    UnknownVersion,
+    CertificateError {
+        source: Box<der::Error>,
+    },
+}
+type Result<T> = core::result::Result<T, Error>;
+
+#[cfg(feature = "std")]
+impl From<std::io::Error> for Error {
+    #[inline]
+    fn from(error: std::io::Error) -> Self {
+        match error.kind() {
+            std::io::ErrorKind::NotFound => Self::NotFound,
+            std::io::ErrorKind::UnexpectedEof => Self::EndOfFile,
+            std::io::ErrorKind::PermissionDenied => Self::PermissionDenied,
+            kind => {
+                panic!(
+                    "Unexpected std::io::error: {}! Something has gone horribly wrong",
+                    kind
+                )
+            }
+        }
+    }
+}
+
+impl From<data::Error> for Error {
+    #[inline]
+    fn from(error: data::Error) -> Self {
+        match error {
+            data::Error::EndOfFile => Self::EndOfFile,
+            _ => panic!("Unexpected data::error! Something has gone horribly wrong"),
+        }
+    }
+}
+
+/// This struct is mainly for readability in place of an unnamed tuple
+#[derive(PartialEq, Eq, Clone, Copy)]
+pub struct Version {
+    major: i16,
+    minor: i16,
+}
+
+impl fmt::Display for Version {
+    #[inline]
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}.{}", self.major, self.minor)
+    }
+}
+
+pub struct Multifile {}
+
+impl Multifile {
+    pub const CURRENT_VERSION: Version = Version { major: 1, minor: 1 };
+    pub const MAGIC: [u8; 6] = *b"pmf\0\n\r";
+
+    /// Helper function that reads the pre-header for a given file, if any, which allows for comment
+    /// lines starting with '#'.
+    #[inline]
+    fn parse_header_prefix(input: &[u8]) -> usize {
+        let mut pos = 0;
+
+        while pos < input.len() {
+            //Check if a line starts with '#'
+            if input[pos] == b'#' {
+                //If it doesn't, look for the next newline
+                while pos < input.len() && input[pos] != b'\n' {
+                    pos += 1;
+                }
+                //Skip any whitespace characters at the start of the line
+                while pos < input.len() && (input[pos] == b' ' || input[pos] == b'\r') {
+                    pos += 1;
+                }
+            } else {
+                //If it doesn't, we've found the end of the pre-header
+                break;
+            }
+        }
+        pos
+    }
+
+    /// Loads a [`Multifile`] and extracts all [`Subfiles`](self::Subfile). For use with other
+    /// functions, see [`extract`](Self::extract).
+    #[cfg(feature = "std")]
+    #[inline]
+    pub fn extract_from_path<P: AsRef<Path>>(input: P, output: P, offset: usize) -> Result<()> {
+        let data = std::fs::read(input)?;
+        Self::extract_from(&data, output, offset)?;
+        Ok(())
+    }
+
+    /// Extracts all Subfiles from the given Multifile. For use with other functions, see
+    /// [`extract`](Self::extract).
+    #[cfg(feature = "std")]
+    #[inline]
+    pub fn extract_from<P: AsRef<Path>>(input: &[u8], output: P, _offset: usize) -> Result<()> {
+        //Use a DataCursor internally because it makes reading structured data a lot easier
+        let mut data = DataCursor::new(input, Endian::Little);
+        data.set_position(Self::parse_header_prefix(&data));
+
+        //Read the magic and make sure we're actually parsing a Multifile
+        let mut magic = [0u8; 6];
+        data.read_exact(&mut magic)?;
+        ensure!(magic == Self::MAGIC, InvalidMagicSnafu);
+
+        let version = Version {
+            major: data.read_i16()?,
+            minor: data.read_i16()?,
+        };
+        ensure!(
+            Self::CURRENT_VERSION.major == version.major
+                && Self::CURRENT_VERSION.minor >= version.minor,
+            UnknownVersionSnafu
+        );
+
+        let scale_factor = data.read_u32()?;
+
+        let timestamp = match version.minor >= 1 {
+            true => data.read_u32()?,
+            false => 0,
+        };
+
+        // Loop through each Subfile, using next_index as a linked list
+        let mut next_index = data.read_u32()? * scale_factor;
+        while next_index != 0 {
+            let mut header = Subfile::read_header(&mut data, version)?;
+            header.offset *= scale_factor;
+            if header.timestamp == 0 {
+                header.timestamp = timestamp;
+            }
+
+            if !header.flags.contains(subfile::Flags::Signature) {
+                //extract file
+                let mut path = PathBuf::from(output.as_ref());
+                path.push(&header.filename);
+
+                if let Some(dir) = path.parent() {
+                    std::fs::create_dir_all(dir)?;
+                }
+
+                let mut output = File::create(path)?;
+                data.set_position(header.offset as usize);
+                let file_data = data.get_slice(header.length as usize)?;
+                output.write_all(file_data)?;
+            } else {
+                println!("{:?}", header);
+                data.set_position(header.offset as usize);
+                let mut file_data =
+                    DataCursor::new(data.get_slice(header.length as usize)?, Endian::Little);
+                let signature_size = file_data.read_u32()?;
+                file_data.set_position(4 + signature_size as usize);
+                let certificate_count = file_data.read_u32()?;
+                let mut certificate_blob = DataCursor::new(vec![0u8; file_data.len() - file_data.position()], Endian::Little);
+                file_data.read_exact(&mut certificate_blob)?;
+                
+                for n in 0..certificate_count {
+                    let certificate = orthrus_core::certificate::Certificate::from_der(certificate_blob.remaining_slice()).unwrap();
+                    println!("Certificate {n}:\n{certificate:?}");
+                    let remaining_length: usize = certificate.remaining_len.try_into().unwrap();
+                    certificate_blob.set_position(certificate_blob.len() - remaining_length);
+                }
+            }
+
+            data.set_position(next_index as usize);
+            next_index = data.read_u32()? * scale_factor;
+        }
+
+        Ok(())
+    }
+
+    #[cfg(feature = "std")]
+    #[inline]
+    pub fn extract<P: AsRef<Path>>(&self, _output: P) {}
+
+    //Multifile::check_signatures parses and verifies the signature and certificates
+}
+
+#[allow(non_snake_case)]
+pub mod subfile {
+    //Use the same includes as the main Multifile
+    use bitflags::bitflags;
+
+    use super::*;
+
+    bitflags! {
+        #[derive(Debug, PartialEq, Default)]
+        pub(super)
+        struct Flags: u16 {
+            const Deleted = 1 << 0;
+            const IndexInvalid = 1 << 1;
+            const DataInvalid = 1 << 2;
+            const Compressed = 1 << 3;
+            const Encrypted = 1 << 4;
+            const Signature = 1 << 5;
+            const Text = 1 << 6;
+        }
+    }
+
+    #[derive(Default, Debug)]
+    #[allow(dead_code)]
+    pub(super) struct Header {
+        pub(super) offset: u32,
+        pub(super) length: u32,
+        pub(super) flags: Flags,
+        pub(super) timestamp: u32,
+        pub(super) filename: String,
+    }
+    pub struct Subfile {}
+
+    impl Subfile {
+        pub(super) fn read_header(input: &mut DataCursor, version: Version) -> Result<Header> {
+            let offset = input.read_u32()?;
+            let data_length = input.read_u32()?;
+            let flags = Flags::from_bits_truncate(input.read_u16()?);
+
+            let length = match flags.intersects(Flags::Compressed | Flags::Encrypted) {
+                true => input.read_u32()?,
+                false => data_length,
+            };
+
+            let timestamp = match version.minor >= 1 {
+                true => input.read_u32()?,
+                false => 0,
+            };
+
+            let name_length = input.read_u16()?;
+            let mut filename = String::with_capacity(name_length.into());
+            for _ in 0..name_length {
+                filename.push((255 - input.read_u8()?) as char);
+            }
+
+            Ok(Header {
+                offset,
+                length,
+                flags,
+                timestamp,
+                filename,
+            })
+        }
+    }
+}
+use subfile::Subfile;
+/*use core::fmt;
 use std::io::prelude::*;
 use std::path::Path;
 
@@ -8,19 +355,21 @@ use orthrus_core::prelude::*;
 use snafu::prelude::*;
 
 /// This struct is mainly for readability in place of an unnamed tuple
-#[derive(PartialEq)]
-struct Version {
+#[derive(PartialEq, Eq)]
+pub struct Version {
     major: i16,
     minor: i16,
 }
 
 impl fmt::Display for Version {
+    #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}.{}", self.major, self.minor)
     }
 }
 
 #[derive(Debug, Snafu)]
+#[non_exhaustive]
 pub enum MultifileError {
     #[snafu(display("Unable to find file/folder!"))]
     NotFound,
@@ -38,29 +387,33 @@ pub enum MultifileError {
 
 #[cfg(feature = "std")]
 impl From<std::io::Error> for MultifileError {
+    #[inline]
     fn from(error: std::io::Error) -> Self {
         match error.kind() {
-            std::io::ErrorKind::NotFound => MultifileError::NotFound,
-            std::io::ErrorKind::UnexpectedEof => MultifileError::EndOfFile,
+            std::io::ErrorKind::NotFound => Self::NotFound,
+            std::io::ErrorKind::UnexpectedEof => Self::EndOfFile,
             _ => panic!("Unexpected std::io::error! Something has gone horribly wrong"),
         }
     }
 }
 
 impl From<data::Error> for MultifileError {
+    #[inline]
     fn from(error: data::Error) -> Self {
         match error {
-            data::Error::EndOfFile => MultifileError::EndOfFile,
-            data::Error::InvalidSize => MultifileError::InvalidSize,
+            data::Error::EndOfFile => Self::EndOfFile,
+            data::Error::InvalidSize => Self::InvalidSize,
+            _ => panic!("Unexpected data::error! Something has gone horribly wrong"),
         }
     }
 }
 
 impl From<time::Error> for MultifileError {
+    #[inline]
     fn from(error: time::Error) -> Self {
         match error {
-            time::Error::ComponentRange(_) => MultifileError::EndOfFile,
-            time::Error::IndeterminateOffset(_) => MultifileError::InvalidTimestamp,
+            time::Error::ComponentRange(_) => Self::EndOfFile,
+            time::Error::IndeterminateOffset(_) => Self::InvalidTimestamp,
             _ => panic!("Unexpected time::error! Something has gone horribly wrong"),
         }
     }
@@ -70,8 +423,8 @@ pub struct Multifile {}
 
 /// This is a test, thanks
 impl Multifile {
-    const CURRENT_VERSION: Version = Version { major: 1, minor: 1 };
-    const MAGIC: [u8; 6] = *b"pmf\0\n\r";
+    pub const CURRENT_VERSION: Version = Version { major: 1, minor: 1 };
+    pub const MAGIC: [u8; 6] = *b"pmf\0\n\r";
 
     /// Parses a `Panda3D` Multifile pre-header, which allows for comment lines starting with '#'.
     ///
@@ -103,6 +456,7 @@ impl Multifile {
     }*/
 
     #[cfg(feature = "std")]
+    #[inline]
     pub fn extract_from_path<P>(input: P, output: P, offset: usize) -> Result<(), MultifileError>
     where
         P: AsRef<Path> + fmt::Display,
@@ -115,6 +469,7 @@ impl Multifile {
     /// This function is designed to run as a single pass. For more general use, see
     /// [`extract`](Multifile::extract).
     #[cfg(feature = "std")]
+    #[inline]
     pub fn extract_from<P>(input: &[u8], output: P, offset: usize) -> Result<(), MultifileError>
     where
         P: AsRef<Path> + fmt::Display,
@@ -170,13 +525,14 @@ impl Multifile {
     }
 
     /// This function
+    #[inline]
     pub fn extract<P: AsRef<Path> + fmt::Display>(
         &mut self,
         _output: P,
     ) -> Result<(), MultifileError> {
         Ok(())
     }
-}
+}*/
 
 /*
 use core::fmt;

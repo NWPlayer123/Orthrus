@@ -44,28 +44,30 @@
 //! ## Compression
 //! * [`compress_from_path`]: Provide a path, get compressed data back
 //! * [`compress_from`]: Provide the input data, get compressed data back
-//! * [`compress_n64`]: Provide the input data and output buffer, run the compression (older matching algorithm)
-
-#[cfg(not(feature = "std"))]
-use crate::no_std::*;
+//! * [`compress_n64`]: Provide the input data and output buffer, run the compression (older
+//!   matching algorithm)
 
 #[cfg(feature = "std")]
 use std::{fmt::Display, path::Path};
 
 use snafu::prelude::*;
 
+#[cfg(not(feature = "std"))]
+use crate::no_std::*;
+
 /// Error conditions for when reading/writing Yaz0 files
 #[derive(Debug, Snafu)]
+#[non_exhaustive]
 pub enum Error {
     /// Thrown when trying to open a file or folder that doesn't exist.
     #[snafu(display("Unable to find file/folder!"))]
     NotFound,
-    /// Thrown when unable to open a file or folder.
-    #[snafu(display("No permissions to open file/folder!"))]
-    PermissionDenied,
     /// Thrown if reading/writing tries to go out of bounds.
     #[snafu(display("Unexpected End-Of-File!"))]
     EndOfFile,
+    /// Thrown when unable to open a file or folder.
+    #[snafu(display("No permissions to open file/folder!"))]
+    PermissionDenied,
     /// Thrown if yaz0-compressed file is larger than worst possible estimation.
     ///
     /// **This should not be seen in normal use.**
@@ -75,18 +77,19 @@ pub enum Error {
     #[snafu(display("File too large to fit into u32::MAX!"))]
     FileTooBig,
     /// Thrown if the header contains a magic number other than "Yaz0".
-    #[snafu(display("Invalid Magic! Expected \"Yaz0\""))]
+    #[snafu(display("Invalid Magic! Expected {:?}.", MAGIC))]
     InvalidMagic,
 }
 type Result<T> = core::result::Result<T, Error>;
 
 #[cfg(feature = "std")]
 impl From<std::io::Error> for Error {
+    #[inline]
     fn from(error: std::io::Error) -> Self {
         match error.kind() {
-            std::io::ErrorKind::NotFound => Error::NotFound,
-            std::io::ErrorKind::UnexpectedEof => Error::EndOfFile,
-            std::io::ErrorKind::PermissionDenied => Error::PermissionDenied,
+            std::io::ErrorKind::NotFound => Self::NotFound,
+            std::io::ErrorKind::UnexpectedEof => Self::EndOfFile,
+            std::io::ErrorKind::PermissionDenied => Self::PermissionDenied,
             _ => panic!("Unexpected std::io::error! Something has gone horribly wrong"),
         }
     }
@@ -95,8 +98,8 @@ impl From<std::io::Error> for Error {
 /// Unique identifier that tells us if we're reading a Yaz0-compressed file
 pub const MAGIC: [u8; 4] = *b"Yaz0";
 
-/// See the [header](self#header) for more information.
-pub struct Yaz0Header {
+/// See the module [header](self#header) for more information.
+pub struct Header {
     pub decompressed_size: u32,
     pub alignment: u32,
 }
@@ -115,7 +118,8 @@ pub struct Yaz0Header {
 ///
 /// # Errors
 /// Returns [`InvalidMagic`](Error::InvalidMagic) if the header does not match a Yaz0 file.
-pub fn read_header(data: &[u8]) -> Result<Yaz0Header> {
+#[inline]
+pub fn read_header(data: &[u8]) -> Result<Header> {
     let magic = &data[0..4];
     ensure!(magic == MAGIC, InvalidMagicSnafu);
 
@@ -140,7 +144,7 @@ pub fn read_header(data: &[u8]) -> Result<Yaz0Header> {
         ])
     };
 
-    Ok(Yaz0Header {
+    Ok(Header {
         decompressed_size,
         alignment,
     })
@@ -166,6 +170,7 @@ pub fn read_header(data: &[u8]) -> Result<Yaz0Header> {
 /// * [`InvalidMagic`](Error::InvalidMagic) if the header does not match a Yaz0 file
 /// * [`EndOfFile`](Error::EndOfFile) if trying to read or write out of bounds
 #[cfg(feature = "std")]
+#[inline]
 pub fn decompress_from_path<P: AsRef<Path> + Display>(path: P) -> Result<Box<[u8]>> {
     let input = std::fs::read(path)?;
     self::decompress_from(&input)
@@ -188,6 +193,7 @@ pub fn decompress_from_path<P: AsRef<Path> + Display>(path: P) -> Result<Box<[u8
 /// # Errors
 /// Returns [`InvalidMagic`](Error::InvalidMagic) if the header does not match a Yaz0 file, or
 /// [`EndOfFile`](Error::EndOfFile) if trying to read or write out of bounds.
+#[inline]
 pub fn decompress_from(data: &[u8]) -> Result<Box<[u8]>> {
     let header = read_header(data)?;
 
@@ -219,7 +225,7 @@ pub fn decompress_from(data: &[u8]) -> Result<Box<[u8]>> {
 /// # Errors
 /// This function will return [`EndOfFile`](Error::EndOfFile) if trying to read or write out of
 /// bounds.
-#[inline(never)]
+#[inline]
 pub fn decompress(input: &[u8], output: &mut [u8]) -> Result<()> {
     let mut input_pos: usize = 0x10;
     let mut output_pos: usize = 0x0;
@@ -277,17 +283,24 @@ pub fn decompress(input: &[u8], output: &mut [u8]) -> Result<()> {
     Ok(())
 }
 
+/// All supported Yaz0 compression algorithms
+#[derive(Clone, Copy)]
+#[non_exhaustive]
 pub enum CompressionAlgo {
     MatchingOld, //eggCompress
-    MatchingNew, //MK8
+    //MatchingNew, //MK8
 }
 
 /// Loads a Yaz0 file and returns the compressed data.
-/// 
+///
 /// # Examples
 /// ```
 /// # use orthrus_ncompress::yaz0;
-/// let output = yaz0::compress_from_path("../../examples/assets/tobudx.gb", yaz0::CompressionAlgo::MatchingOld, 0)?;
+/// let output = yaz0::compress_from_path(
+///     "../../examples/assets/tobudx.gb",
+///     yaz0::CompressionAlgo::MatchingOld,
+///     0,
+/// )?;
 ///
 /// let expected = std::fs::read("../../examples/assets/tobudx.yaz0_n64")?;
 /// assert_eq!(*output, *expected);
@@ -298,6 +311,7 @@ pub enum CompressionAlgo {
 /// Returns [`FileTooBig`](Error::FileTooBig) if the input is too large for the filesize to be
 /// stored in the header.
 #[cfg(feature = "std")]
+#[inline]
 pub fn compress_from_path<P>(path: P, algo: CompressionAlgo, align: u32) -> Result<Box<[u8]>>
 where
     P: AsRef<Path> + Display,
@@ -307,14 +321,17 @@ where
 }
 
 /// Calculates the filesize for the largest possible file that can be created with Yaz0 compression.
+///
 /// This consists of the 0x10 header, the length of the input file, and all flag bits needed,
 /// rounded up.
+#[must_use]
+#[inline]
 pub const fn worst_possible_size(input_len: usize) -> usize {
     0x10 + input_len + input_len.div_ceil(8)
 }
 
 /// Compresses the input data using a given compression algorithm.
-/// 
+///
 /// # Examples
 /// ```
 /// # use orthrus_ncompress::yaz0;
@@ -328,19 +345,19 @@ pub const fn worst_possible_size(input_len: usize) -> usize {
 ///
 /// # Warnings
 /// Alignment should be zero for N64, GameCube, and Wii, and should be non-zero on Wii U and Switch.
-/// 
+///
 /// # Errors
 /// Returns [`FileTooBig`](Error::FileTooBig) if the input is too large for the filesize to be
 /// stored in the header.
+#[inline]
 pub fn compress_from(input: &[u8], algo: CompressionAlgo, _align: u32) -> Result<Box<[u8]>> {
-    ensure!(input.len() <= u32::MAX as usize, FileTooBigSnafu);
+    ensure!(u32::try_from(input.len()).is_ok(), FileTooBigSnafu);
 
     //Assume 0x10 header, every byte is a copy, and include flag bytes (rounded up)
     let mut output = vec![0u8; worst_possible_size(input.len())];
 
     let output_size = match algo {
         CompressionAlgo::MatchingOld => compress_n64(input, &mut output),
-        _ => panic!("MK8 not implemented yet!"),
     };
 
     output.truncate(output_size);
@@ -348,10 +365,13 @@ pub fn compress_from(input: &[u8], algo: CompressionAlgo, _align: u32) -> Result
     Ok(output.into_boxed_slice())
 }
 
-/// Compresses a given input using the algorithm Nintendo used for older projects (i.e. before Wii U
-/// when alignment was added to the header), and returns the size of the compressed data. It should
-/// create identically compressed files to those from official Nintendo games.
-/// 
+/// Compresses the input using Nintendo's pre-Wii U algorithm, and returns the size of the
+/// compressed data.
+///
+/// This algorithm should create identically compressed files to those from N64, GameCube, and Wii
+/// Nintendo games. It does not allow for setting the alignment, as theoretically no files created
+/// using this algorithm should have a header with alignment.
+///
 /// # Examples
 /// ```
 /// # use orthrus_ncompress::yaz0;
@@ -364,6 +384,7 @@ pub fn compress_from(input: &[u8], algo: CompressionAlgo, _align: u32) -> Result
 /// assert_eq!(*output, *expected);
 /// # Ok::<(), yaz0::Error>(())
 /// ```
+#[inline]
 pub fn compress_n64(input: &[u8], output: &mut [u8]) -> usize {
     output[0..4].copy_from_slice(b"Yaz0");
     output[4..8].copy_from_slice(&u32::to_be_bytes(input.len() as u32));
@@ -493,7 +514,7 @@ fn find_match(input: &[u8], input_pos: usize) -> (usize, usize) {
 
 /// Searches for the needle in the haystack using a modified version of Horspool's algorithm, and
 /// returns the index of the first match
-#[inline(always)]
+#[inline]
 fn search_window(needle: &[u8], haystack: &[u8]) -> usize {
     //Check if we can even find the needle
     if needle.len() > haystack.len() {
@@ -511,7 +532,8 @@ fn search_window(needle: &[u8], haystack: &[u8]) -> usize {
         }
         haystack_index -= 1;
 
-        //Found a possible match with the end character, now check if the rest of the needle matches
+        //Found a possible match with the end character, now check if the rest of the needle
+        // matches
         for needle_index in (0..needle.len() - 1).rev() {
             //If it doesn't, skip ahead and go back to searching for another end character
             if haystack[haystack_index] != needle[needle_index] {
