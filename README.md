@@ -1,6 +1,8 @@
 # Orthrus
 Orthrus is a work-in-progress modding toolkit that aims to support a wide array of game file formats, to allow for blazing fast interoperability across systems and game engines. It supports no_std for embedded platforms, and tries to keep dependencies to a minimum.
 
+For more about the structure of the Orthrus project, see the [Architecture](ARCHITECTURE.md) page.
+
 ## Current Formats
 ### ncompress - Nintendo Compression Formats
 * Yay0 - used for early first-party engines on N64/GameCube

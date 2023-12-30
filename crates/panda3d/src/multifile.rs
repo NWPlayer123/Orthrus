@@ -199,8 +199,8 @@ impl Multifile {
     #[cfg(feature = "std")]
     #[inline]
     pub fn extract_from<P: AsRef<Path>>(input: &[u8], output: P, _offset: usize) -> Result<()> {
-        //Use a DataCursor internally because it makes reading structured data a lot easier
-        let mut data = DataCursor::new(input, Endian::Little);
+        //Use a DataCursorRef internally because it makes reading structured data a lot easier
+        let mut data = DataCursorRef::new(input, Endian::Little);
         data.set_position(Self::parse_header_prefix(&data));
 
         //Read the magic and make sure we're actually parsing a Multifile
@@ -313,7 +313,7 @@ pub mod subfile {
     pub struct Subfile {}
 
     impl Subfile {
-        pub(super) fn read_header(input: &mut DataCursor, version: Version) -> Result<Header> {
+        pub(super) fn read_header(input: &mut DataCursorRef, version: Version) -> Result<Header> {
             let offset = input.read_u32()?;
             let data_length = input.read_u32()?;
             let flags = Flags::from_bits_truncate(input.read_u16()?);

@@ -8,7 +8,7 @@
 //! ```
 
 #[doc(inline)]
-pub use crate::data::{DataCursor, Endian};
+pub use crate::data::{DataCursor, DataCursorRef, DataCursorMut, Endian, EndianRead, EndianWrite};
 
 /// Contains [`data::Error`], which is used in Results returned by [`DataCursor`]
 pub mod data {

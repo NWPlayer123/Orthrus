@@ -2,8 +2,9 @@
 //! [Orthrus](https://crates.io/crates/orthrus) modules.
 //!
 //! By default, this crate only enables the data module, which contains
-//! [`DataCursor`](data::DataCursor), an in-memory fixed-length file that allows for efficient
-//! reading and writing of endian-specific data.
+//! [`DataCursor`](data::DataCursor), [`DataCursorRef`](data::DataCursorRef), and
+//! [`DataCursorMut`](data::DataCursorMut), the owned and unowned read-only/read-write variants for
+//! manipulating endian-specific data and complex files.
 //!
 //! Additionally, there is a time module, which provides convenient functions for handling
 //! timestamps and getting the current time, and a certificate module, which provides a custom X509
