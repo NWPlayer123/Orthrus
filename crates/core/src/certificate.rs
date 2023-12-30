@@ -1,5 +1,5 @@
+use der::{Decode, Length, Reader, Result, SliceReader};
 use x509_cert::certificate::{CertificateInner, Rfc5280};
-use der::{Decode, Reader, Result, SliceReader, Length};
 
 #[derive(Debug)]
 pub struct Certificate {
@@ -10,7 +10,10 @@ pub struct Certificate {
 impl<'a> Decode<'a> for Certificate {
     fn decode<R: Reader<'a>>(reader: &mut R) -> Result<Self> {
         let inner = CertificateInner::<Rfc5280>::decode(reader)?;
-        Ok(Certificate { certificate: inner, remaining_len: Length::new(0) })
+        Ok(Certificate {
+            certificate: inner,
+            remaining_len: Length::new(0),
+        })
     }
 
     fn from_der(bytes: &'a [u8]) -> Result<Self> {

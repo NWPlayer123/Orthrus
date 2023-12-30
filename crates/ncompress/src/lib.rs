@@ -12,8 +12,8 @@ mod no_std {
 }
 
 // All public modules
-pub mod yaz0;
 pub mod yay0;
+pub mod yaz0;
 
 // For internal use only right now
 mod algorithms;

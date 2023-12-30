@@ -64,9 +64,6 @@
 //! ## Certificate Format
 //! The Multifile certificate is a binary blob that can contain multiple certificates in a
 //! certificate chain, along with the actual signature of the Multifile.
-//!
-
-use der::Decode;
 
 use core::fmt;
 #[cfg(feature = "std")]
@@ -77,6 +74,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use der::Decode;
 use orthrus_core::prelude::*;
 use snafu::prelude::*;
 
@@ -255,11 +253,17 @@ impl Multifile {
                 let signature_size = file_data.read_u32()?;
                 file_data.set_position(4 + signature_size as usize);
                 let certificate_count = file_data.read_u32()?;
-                let mut certificate_blob = DataCursor::new(vec![0u8; file_data.len() - file_data.position()], Endian::Little);
+                let mut certificate_blob = DataCursor::new(
+                    vec![0u8; file_data.len() - file_data.position()],
+                    Endian::Little,
+                );
                 file_data.read_exact(&mut certificate_blob)?;
-                
+
                 for n in 0..certificate_count {
-                    let certificate = orthrus_core::certificate::Certificate::from_der(certificate_blob.remaining_slice()).unwrap();
+                    let certificate = orthrus_core::certificate::Certificate::from_der(
+                        certificate_blob.remaining_slice(),
+                    )
+                    .unwrap();
                     println!("Certificate {n}:\n{certificate:?}");
                     let remaining_length: usize = certificate.remaining_len.try_into().unwrap();
                     certificate_blob.set_position(certificate_blob.len() - remaining_length);

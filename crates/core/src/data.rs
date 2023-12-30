@@ -465,11 +465,7 @@ impl Read for DataCursor {
         let length = min(buf.len(), self.len() - self.pos);
         //Unroll buf.copy_from_slice() since we are guaranteed to be in bounds
         unsafe {
-            ptr::copy_nonoverlapping(
-                self.data.as_ptr().add(self.pos),
-                buf.as_mut_ptr(),
-                length,
-            );
+            ptr::copy_nonoverlapping(self.data.as_ptr().add(self.pos), buf.as_mut_ptr(), length);
         }
         self.pos += length;
         Ok(length)
@@ -779,11 +775,7 @@ impl Read for DataCursorRef<'_> {
         let length = min(buf.len(), self.len() - self.pos);
         //Unroll buf.copy_from_slice() since we are guaranteed to be in bounds
         unsafe {
-            ptr::copy_nonoverlapping(
-                self.data.as_ptr().add(self.pos),
-                buf.as_mut_ptr(),
-                length,
-            );
+            ptr::copy_nonoverlapping(self.data.as_ptr().add(self.pos), buf.as_mut_ptr(), length);
         }
         self.pos += length;
         Ok(length)
@@ -1140,11 +1132,7 @@ impl Read for DataCursorMut<'_> {
         let length = min(buf.len(), self.len() - self.pos);
         //Unroll buf.copy_from_slice() since we are guaranteed to be in bounds
         unsafe {
-            ptr::copy_nonoverlapping(
-                self.data.as_ptr().add(self.pos),
-                buf.as_mut_ptr(),
-                length,
-            );
+            ptr::copy_nonoverlapping(self.data.as_ptr().add(self.pos), buf.as_mut_ptr(), length);
         }
         self.pos += length;
         Ok(length)
