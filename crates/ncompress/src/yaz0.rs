@@ -1,4 +1,4 @@
-//! Adds support for the Yaz0 compression format used for N64, GameCube, Wii, Wii U, and Switch.
+//! Adds support for the Yaz0 compression format used for first-party N64, GameCube, Wii, Wii U, and Switch games.
 //!
 //! Because the Yaz0 format is so lightweight, this module is designed to not have any persistence.
 //! It takes in data, and will return the de/compressed data contained inside.
@@ -244,7 +244,7 @@ pub fn decompress(input: &[u8], output: &mut [u8]) {
 
             //Extract RLE information from the code byte, read another byte for size if we need to
             //How far back in the output buffer do we need to copy from, how many bytes do we copy?
-            let back = usize::from((code & 0xFFF) + 1);
+            let back = output_pos - usize::from((code & 0xFFF) + 1);
             let size = match code >> 12 {
                 0 => {
                     let value = input[input_pos];
@@ -255,12 +255,12 @@ pub fn decompress(input: &[u8], output: &mut [u8]) {
             };
 
             //If the ranges are not overlapping, use the faster copy method
-            if (output_pos - back < output_pos + size) && (output_pos < output_pos - back + size) {
+            if (back < output_pos + size) && (output_pos < back + size) {
                 for n in 0..size {
-                    output[output_pos + n] = output[output_pos - back + n];
+                    output[output_pos + n] = output[back + n];
                 }
             } else {
-                output.copy_within(output_pos - back..output_pos - back + size, output_pos);
+                output.copy_within(back..back + size, output_pos);
             }
             output_pos += size;
         }
