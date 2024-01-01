@@ -501,4 +501,15 @@ impl FileIdentifier for Yay0 {
             FileInfo::new(info, None)
         })
     }
+
+    fn identify_deep(data: &[u8]) -> Option<FileInfo> {
+        Self::read_header(data).ok().map(|header| {
+            let info = format!(
+                "Nintendo Yay0-compressed file, decompressed size: {}",
+                util::format_size(header.decompressed_size as usize)
+            );
+            let payload = Self::decompress_from(data).ok();
+            FileInfo::new(info, payload)
+        })
+    }
 }

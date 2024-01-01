@@ -54,6 +54,7 @@
 #[cfg(feature = "std")]
 use std::{fmt::Display, path::Path};
 
+use orthrus_core::prelude::*;
 use snafu::prelude::*;
 
 #[cfg(not(feature = "std"))]
@@ -442,5 +443,28 @@ impl Yaz0 {
         }
 
         output_pos
+    }
+}
+
+impl FileIdentifier for Yaz0 {
+    fn identify(data: &[u8]) -> Option<FileInfo> {
+        Self::read_header(data).ok().map(|header| {
+            let info = format!(
+                "Nintendo Yaz0-compressed file, decompressed size: {}",
+                util::format_size(header.decompressed_size as usize)
+            );
+            FileInfo::new(info, None)
+        })
+    }
+
+    fn identify_deep(data: &[u8]) -> Option<FileInfo> {
+        Self::read_header(data).ok().map(|header| {
+            let info = format!(
+                "Nintendo Yaz0-compressed file, decompressed size: {}",
+                util::format_size(header.decompressed_size as usize)
+            );
+            let payload = Self::decompress_from(data).ok();
+            FileInfo::new(info, payload)
+        })
     }
 }
