@@ -2,14 +2,31 @@
 ///
 
 #[non_exhaustive]
-struct FileInfo {
-    info: String,
-    payload: Option<Box<[u8]>>,
+pub struct FileInfo {
+    pub info: String,
+    pub payload: Option<Box<[u8]>>,
 }
 
-trait FileIdentifier {
+impl FileInfo {
+    pub fn new(info: String, payload: Option<Box<[u8]>>) -> Self {
+        FileInfo {info, payload}
+    }
+}
+
+impl Default for FileInfo {
+    fn default() -> Self {
+        FileInfo {
+            info: String::new(),
+            payload: None,
+        }
+    }
+}
+
+pub trait FileIdentifier {
     fn identify(data: &[u8]) -> Option<FileInfo>;
     fn identify_deep(data: &[u8]) -> Option<FileInfo> {
         Self::identify(data)
     }
 }
+
+pub type IdentifyFn = fn(&[u8]) -> Option<FileInfo>;

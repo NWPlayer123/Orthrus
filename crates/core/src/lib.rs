@@ -30,4 +30,23 @@ pub mod time;
 #[cfg(feature = "certificate")]
 pub mod certificate;
 
+pub mod identify;
+
 pub mod prelude;
+
+/// Converts a file size in bytes to a human-readable format.
+/// 
+/// This function condenses the length of a file until it can't be shrank any more and returns that
+/// with the relevant unit (bytes, KB, MB, GB, etc). 
+pub fn format_size(length: usize) -> String {
+    const UNITS: [&str; 7] = ["bytes", "KB", "MB", "GB", "TB", "PB", "EB"];
+    let mut size = length as f64;
+    let mut unit_index = 0;
+
+    while size >= 1024.0 && unit_index < UNITS.len() - 1 {
+        size /= 1024.0;
+        unit_index += 1;
+    }
+
+    format!("{:.2} {}", size, UNITS[unit_index])
+}

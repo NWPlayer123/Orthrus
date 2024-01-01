@@ -10,6 +10,8 @@
 #[doc(inline)]
 pub use crate::data::{DataCursor, DataCursorMut, DataCursorRef, Endian, EndianRead, EndianWrite};
 
+pub use crate::identify::*;
+
 /// Contains [`data::Error`], which is used in Results returned by [`DataCursor`]
 pub mod data {
     pub use crate::data::Error;
@@ -18,4 +20,8 @@ pub mod data {
 #[cfg(all(feature = "time", feature = "std"))]
 pub mod time {
     pub use crate::time::*;
+}
+
+pub mod util {
+    pub use crate::format_size;
 }

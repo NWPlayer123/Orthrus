@@ -1,14 +1,16 @@
 use std::fs::File;
 use std::io::prelude::*;
+use std::path::PathBuf;
 
 use env_logger::Builder;
 use log::{Level, LevelFilter};
-use orthrus_ncompress::*;
+use orthrus_ncompress::prelude::*;
 use orthrus_panda3d::prelude as panda3d;
 use owo_colors::OwoColorize;
 
 mod menu;
-use menu::{exactly_one_true, Modules, Panda3DModules};
+mod identify;
+use menu::{exactly_one_true, Modules, NCompressModules, Panda3DModules};
 
 fn color_level(level: Level) -> String {
     match level {
@@ -58,30 +60,91 @@ fn main() {
     }
 
     match args.nested {
-        Modules::Yaz0(params) => {
-            if let Some(index) = exactly_one_true(&[params.decompress, params.compress]) {
-                match index {
-                    0 => {
-                        let data = yaz0::decompress_from_path(params.input).unwrap();
-                        let mut output = File::create(params.output).unwrap();
-                        output.write_all(&data).unwrap();
-                    }
-                    1 => {
-                        let data = yaz0::compress_from_path(
-                            params.input,
-                            yaz0::CompressionAlgo::MatchingOld,
-                            0,
-                        )
-                        .unwrap();
-                        let mut output = File::create(params.output).unwrap();
-                        output.write_all(&data).unwrap();
-                    }
-                    _ => unreachable!("Oops! Forgot to cover all operations."),
-                }
-            } else {
-                log::error!("Please select exactly one operation!");
-            }
+        Modules::IdentifyFile(params) => {
+            crate::identify::identify_file(params.input, params.deep_scan);
         }
+        Modules::NintendoCompression(module) => match module.nested {
+            NCompressModules::Yay0(params) => {
+                if let Some(index) = exactly_one_true(&[params.decompress, params.compress]) {
+                    match index {
+                        0 => {
+                            let data = Yay0::decompress_from_path(&params.input).unwrap();
+                            let output_filename = match params.output {
+                                Some(output) => output,
+                                None => {
+                                    let mut new_path = PathBuf::from(params.input);
+                                    new_path.set_extension("arc");
+                                    new_path.to_string_lossy().into_owned()
+                                }
+                            };
+                            let mut output = File::create(output_filename).unwrap();
+                            output.write_all(&data).unwrap();
+                        }
+                        1 => {
+                            let data = Yay0::compress_from_path(
+                                &params.input,
+                                yay0::CompressionAlgo::MatchingOld,
+                                0,
+                            )
+                            .unwrap();
+                            let output_filename = match params.output {
+                                Some(output) => output,
+                                None => {
+                                    let mut new_path = PathBuf::from(params.input);
+                                    new_path.set_extension("arc");
+                                    new_path.to_string_lossy().into_owned()
+                                }
+                            };
+                            let mut output = File::create(output_filename).unwrap();
+                            output.write_all(&data).unwrap();
+                        }
+                        _ => unreachable!("Oops! Forgot to cover all operations."),
+                    }
+                } else {
+                    log::error!("Please select exactly one operation!");
+                }
+            }
+            NCompressModules::Yaz0(params) => {
+                if let Some(index) = exactly_one_true(&[params.decompress, params.compress]) {
+                    match index {
+                        0 => {
+                            let data = Yaz0::decompress_from_path(&params.input).unwrap();
+                            let output_filename = match params.output {
+                                Some(output) => output,
+                                None => {
+                                    let mut new_path = PathBuf::from(params.input);
+                                    new_path.set_extension("arc");
+                                    new_path.to_string_lossy().into_owned()
+                                }
+                            };
+                            let mut output = File::create(output_filename).unwrap();
+                            output.write_all(&data).unwrap();
+                        }
+                        1 => {
+                            let data = Yaz0::compress_from_path(
+                                &params.input,
+                                yaz0::CompressionAlgo::MatchingOld,
+                                0,
+                            )
+                            .unwrap();
+                            let output_filename = match params.output {
+                                Some(output) => output,
+                                None => {
+                                    let mut new_path = PathBuf::from(params.input);
+                                    new_path.set_extension("arc");
+                                    new_path.to_string_lossy().into_owned()
+                                }
+                            };
+                            let mut output = File::create(output_filename).unwrap();
+                            output.write_all(&data).unwrap();
+                        }
+                        _ => unreachable!("Oops! Forgot to cover all operations."),
+                    }
+                } else {
+                    log::error!("Please select exactly one operation!");
+                }
+            }
+        },
         Modules::Panda3D(module) => match module.nested {
             Panda3DModules::Multifile(data) => {
                 if let Some(index) = exactly_one_true(&[data.extract]) {

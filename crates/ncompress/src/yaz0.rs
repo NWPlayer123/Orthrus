@@ -80,7 +80,7 @@ pub enum Error {
     #[snafu(display("File too large to fit into u32::MAX!"))]
     FileTooBig,
     /// Thrown if the header contains a magic number other than "Yaz0".
-    #[snafu(display("Invalid Magic! Expected {:?}.", MAGIC))]
+    #[snafu(display("Invalid Magic! Expected {:?}.", Yaz0::MAGIC))]
     InvalidMagic,
 }
 type Result<T> = core::result::Result<T, Error>;
@@ -98,177 +98,6 @@ impl From<std::io::Error> for Error {
     }
 }
 
-/// Unique identifier that tells us if we're reading a Yaz0-compressed file
-pub const MAGIC: [u8; 4] = *b"Yaz0";
-
-/// See the module [header](self#header) for more information.
-pub struct Header {
-    pub decompressed_size: u32,
-    pub alignment: u32,
-}
-
-/// Returns the metadata from a Yaz0 header.
-///
-/// # Examples
-/// ```
-/// # use orthrus_ncompress::yaz0;
-/// let input = std::fs::read("../../examples/assets/tobudx.yaz0_n64")?;
-/// let header = yaz0::read_header(&input)?;
-/// assert_eq!(header.decompressed_size, 0x40000);
-/// assert_eq!(header.alignment, 0);
-/// # Ok::<(), yaz0::Error>(())
-/// ```
-///
-/// # Errors
-/// Returns [`InvalidMagic`](Error::InvalidMagic) if the header does not match a Yaz0 file.
-#[inline]
-pub fn read_header(data: &[u8]) -> Result<Header> {
-    let magic = &data[0..4];
-    ensure!(magic == MAGIC, InvalidMagicSnafu);
-
-    let decompressed_size = u32::from_be_bytes([data[4], data[5], data[6], data[7]]);
-
-    //0 on GC/Wii files
-    let alignment = u32::from_be_bytes([data[8], data[9], data[10], data[11]]);
-
-    Ok(Header {
-        decompressed_size,
-        alignment,
-    })
-}
-
-/// Calculates the filesize for the largest possible file that can be created with Yaz0 compression.
-///
-/// This consists of the 0x10 header, the length of the input file, and all flag bits needed,
-/// rounded up.
-#[must_use]
-#[inline]
-pub const fn worst_possible_size(input_len: usize) -> usize {
-    0x10 + input_len + input_len.div_ceil(8)
-}
-
-/// Loads a Yaz0 file and returns the decompressed data.
-///
-/// # Examples
-/// ```
-/// # use orthrus_ncompress::yaz0;
-/// let output = yaz0::decompress_from_path("../../examples/assets/tobudx.yaz0_n64")?;
-/// assert_eq!(output.len(), 0x40000);
-///
-/// let expected = std::fs::read("../../examples/assets/tobudx.gb")?;
-/// assert_eq!(*output, *expected);
-/// # Ok::<(), yaz0::Error>(())
-/// ```
-///
-/// # Errors
-/// Returns:
-/// * [`NotFound`](Error::NotFound) if the path does not exist
-/// * [`PermissionDenied`](Error::PermissionDenied) if unable to open the file
-/// * [`InvalidMagic`](Error::InvalidMagic) if the header does not match a Yaz0 file
-#[cfg(feature = "std")]
-#[inline]
-pub fn decompress_from_path<P: AsRef<Path> + Display>(path: P) -> Result<Box<[u8]>> {
-    let input = std::fs::read(path)?;
-    self::decompress_from(&input)
-}
-
-/// Decompresses a Yaz0 file and returns the decompressed data.
-///
-/// # Examples
-/// ```
-/// # use orthrus_ncompress::yaz0;
-/// let input = std::fs::read("../../examples/assets/tobudx.yaz0_n64")?;
-/// let output = yaz0::decompress_from(&input)?;
-/// assert_eq!(output.len(), 0x40000);
-///
-/// let expected = std::fs::read("../../examples/assets/tobudx.gb")?;
-/// assert_eq!(*output, *expected);
-/// # Ok::<(), yaz0::Error>(())
-/// ```
-///
-/// # Errors
-/// Returns [`InvalidMagic`](Error::InvalidMagic) if the header does not match a Yaz0 file.
-#[inline]
-pub fn decompress_from(data: &[u8]) -> Result<Box<[u8]>> {
-    let header = read_header(data)?;
-
-    //Allocate decompression buffer
-    let mut output = vec![0u8; header.decompressed_size as usize].into_boxed_slice();
-
-    //Perform the actual decompression
-    self::decompress(data, &mut output);
-
-    //If we've gotten this far, output contains valid decompressed data
-    Ok(output)
-}
-
-/// Decompresses a Yaz0 input file into the output buffer.
-///
-/// # Examples
-/// ```
-/// # use orthrus_ncompress::yaz0;
-/// let input = std::fs::read("../../examples/assets/tobudx.yaz0_n64")?;
-/// let header = yaz0::read_header(&input)?;
-/// let mut output = vec![0u8; header.decompressed_size as usize];
-/// yaz0::decompress(&input, &mut output);
-///
-/// let expected = std::fs::read("../../examples/assets/tobudx.gb")?;
-/// assert_eq!(*output, *expected);
-/// # Ok::<(), yaz0::Error>(())
-/// ```
-#[inline]
-pub fn decompress(input: &[u8], output: &mut [u8]) {
-    let mut input_pos: usize = 0x10;
-    let mut output_pos: usize = 0x0;
-    let mut mask: u8 = 0;
-    let mut flags: u8 = 0;
-
-    while output_pos < output.len() {
-        //Check if we need a new flag byte
-        if mask == 0 {
-            flags = input[input_pos];
-            input_pos += 1;
-            mask = 1 << 7;
-        }
-
-        //Check what kind of copy we're doing
-        if (flags & mask) != 0 {
-            //Copy one byte from the input stream
-            output[output_pos] = input[input_pos];
-            output_pos += 1;
-            input_pos += 1;
-        } else {
-            //RLE copy from previously in the buffer
-            let code = u16::from_be_bytes([input[input_pos], input[input_pos + 1]]);
-            input_pos += 2;
-
-            //Extract RLE information from the code byte, read another byte for size if we need to
-            //How far back in the output buffer do we need to copy from, how many bytes do we copy?
-            let back = output_pos - usize::from((code & 0xFFF) + 1);
-            let size = match code >> 12 {
-                0 => {
-                    let value = input[input_pos];
-                    input_pos += 1;
-                    usize::from(value) + 0x12
-                }
-                n => usize::from(n) + 2,
-            };
-
-            //If the ranges are not overlapping, use the faster copy method
-            if (back < output_pos + size) && (output_pos < back + size) {
-                for n in 0..size {
-                    output[output_pos + n] = output[back + n];
-                }
-            } else {
-                output.copy_within(back..back + size, output_pos);
-            }
-            output_pos += size;
-        }
-
-        mask >>= 1;
-    }
-}
-
 /// All supported Yaz0 compression algorithms
 #[derive(Clone, Copy)]
 #[non_exhaustive]
@@ -278,160 +107,336 @@ pub enum CompressionAlgo {
     //MatchingNew, //MK8
 }
 
-/// Loads a Yaz0 file and returns the compressed data.
-///
-/// # Examples
-/// ```
-/// # use orthrus_ncompress::yaz0;
-/// let output = yaz0::compress_from_path(
-///     "../../examples/assets/tobudx.gb",
-///     yaz0::CompressionAlgo::MatchingOld,
-///     0,
-/// )?;
-///
-/// let expected = std::fs::read("../../examples/assets/tobudx.yaz0_n64")?;
-/// assert_eq!(*output, *expected);
-/// # Ok::<(), yaz0::Error>(())
-/// ```
-///
-/// # Errors
-/// Returns:
-/// * [`NotFound`](Error::NotFound) if the path does not exist
-/// * [`PermissionDenied`](Error::PermissionDenied) if unable to open the file
-/// * [`FileTooBig`](Error::FileTooBig) if too large for the filesize to be stored in the header
-#[cfg(feature = "std")]
-#[inline]
-pub fn compress_from_path<P>(path: P, algo: CompressionAlgo, align: u32) -> Result<Box<[u8]>>
-where
-    P: AsRef<Path> + Display,
-{
-    let input = std::fs::read(path)?;
-    self::compress_from(&input, algo, align)
+/// See the module [header](self#header) for more information.
+pub struct Header {
+    pub decompressed_size: u32,
+    pub alignment: u32,
 }
 
-/// Compresses the input data using a given compression algorithm.
-///
-/// # Examples
-/// ```
-/// # use orthrus_ncompress::yaz0;
-/// let input = std::fs::read("../../examples/assets/tobudx.gb")?;
-/// let output = yaz0::compress_from(&input, yaz0::CompressionAlgo::MatchingOld, 0)?;
-///
-/// let expected = std::fs::read("../../examples/assets/tobudx.yaz0_n64")?;
-/// assert_eq!(*output, *expected);
-/// # Ok::<(), yaz0::Error>(())
-/// ```
-///
-/// # Warnings
-/// Alignment should be zero for N64, GameCube, and Wii, and should be non-zero on Wii U and Switch.
-///
-/// # Errors
-/// Returns [`FileTooBig`](Error::FileTooBig) if the input is too large for the filesize to be
-/// stored in the header.
-#[inline]
-pub fn compress_from(input: &[u8], algo: CompressionAlgo, _align: u32) -> Result<Box<[u8]>> {
-    ensure!(u32::try_from(input.len()).is_ok(), FileTooBigSnafu);
+pub struct Yaz0;
 
-    //Assume 0x10 header, every byte is a copy, and include flag bytes (rounded up)
-    let mut output = vec![0u8; worst_possible_size(input.len())];
+impl Yaz0 {
+    /// Unique identifier that tells us if we're reading a Yaz0-compressed file
+    pub const MAGIC: [u8; 4] = *b"Yaz0";
 
-    let output_size = match algo {
-        CompressionAlgo::MatchingOld => compress_n64(input, &mut output),
-    };
+    /// Returns the metadata from a Yaz0 header.
+    ///
+    /// # Examples
+    /// ```
+    /// # use orthrus_ncompress::prelude::*;
+    /// let input = std::fs::read("../../examples/assets/tobudx.yaz0_n64")?;
+    /// let header = Yaz0::read_header(&input)?;
+    /// assert_eq!(header.decompressed_size, 0x40000);
+    /// assert_eq!(header.alignment, 0);
+    /// # Ok::<(), yaz0::Error>(())
+    /// ```
+    ///
+    /// # Errors
+    /// Returns [`InvalidMagic`](Error::InvalidMagic) if the header does not match a Yaz0 file.
+    #[inline]
+    pub fn read_header(data: &[u8]) -> Result<Header> {
+        let magic = &data[0..4];
+        ensure!(magic == Self::MAGIC, InvalidMagicSnafu);
 
-    output.truncate(output_size);
+        let decompressed_size = u32::from_be_bytes([data[4], data[5], data[6], data[7]]);
 
-    Ok(output.into_boxed_slice())
-}
+        //0 on GC/Wii files
+        let alignment = u32::from_be_bytes([data[8], data[9], data[10], data[11]]);
 
-/// Compresses the input using Nintendo's pre-Wii U algorithm, and returns the size of the
-/// compressed data.
-///
-/// This algorithm should create identically compressed files to those from N64, GameCube, and Wii
-/// Nintendo games. It does not allow for setting the alignment, as theoretically no files created
-/// using this algorithm should have a header with alignment.
-///
-/// # Examples
-/// ```
-/// # use orthrus_ncompress::yaz0;
-/// let input = std::fs::read("../../examples/assets/tobudx.gb")?;
-/// let mut output = vec![0u8; yaz0::worst_possible_size(input.len())];
-/// let output_size = yaz0::compress_n64(&input, &mut output);
-/// output.truncate(output_size);
-///
-/// let expected = std::fs::read("../../examples/assets/tobudx.yaz0_n64")?;
-/// assert_eq!(*output, *expected);
-/// # Ok::<(), yaz0::Error>(())
-/// ```
-#[inline]
-pub fn compress_n64(input: &[u8], output: &mut [u8]) -> usize {
-    output[0..4].copy_from_slice(b"Yaz0");
-    output[4..8].copy_from_slice(&u32::to_be_bytes(input.len() as u32));
-    //Older files do not have alignment so this just leaves it as zero
+        Ok(Header {
+            decompressed_size,
+            alignment,
+        })
+    }
 
-    let mut input_pos = 0;
-    let mut output_pos = 0x11;
-    let mut flag_byte_pos = 0x10;
-    let mut flag_byte_shift = 0x80;
+    /// Calculates the filesize for the largest possible file that can be created with Yaz0 compression.
+    ///
+    /// This consists of the 0x10 header, the length of the input file, and all flag bits needed,
+    /// rounded up.
+    #[must_use]
+    #[inline]
+    pub const fn worst_possible_size(input_len: usize) -> usize {
+        0x10 + input_len + input_len.div_ceil(8)
+    }
 
-    while input_pos < input.len() {
-        let (mut group_offset, mut group_size) = crate::algorithms::find_match(input, input_pos);
-        if group_size <= 2 {
-            //If the group is less than two bytes, it's smaller to just copy a byte
-            output[flag_byte_pos] |= flag_byte_shift;
-            output[output_pos] = input[input_pos];
-            input_pos += 1;
-            output_pos += 1;
-        } else {
-            //Check one byte after this, see if we can get a better match
-            let (new_offset, new_size) = crate::algorithms::find_match(input, input_pos + 1);
-            if group_size + 1 < new_size {
-                //If we did find a better match, copy a byte and then use the new slice
+    /// Loads a Yaz0 file and returns the decompressed data.
+    ///
+    /// # Examples
+    /// ```
+    /// # use orthrus_ncompress::prelude::*;
+    /// let output = Yaz0::decompress_from_path("../../examples/assets/tobudx.yaz0_n64")?;
+    /// assert_eq!(output.len(), 0x40000);
+    ///
+    /// let expected = std::fs::read("../../examples/assets/tobudx.gb")?;
+    /// assert_eq!(*output, *expected);
+    /// # Ok::<(), yaz0::Error>(())
+    /// ```
+    ///
+    /// # Errors
+    /// Returns:
+    /// * [`NotFound`](Error::NotFound) if the path does not exist
+    /// * [`PermissionDenied`](Error::PermissionDenied) if unable to open the file
+    /// * [`InvalidMagic`](Error::InvalidMagic) if the header does not match a Yaz0 file
+    #[cfg(feature = "std")]
+    #[inline]
+    pub fn decompress_from_path<P: AsRef<Path> + Display>(path: P) -> Result<Box<[u8]>> {
+        let input = std::fs::read(path)?;
+        Self::decompress_from(&input)
+    }
+
+    /// Decompresses a Yaz0 file and returns the decompressed data.
+    ///
+    /// # Examples
+    /// ```
+    /// # use orthrus_ncompress::prelude::*;
+    /// let input = std::fs::read("../../examples/assets/tobudx.yaz0_n64")?;
+    /// let output = Yaz0::decompress_from(&input)?;
+    /// assert_eq!(output.len(), 0x40000);
+    ///
+    /// let expected = std::fs::read("../../examples/assets/tobudx.gb")?;
+    /// assert_eq!(*output, *expected);
+    /// # Ok::<(), yaz0::Error>(())
+    /// ```
+    ///
+    /// # Errors
+    /// Returns [`InvalidMagic`](Error::InvalidMagic) if the header does not match a Yaz0 file.
+    #[inline]
+    pub fn decompress_from(data: &[u8]) -> Result<Box<[u8]>> {
+        let header = Self::read_header(data)?;
+
+        //Allocate decompression buffer
+        let mut output = vec![0u8; header.decompressed_size as usize].into_boxed_slice();
+
+        //Perform the actual decompression
+        Self::decompress(data, &mut output);
+
+        //If we've gotten this far, output contains valid decompressed data
+        Ok(output)
+    }
+
+    /// Decompresses a Yaz0 input file into the output buffer.
+    ///
+    /// # Examples
+    /// ```
+    /// # use orthrus_ncompress::prelude::*;
+    /// let input = std::fs::read("../../examples/assets/tobudx.yaz0_n64")?;
+    /// let header = Yaz0::read_header(&input)?;
+    /// let mut output = vec![0u8; header.decompressed_size as usize];
+    /// Yaz0::decompress(&input, &mut output);
+    ///
+    /// let expected = std::fs::read("../../examples/assets/tobudx.gb")?;
+    /// assert_eq!(*output, *expected);
+    /// # Ok::<(), yaz0::Error>(())
+    /// ```
+    #[inline]
+    pub fn decompress(input: &[u8], output: &mut [u8]) {
+        let mut input_pos: usize = 0x10;
+        let mut output_pos: usize = 0x0;
+        let mut mask: u8 = 0;
+        let mut flags: u8 = 0;
+
+        while output_pos < output.len() {
+            //Check if we need a new flag byte
+            if mask == 0 {
+                flags = input[input_pos];
+                input_pos += 1;
+                mask = 1 << 7;
+            }
+
+            //Check what kind of copy we're doing
+            if (flags & mask) != 0 {
+                //Copy one byte from the input stream
+                output[output_pos] = input[input_pos];
+                output_pos += 1;
+                input_pos += 1;
+            } else {
+                //RLE copy from previously in the buffer
+                let code = u16::from_be_bytes([input[input_pos], input[input_pos + 1]]);
+                input_pos += 2;
+
+                //Extract RLE information from the code byte, read another byte for size if we need to
+                //How far back in the output buffer do we need to copy from, how many bytes do we copy?
+                let back = output_pos - usize::from((code & 0xFFF) + 1);
+                let size = match code >> 12 {
+                    0 => {
+                        let value = input[input_pos];
+                        input_pos += 1;
+                        usize::from(value) + 0x12
+                    }
+                    n => usize::from(n) + 2,
+                };
+
+                //If the ranges are not overlapping, use the faster copy method
+                if (back < output_pos + size) && (output_pos < back + size) {
+                    for n in 0..size {
+                        output[output_pos + n] = output[back + n];
+                    }
+                } else {
+                    output.copy_within(back..back + size, output_pos);
+                }
+                output_pos += size;
+            }
+
+            mask >>= 1;
+        }
+    }
+
+    /// Loads a Yaz0 file and returns the compressed data.
+    ///
+    /// # Examples
+    /// ```
+    /// # use orthrus_ncompress::prelude::*;
+    /// let output = Yaz0::compress_from_path(
+    ///     "../../examples/assets/tobudx.gb",
+    ///     yaz0::CompressionAlgo::MatchingOld,
+    ///     0,
+    /// )?;
+    ///
+    /// let expected = std::fs::read("../../examples/assets/tobudx.yaz0_n64")?;
+    /// assert_eq!(*output, *expected);
+    /// # Ok::<(), yaz0::Error>(())
+    /// ```
+    ///
+    /// # Errors
+    /// Returns:
+    /// * [`NotFound`](Error::NotFound) if the path does not exist
+    /// * [`PermissionDenied`](Error::PermissionDenied) if unable to open the file
+    /// * [`FileTooBig`](Error::FileTooBig) if too large for the filesize to be stored in the header
+    #[cfg(feature = "std")]
+    #[inline]
+    pub fn compress_from_path<P>(path: P, algo: CompressionAlgo, align: u32) -> Result<Box<[u8]>>
+    where
+        P: AsRef<Path> + Display,
+    {
+        let input = std::fs::read(path)?;
+        Self::compress_from(&input, algo, align)
+    }
+
+    /// Compresses the input data using a given compression algorithm.
+    ///
+    /// # Examples
+    /// ```
+    /// # use orthrus_ncompress::prelude::*;
+    /// let input = std::fs::read("../../examples/assets/tobudx.gb")?;
+    /// let output = Yaz0::compress_from(&input, yaz0::CompressionAlgo::MatchingOld, 0)?;
+    ///
+    /// let expected = std::fs::read("../../examples/assets/tobudx.yaz0_n64")?;
+    /// assert_eq!(*output, *expected);
+    /// # Ok::<(), yaz0::Error>(())
+    /// ```
+    ///
+    /// # Warnings
+    /// Alignment should be zero for N64, GameCube, and Wii, and should be non-zero on Wii U and Switch.
+    ///
+    /// # Errors
+    /// Returns [`FileTooBig`](Error::FileTooBig) if the input is too large for the filesize to be
+    /// stored in the header.
+    #[inline]
+    pub fn compress_from(input: &[u8], algo: CompressionAlgo, _align: u32) -> Result<Box<[u8]>> {
+        ensure!(u32::try_from(input.len()).is_ok(), FileTooBigSnafu);
+
+        //Assume 0x10 header, every byte is a copy, and include flag bytes (rounded up)
+        let mut output = vec![0u8; Self::worst_possible_size(input.len())];
+
+        let output_size = match algo {
+            CompressionAlgo::MatchingOld => Self::compress_n64(input, &mut output),
+        };
+
+        output.truncate(output_size);
+
+        Ok(output.into_boxed_slice())
+    }
+
+    /// Compresses the input using Nintendo's pre-Wii U algorithm, and returns the size of the
+    /// compressed data.
+    ///
+    /// This algorithm should create identically compressed files to those from N64, GameCube, and Wii
+    /// Nintendo games. It does not allow for setting the alignment, as theoretically no files created
+    /// using this algorithm should have a header with alignment.
+    ///
+    /// # Examples
+    /// ```
+    /// # use orthrus_ncompress::prelude::*;
+    /// let input = std::fs::read("../../examples/assets/tobudx.gb")?;
+    /// let mut output = vec![0u8; Yaz0::worst_possible_size(input.len())];
+    /// let output_size = Yaz0::compress_n64(&input, &mut output);
+    /// output.truncate(output_size);
+    ///
+    /// let expected = std::fs::read("../../examples/assets/tobudx.yaz0_n64")?;
+    /// assert_eq!(*output, *expected);
+    /// # Ok::<(), yaz0::Error>(())
+    /// ```
+    #[inline]
+    pub fn compress_n64(input: &[u8], output: &mut [u8]) -> usize {
+        output[0..4].copy_from_slice(b"Yaz0");
+        output[4..8].copy_from_slice(&u32::to_be_bytes(input.len() as u32));
+        //Older files do not have alignment so this just leaves it as zero
+
+        let mut input_pos = 0;
+        let mut output_pos = 0x11;
+        let mut flag_byte_pos = 0x10;
+        let mut flag_byte_shift = 0x80;
+
+        while input_pos < input.len() {
+            let (mut group_offset, mut group_size) =
+                crate::algorithms::find_match(input, input_pos);
+            if group_size <= 2 {
+                //If the group is less than two bytes, it's smaller to just copy a byte
                 output[flag_byte_pos] |= flag_byte_shift;
                 output[output_pos] = input[input_pos];
                 input_pos += 1;
                 output_pos += 1;
-
-                //Check if we need to create a new flag byte
-                flag_byte_shift >>= 1;
-                if flag_byte_shift == 0 {
-                    flag_byte_shift = 0x80;
-                    flag_byte_pos = output_pos;
-                    output[output_pos] = 0;
+            } else {
+                //Check one byte after this, see if we can get a better match
+                let (new_offset, new_size) = crate::algorithms::find_match(input, input_pos + 1);
+                if group_size + 1 < new_size {
+                    //If we did find a better match, copy a byte and then use the new slice
+                    output[flag_byte_pos] |= flag_byte_shift;
+                    output[output_pos] = input[input_pos];
+                    input_pos += 1;
                     output_pos += 1;
+
+                    //Check if we need to create a new flag byte
+                    flag_byte_shift >>= 1;
+                    if flag_byte_shift == 0 {
+                        flag_byte_shift = 0x80;
+                        flag_byte_pos = output_pos;
+                        output[output_pos] = 0;
+                        output_pos += 1;
+                    }
+
+                    //Use the new slice for the lookback data
+                    group_size = new_size;
+                    group_offset = new_offset;
                 }
 
-                //Use the new slice for the lookback data
-                group_size = new_size;
-                group_offset = new_offset;
+                //Calculate the lookback offset
+                group_offset = input_pos - group_offset - 1;
+
+                //If we can't fit the size in the upper nibble, write a third byte for the length
+                if group_size >= 0x12 {
+                    output[output_pos] = (group_offset >> 8) as u8;
+                    output[output_pos + 1] = (group_offset) as u8;
+                    output[output_pos + 2] = (group_size - 0x12) as u8;
+                    output_pos += 3;
+                } else {
+                    output[output_pos] = (((group_size - 2) << 4) | (group_offset >> 8)) as u8;
+                    output[output_pos + 1] = (group_offset) as u8;
+                    output_pos += 2;
+                }
+                input_pos += group_size;
             }
 
-            //Calculate the lookback offset
-            group_offset = input_pos - group_offset - 1;
-
-            //If we can't fit the size in the upper nibble, write a third byte for the length
-            if group_size >= 0x12 {
-                output[output_pos] = (group_offset >> 8) as u8;
-                output[output_pos + 1] = (group_offset) as u8;
-                output[output_pos + 2] = (group_size - 0x12) as u8;
-                output_pos += 3;
-            } else {
-                output[output_pos] = (((group_size - 2) << 4) | (group_offset >> 8)) as u8;
-                output[output_pos + 1] = (group_offset) as u8;
-                output_pos += 2;
+            //Check if we need to create a new flag byte
+            flag_byte_shift >>= 1;
+            if flag_byte_shift == 0 {
+                flag_byte_shift = 0x80;
+                flag_byte_pos = output_pos;
+                output[output_pos] = 0;
+                output_pos += 1;
             }
-            input_pos += group_size;
         }
 
-        //Check if we need to create a new flag byte
-        flag_byte_shift >>= 1;
-        if flag_byte_shift == 0 {
-            flag_byte_shift = 0x80;
-            flag_byte_pos = output_pos;
-            output[output_pos] = 0;
-            output_pos += 1;
-        }
+        output_pos
     }
-
-    output_pos
 }
