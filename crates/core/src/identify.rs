@@ -1,5 +1,5 @@
-/// This module is for an identification system to allow for types to return inforamtion if they recognize a given file.
-///
+/// This module is for an identification system to allow for types to return inforamtion if they
+/// recognize a given file.
 
 #[non_exhaustive]
 pub struct FileInfo {
@@ -9,7 +9,7 @@ pub struct FileInfo {
 
 impl FileInfo {
     pub fn new(info: String, payload: Option<Box<[u8]>>) -> Self {
-        FileInfo {info, payload}
+        FileInfo { info, payload }
     }
 }
 

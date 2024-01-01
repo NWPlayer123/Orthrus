@@ -49,7 +49,7 @@
 //! * [`compress_from_path`]: Provide a path, get compressed data back
 //! * [`compress_from`]: Provide the input data, get compressed data back
 //! * [`compress_n64`]: Provide the input data and output buffer, run the compression (matching
-//!       algorithm)
+//!   algorithm)
 //! ## Utilities
 //! * [`read_header`]: Returns the header information for a given Yay0 file
 //! * [`worst_possible_size`]: Calculates the worst possible compression size for a given filesize
@@ -58,7 +58,6 @@
 use std::{fmt::Display, path::Path};
 
 use orthrus_core::prelude::*;
-
 use snafu::prelude::*;
 
 #[cfg(not(feature = "std"))]
@@ -157,10 +156,12 @@ impl Yay0 {
         })
     }
 
-    /// Calculates the filesize for the largest possible file that can be created with Yay0 compression.
+    /// Calculates the filesize for the largest possible file that can be created with Yay0
+    /// compression.
     ///
     /// This consists of the 0x10 header, the length of the input file, and all flag bits needed,
-    /// rounded up, with all sections aligned to 4 bytes and the file aligned to a 0x10 byte boundary.
+    /// rounded up, with all sections aligned to 4 bytes and the file aligned to a 0x10 byte
+    /// boundary.
     #[must_use]
     #[inline]
     pub const fn worst_possible_size(input_len: usize) -> usize {
@@ -236,7 +237,12 @@ impl Yay0 {
     /// let input = std::fs::read("../../examples/assets/tobudx.yay0_n64")?;
     /// let header = Yay0::read_header(&input)?;
     /// let mut output = vec![0u8; header.decompressed_size as usize];
-    /// Yay0::decompress(&input, &mut output, header.lookback_offset, header.copy_data_offset);
+    /// Yay0::decompress(
+    ///     &input,
+    ///     &mut output,
+    ///     header.lookback_offset,
+    ///     header.copy_data_offset,
+    /// );
     ///
     /// let expected = std::fs::read("../../examples/assets/tobudx.gb")?;
     /// assert_eq!(*output, *expected);
@@ -272,8 +278,9 @@ impl Yay0 {
                 let code = u16::from_be_bytes([input[lookback_offset], input[lookback_offset + 1]]);
                 lookback_offset += 2;
 
-                //Extract RLE information from the code byte, read another byte for size if we need to
-                //How far back in the output buffer do we need to copy from, how many bytes do we copy?
+                //Extract RLE information from the code byte, read another byte for size if we need
+                // to How far back in the output buffer do we need to copy from, how
+                // many bytes do we copy?
                 let back = output_pos - usize::from((code & 0xFFF) + 1);
                 let size = match code >> 12 {
                     0 => {
@@ -382,14 +389,16 @@ impl Yay0 {
     /// ```
     #[inline]
     pub fn compress_n64(input: &[u8], output: &mut [u8]) -> usize {
-        //Set up all arrays so we can accumulate data before writing it, since we don't know how big each section can be
+        //Set up all arrays so we can accumulate data before writing it, since we don't know how
+        // big each section can be
         let mut flag_data = vec![0u8; input.len().div_ceil(8)];
         let mut flag_byte = 0;
         let mut flag_shift = 0x80;
         let mut flag_pos = 0;
         let mut copy_data = vec![0u8; input.len()];
         let mut copy_pos = 0;
-        //We only consider writing lookback if it's two bytes or more, so maximum will be two bytes = two bytes aka input.len()
+        //We only consider writing lookback if it's two bytes or more, so maximum will be two bytes
+        // = two bytes aka input.len()
         let mut lookback_data = vec![0u8; input.len()];
         let mut lookback_pos = 0;
 
@@ -484,14 +493,12 @@ impl Yay0 {
 
 impl FileIdentifier for Yay0 {
     fn identify(data: &[u8]) -> Option<FileInfo> {
-        Self::read_header(data)
-            .ok()
-            .map(|header| {
-                let info = format!(
-                    "Nintendo Yay0-compressed file, decompressed size: {}",
-                    util::format_size(header.decompressed_size as usize)
-                );
-                FileInfo::new(info, None)
-            })
+        Self::read_header(data).ok().map(|header| {
+            let info = format!(
+                "Nintendo Yay0-compressed file, decompressed size: {}",
+                util::format_size(header.decompressed_size as usize)
+            );
+            FileInfo::new(info, None)
+        })
     }
 }

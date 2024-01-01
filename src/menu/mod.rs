@@ -1,10 +1,10 @@
 use argp::FromArgs;
 mod ncompress;
-use ncompress::NCompressOption;
 pub use ncompress::NCompressModules;
+use ncompress::NCompressOption;
 mod panda3d;
-use panda3d::Panda3DOption;
 pub use panda3d::Panda3DModules;
+use panda3d::Panda3DOption;
 
 /// Top-level command
 #[derive(FromArgs, PartialEq, Debug)]

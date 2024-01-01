@@ -1,4 +1,5 @@
-// The identification system will get very bulky since it staticly links every function so it gets its own file
+// The identification system will get very bulky since it staticly links every function so it gets
+// its own file
 use orthrus_core::prelude::*;
 use orthrus_ncompress::prelude::*;
 

@@ -1,4 +1,5 @@
-//! Adds support for the Yaz0 compression format used for first-party N64, GameCube, Wii, Wii U, and Switch games.
+//! Adds support for the Yaz0 compression format used for first-party N64, GameCube, Wii, Wii U, and
+//! Switch games.
 //!
 //! Because the Yaz0 format is so lightweight, this module is designed to not have any persistence.
 //! It takes in data, and will return the de/compressed data contained inside.
@@ -149,7 +150,8 @@ impl Yaz0 {
         })
     }
 
-    /// Calculates the filesize for the largest possible file that can be created with Yaz0 compression.
+    /// Calculates the filesize for the largest possible file that can be created with Yaz0
+    /// compression.
     ///
     /// This consists of the 0x10 header, the length of the input file, and all flag bits needed,
     /// rounded up.
@@ -254,8 +256,9 @@ impl Yaz0 {
                 let code = u16::from_be_bytes([input[input_pos], input[input_pos + 1]]);
                 input_pos += 2;
 
-                //Extract RLE information from the code byte, read another byte for size if we need to
-                //How far back in the output buffer do we need to copy from, how many bytes do we copy?
+                //Extract RLE information from the code byte, read another byte for size if we need
+                // to How far back in the output buffer do we need to copy from, how
+                // many bytes do we copy?
                 let back = output_pos - usize::from((code & 0xFFF) + 1);
                 let size = match code >> 12 {
                     0 => {
@@ -326,7 +329,8 @@ impl Yaz0 {
     /// ```
     ///
     /// # Warnings
-    /// Alignment should be zero for N64, GameCube, and Wii, and should be non-zero on Wii U and Switch.
+    /// Alignment should be zero for N64, GameCube, and Wii, and should be non-zero on Wii U and
+    /// Switch.
     ///
     /// # Errors
     /// Returns [`FileTooBig`](Error::FileTooBig) if the input is too large for the filesize to be
@@ -350,9 +354,9 @@ impl Yaz0 {
     /// Compresses the input using Nintendo's pre-Wii U algorithm, and returns the size of the
     /// compressed data.
     ///
-    /// This algorithm should create identically compressed files to those from N64, GameCube, and Wii
-    /// Nintendo games. It does not allow for setting the alignment, as theoretically no files created
-    /// using this algorithm should have a header with alignment.
+    /// This algorithm should create identically compressed files to those from N64, GameCube, and
+    /// Wii Nintendo games. It does not allow for setting the alignment, as theoretically no
+    /// files created using this algorithm should have a header with alignment.
     ///
     /// # Examples
     /// ```

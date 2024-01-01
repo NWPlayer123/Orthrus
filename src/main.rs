@@ -8,8 +8,8 @@ use orthrus_ncompress::prelude::*;
 use orthrus_panda3d::prelude as panda3d;
 use owo_colors::OwoColorize;
 
-mod menu;
 mod identify;
+mod menu;
 use menu::{exactly_one_true, Modules, NCompressModules, Panda3DModules};
 
 fn color_level(level: Level) -> String {

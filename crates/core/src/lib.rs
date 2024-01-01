@@ -35,9 +35,9 @@ pub mod identify;
 pub mod prelude;
 
 /// Converts a file size in bytes to a human-readable format.
-/// 
+///
 /// This function condenses the length of a file until it can't be shrank any more and returns that
-/// with the relevant unit (bytes, KB, MB, GB, etc). 
+/// with the relevant unit (bytes, KB, MB, GB, etc).
 pub fn format_size(length: usize) -> String {
     const UNITS: [&str; 7] = ["bytes", "KB", "MB", "GB", "TB", "PB", "EB"];
     let mut size = length as f64;
