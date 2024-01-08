@@ -7,7 +7,7 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-snafu = { version = "0.7", default-features = false }
+snafu = { version = "0.8", default-features = false }
 
 time = { version = "0.3", features = ["formatting", "macros", "local-offset"], optional = true }
 

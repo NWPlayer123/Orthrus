@@ -23,7 +23,7 @@ argp = { version = "0.3", default-features = false }
 env_logger = { version = "0.10", default-features = false }
 enable-ansi-support = "0.2"
 log = "0.4"
-owo-colors = "3.5"
+owo-colors = "4.0"
 anyhow = "1.0"
 
 

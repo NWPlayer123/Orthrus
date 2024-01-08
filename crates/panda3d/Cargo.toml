@@ -9,7 +9,7 @@ repository.workspace = true
 [dependencies]
 orthrus-core = { version = "0.2.0", path = "../core", features = ["certificate"] }
 
-snafu = { version = "0.7", default-features = false }
+snafu = { version = "0.8", default-features = false }
 
 der = "0.7"
 x509-cert = "0.2"
