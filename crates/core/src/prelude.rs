@@ -8,7 +8,9 @@
 //! ```
 
 #[doc(inline)]
-pub use crate::data::{DataCursor, DataCursorMut, DataCursorRef, Endian, EndianRead, EndianWrite};
+pub use crate::data::{
+    DataCursor, DataCursorMut, DataCursorRef, DataCursorTrait, Endian, EndianRead, EndianWrite,
+};
 pub use crate::identify::*;
 
 /// Contains [`data::Error`], which is used in Results returned by [`DataCursor`]

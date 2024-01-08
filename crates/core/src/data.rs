@@ -166,6 +166,32 @@ pub trait EndianWrite {
     fn write_f64(&mut self, value: f64) -> Result<()>;
 }
 
+pub trait DataCursorTrait {
+    /// Returns the current position of this cursor.
+    fn position(&self) -> usize;
+
+    /// Sets the position of this cursor.
+    fn set_position(&mut self, pos: usize);
+
+    /// Returns the current endian type of this cursor.
+    fn endian(&self) -> Endian;
+
+    /// Sets the endian type of this cursor.
+    fn set_endian(&mut self, endian: Endian);
+
+    /// Returns the remaining data from the current position.
+    fn remaining_slice(&self) -> &[u8];
+
+    /// Returns `true` if the remaining slice is empty.
+    fn is_empty(&self) -> bool;
+
+    /// Returns the length of the currently stored data.
+    fn len(&self) -> usize;
+
+    /// Returns a slice from the current position to some additional length.
+    fn get_slice(&self, length: usize) -> Result<&[u8]>;
+}
+
 impl DataCursor {
     /// Creates a new cursor using the provided data and endianness.
     #[inline]
@@ -193,61 +219,6 @@ impl DataCursor {
     #[must_use]
     pub fn into_inner(self) -> Box<[u8]> {
         self.data
-    }
-
-    /// Returns the current position of this cursor.
-    #[inline]
-    #[must_use]
-    pub const fn position(&self) -> usize {
-        self.pos
-    }
-
-    /// Sets the position of this cursor.
-    #[inline]
-    pub fn set_position(&mut self, pos: usize) {
-        self.pos = pos;
-    }
-
-    /// Returns the current endian type of this cursor.
-    #[inline]
-    #[must_use]
-    pub const fn endian(&self) -> Endian {
-        self.endian
-    }
-
-    /// Sets the endian type of this cursor.
-    #[inline]
-    pub fn set_endian(&mut self, endian: Endian) {
-        self.endian = endian;
-    }
-
-    /// Returns the remaining data from the current position.
-    #[inline]
-    #[must_use]
-    pub fn remaining_slice(&self) -> &[u8] {
-        &self.data[self.pos..]
-    }
-
-    /// Returns `true` if the remaining slice is empty.
-    #[inline]
-    #[must_use]
-    pub const fn is_empty(&self) -> bool {
-        self.pos >= self.data.len()
-    }
-
-    /// Returns the length of the currently stored data.
-    #[inline]
-    #[must_use]
-    pub const fn len(&self) -> usize {
-        self.data.len()
-    }
-
-    /// Returns a slice from the current position to some additional length.
-    #[inline]
-    #[must_use]
-    pub fn get_slice(&self, length: usize) -> Result<&[u8]> {
-        ensure!(self.len() >= self.pos + length, EndOfFileSnafu);
-        Ok(&self.data[self.pos..self.pos + length])
     }
 
     /// This function tries to resize the [`DataCursor`] to some new shorter length, consuming it
@@ -311,6 +282,55 @@ impl DataCursor {
 
         self.pos += length;
         Ok(())
+    }
+}
+
+impl DataCursorTrait for DataCursor {
+    #[inline]
+    #[must_use]
+    fn position(&self) -> usize {
+        self.pos
+    }
+
+    #[inline]
+    fn set_position(&mut self, pos: usize) {
+        self.pos = pos;
+    }
+
+    #[inline]
+    #[must_use]
+    fn endian(&self) -> Endian {
+        self.endian
+    }
+
+    #[inline]
+    fn set_endian(&mut self, endian: Endian) {
+        self.endian = endian;
+    }
+
+    #[inline]
+    #[must_use]
+    fn remaining_slice(&self) -> &[u8] {
+        &self.data[self.pos..]
+    }
+
+    #[inline]
+    #[must_use]
+    fn is_empty(&self) -> bool {
+        self.pos >= self.data.len()
+    }
+
+    #[inline]
+    #[must_use]
+    fn len(&self) -> usize {
+        self.data.len()
+    }
+
+    #[inline]
+    #[must_use]
+    fn get_slice(&self, length: usize) -> Result<&[u8]> {
+        ensure!(self.len() >= self.pos + length, EndOfFileSnafu);
+        Ok(&self.data[self.pos..self.pos + length])
     }
 }
 
@@ -626,61 +646,6 @@ impl<'a> DataCursorRef<'a> {
         self.data
     }
 
-    /// Returns the current position of this cursor.
-    #[inline]
-    #[must_use]
-    pub const fn position(&self) -> usize {
-        self.pos
-    }
-
-    /// Sets the position of this cursor.
-    #[inline]
-    pub fn set_position(&mut self, pos: usize) {
-        self.pos = pos;
-    }
-
-    /// Returns the current endian type of this cursor.
-    #[inline]
-    #[must_use]
-    pub const fn endian(&self) -> Endian {
-        self.endian
-    }
-
-    /// Sets the endian type of this cursor.
-    #[inline]
-    pub fn set_endian(&mut self, endian: Endian) {
-        self.endian = endian;
-    }
-
-    /// Returns the remaining data from the current position.
-    #[inline]
-    #[must_use]
-    pub fn remaining_slice(&self) -> &[u8] {
-        &self.data[self.pos..]
-    }
-
-    /// Returns `true` if the remaining slice is empty.
-    #[inline]
-    #[must_use]
-    pub const fn is_empty(&self) -> bool {
-        self.pos >= self.data.len()
-    }
-
-    /// Returns the length of the currently stored data.
-    #[inline]
-    #[must_use]
-    pub const fn len(&self) -> usize {
-        self.data.len()
-    }
-
-    /// Returns a slice from the current position to some additional length.
-    #[inline]
-    #[must_use]
-    pub fn get_slice(&self, length: usize) -> Result<&[u8]> {
-        ensure!(self.len() >= self.pos + length, EndOfFileSnafu);
-        Ok(&self.data[self.pos..self.pos + length])
-    }
-
     /// This function tries to resize the [`DataCursor`] to some new shorter length, consuming it
     /// and returning a new one.
     ///
@@ -692,6 +657,56 @@ impl<'a> DataCursorRef<'a> {
         ensure!(len < self.len(), InvalidSizeSnafu);
 
         Ok(Self::new(&self.data[..len], self.endian))
+    }
+}
+
+impl DataCursorTrait for DataCursorRef<'_> {
+    #[inline]
+    #[must_use]
+    fn position(&self) -> usize {
+        self.pos
+    }
+
+    /// Sets the position of this cursor.
+    #[inline]
+    fn set_position(&mut self, pos: usize) {
+        self.pos = pos;
+    }
+
+    #[inline]
+    #[must_use]
+    fn endian(&self) -> Endian {
+        self.endian
+    }
+
+    #[inline]
+    fn set_endian(&mut self, endian: Endian) {
+        self.endian = endian;
+    }
+
+    #[inline]
+    #[must_use]
+    fn remaining_slice(&self) -> &[u8] {
+        &self.data[self.pos..]
+    }
+
+    #[inline]
+    #[must_use]
+    fn is_empty(&self) -> bool {
+        self.pos >= self.data.len()
+    }
+
+    #[inline]
+    #[must_use]
+    fn len(&self) -> usize {
+        self.data.len()
+    }
+
+    #[inline]
+    #[must_use]
+    fn get_slice(&self, length: usize) -> Result<&[u8]> {
+        ensure!(self.len() >= self.pos + length, EndOfFileSnafu);
+        Ok(&self.data[self.pos..self.pos + length])
     }
 }
 
@@ -864,61 +879,6 @@ impl<'a> DataCursorMut<'a> {
         self.data
     }
 
-    /// Returns the current position of this cursor.
-    #[inline]
-    #[must_use]
-    pub const fn position(&self) -> usize {
-        self.pos
-    }
-
-    /// Sets the position of this cursor.
-    #[inline]
-    pub fn set_position(&mut self, pos: usize) {
-        self.pos = pos;
-    }
-
-    /// Returns the current endian type of this cursor.
-    #[inline]
-    #[must_use]
-    pub const fn endian(&self) -> Endian {
-        self.endian
-    }
-
-    /// Sets the endian type of this cursor.
-    #[inline]
-    pub fn set_endian(&mut self, endian: Endian) {
-        self.endian = endian;
-    }
-
-    /// Returns the remaining data from the current position.
-    #[inline]
-    #[must_use]
-    pub fn remaining_slice(&self) -> &[u8] {
-        &self.data[self.pos..]
-    }
-
-    /// Returns `true` if the remaining slice is empty.
-    #[inline]
-    #[must_use]
-    pub const fn is_empty(&self) -> bool {
-        self.pos >= self.data.len()
-    }
-
-    /// Returns the length of the currently stored data.
-    #[inline]
-    #[must_use]
-    pub const fn len(&self) -> usize {
-        self.data.len()
-    }
-
-    /// Returns a slice from the current position to some additional length.
-    #[inline]
-    #[must_use]
-    pub fn get_slice(&self, length: usize) -> Result<&[u8]> {
-        ensure!(self.len() >= self.pos + length, EndOfFileSnafu);
-        Ok(&self.data[self.pos..self.pos + length])
-    }
-
     /// This function tries to resize the [`DataCursor`] to some new shorter length, consuming it
     /// and returning a new one.
     ///
@@ -978,6 +938,55 @@ impl<'a> DataCursorMut<'a> {
 
         self.pos += length;
         Ok(())
+    }
+}
+
+impl DataCursorTrait for DataCursorMut<'_> {
+    #[inline]
+    #[must_use]
+    fn position(&self) -> usize {
+        self.pos
+    }
+
+    #[inline]
+    fn set_position(&mut self, pos: usize) {
+        self.pos = pos;
+    }
+
+    #[inline]
+    #[must_use]
+    fn endian(&self) -> Endian {
+        self.endian
+    }
+
+    #[inline]
+    fn set_endian(&mut self, endian: Endian) {
+        self.endian = endian;
+    }
+
+    #[inline]
+    #[must_use]
+    fn remaining_slice(&self) -> &[u8] {
+        &self.data[self.pos..]
+    }
+
+    #[inline]
+    #[must_use]
+    fn is_empty(&self) -> bool {
+        self.pos >= self.data.len()
+    }
+
+    #[inline]
+    #[must_use]
+    fn len(&self) -> usize {
+        self.data.len()
+    }
+
+    #[inline]
+    #[must_use]
+    fn get_slice(&self, length: usize) -> Result<&[u8]> {
+        ensure!(self.len() >= self.pos + length, EndOfFileSnafu);
+        Ok(&self.data[self.pos..self.pos + length])
     }
 }
 

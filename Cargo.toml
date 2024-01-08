@@ -24,6 +24,8 @@ env_logger = { version = "0.10", default-features = false }
 enable-ansi-support = "0.2"
 log = "0.4"
 owo-colors = "3.5"
+anyhow = "1.0"
+
 
 [workspace]
 members = ["crates/*"]

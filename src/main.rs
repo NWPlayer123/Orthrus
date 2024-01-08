@@ -5,12 +5,14 @@ use std::path::PathBuf;
 use env_logger::Builder;
 use log::{Level, LevelFilter};
 use orthrus_ncompress::prelude::*;
-use orthrus_panda3d::prelude as panda3d;
+use orthrus_panda3d::prelude::*;
 use owo_colors::OwoColorize;
 
 mod identify;
 mod menu;
 use menu::{exactly_one_true, Modules, NCompressModules, Panda3DModules};
+
+use anyhow::Result;
 
 fn color_level(level: Level) -> String {
     match level {
@@ -34,7 +36,7 @@ const fn level_filter(verbose: usize) -> LevelFilter {
     }
 }
 
-fn main() {
+fn main() -> Result<()> {
     //Parse command line input
     let args: menu::Orthrus = argp::parse_args_or_exit(argp::DEFAULT);
 
@@ -150,12 +152,8 @@ fn main() {
                 if let Some(index) = exactly_one_true(&[data.extract]) {
                     match index {
                         0 => {
-                            panda3d::Multifile::extract_from_path(
-                                data.input,
-                                data.output.unwrap_or_else(|| ".".to_string()),
-                                0,
-                            )
-                            .unwrap();
+                            let _multifile = Multifile::open(data.input, 0)?;
+                            //multifile.extract(data.output.unwrap_or_else(|| ".".to_string()));
                         }
                         _ => unreachable!("Oops! Forgot to cover all operations."),
                     }
@@ -165,4 +163,5 @@ fn main() {
             }
         },
     }
+    Ok(())
 }

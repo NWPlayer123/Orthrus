@@ -11,7 +11,7 @@ For more about the structure of the Orthrus project, see the [Architecture](ARCH
 * Multifile - archive format that supports running as a full application
 
 ## Future Plans (Wishlist)
-Panda3D BAM, LZ77/Okumura compression, BFSTM/BWAV, GUI/Rendering
+Panda3D BAM, LZ77/Okumura compression, ASH0/ASR0 compression, BFSTM/BWAV, GUI/Rendering
 
 ## License
 

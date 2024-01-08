@@ -10,5 +10,6 @@ mod no_std {
 }
 
 pub mod multifile;
+pub mod subfile;
 
 pub mod prelude;

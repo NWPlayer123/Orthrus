@@ -10,7 +10,7 @@
 //! copy from the input or from the output buffer, the second contains all copyable data, and the
 //! third contains all lookback+length pairs.
 //!
-//! # Header
+//! ## Header
 //! The header is as follows, in big-endian format:
 //!
 //! | Offset | Field | Type | Notes |
@@ -42,17 +42,17 @@
 //! # Usage
 //! This module offers the following functionality:
 //! ## Decompression
-//! * [`decompress_from_path`]: Provide a path, get decompressed data back
-//! * [`decompress_from`]: Provide the input data, get decompressed data back
-//! * [`decompress`]: Provide the input data and output buffer, run the decompression algorithm
+//! * [`decompress_from_path`](Yay0::decompress_from_path): Provide a path, get decompressed data back
+//! * [`decompress_from`](Yay0::decompress_from): Provide the input data, get decompressed data back
+//! * [`decompress`](Yay0::decompress): Provide the input data and output buffer, run the decompression algorithm
 //! ## Compression
-//! * [`compress_from_path`]: Provide a path, get compressed data back
-//! * [`compress_from`]: Provide the input data, get compressed data back
-//! * [`compress_n64`]: Provide the input data and output buffer, run the compression (matching
+//! * [`compress_from_path`](Yay0::compress_from_path): Provide a path, get compressed data back
+//! * [`compress_from`](Yay0::compress_from): Provide the input data, get compressed data back
+//! * [`compress_n64`](Yay0::compress_n64): Provide the input data and output buffer, run the compression (matching
 //!   algorithm)
 //! ## Utilities
-//! * [`read_header`]: Returns the header information for a given Yay0 file
-//! * [`worst_possible_size`]: Calculates the worst possible compression size for a given filesize
+//! * [`read_header`](Yay0::read_header): Returns the header information for a given Yay0 file
+//! * [`worst_possible_size`](Yay0::worst_possible_size): Calculates the worst possible compression size for a given filesize
 
 #[cfg(feature = "std")]
 use std::{fmt::Display, path::Path};

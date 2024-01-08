@@ -64,19 +64,36 @@
 //! ## Certificate Format
 //! The Multifile certificate is a binary blob that can contain multiple certificates in a
 //! certificate chain, along with the actual signature of the Multifile.
+//!
+//! # Usage
+//! This module can be used either with borrowed data or as an in-memory archive.
+//!
+//! ## Stateful Functions
+//! A [`Multifile`] can be created through [`open`](Multifile::open), which will read a file from
+//! disk, and [`load`](Multifile::load), which will read the provided file.
+//!
+//! Once created, the following functions can be used to manipulate the archive:
+//!
+//! * [`extract`](Multifile::extract): Save all contained [`Subfile`]s to a given folder
+//!
+//! ## Stateless Functions
+//! These functions can be used without having to first create a [`Multifile`], used for the
+//! following one-shot operations:
+//!
+//! * [`extract_from_path`](Multifile::extract_from_path): Reads a [`Multifile`] from disk, and saves all [`Subfile`]s to a given folder
+//! * [`extract_from`](Multifile::extract_from): Reads the provided [`Multifile`], and saves all [`Subfile`]s to a given folder
 
 use core::fmt;
 #[cfg(feature = "std")]
 use std::io::prelude::*;
 #[cfg(feature = "std")]
-use std::{
-    fs::File,
-    path::{Path, PathBuf},
-};
+use std::path::Path;
 
 use der::Decode;
 use orthrus_core::prelude::*;
 use snafu::prelude::*;
+
+use crate::subfile::*;
 
 #[cfg(not(feature = "std"))]
 use crate::no_std::*;
@@ -103,11 +120,10 @@ pub enum Error {
         Multifile::CURRENT_VERSION
     ))]
     UnknownVersion,
-    CertificateError {
-        source: Box<der::Error>,
-    },
+    #[snafu(display("Tried to do an operation without any data to work with."))]
+    NoData,
 }
-type Result<T> = core::result::Result<T, Error>;
+pub(crate) type Result<T> = core::result::Result<T, Error>;
 
 #[cfg(feature = "std")]
 impl From<std::io::Error> for Error {
@@ -140,8 +156,8 @@ impl From<data::Error> for Error {
 /// This struct is mainly for readability in place of an unnamed tuple
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub struct Version {
-    major: i16,
-    minor: i16,
+    pub major: i16,
+    pub minor: i16,
 }
 
 impl fmt::Display for Version {
@@ -151,7 +167,23 @@ impl fmt::Display for Version {
     }
 }
 
-pub struct Multifile {}
+struct Header {
+    version: Version,
+    scale_factor: u32,
+    timestamp: u32,
+}
+
+//The current least terrible way to implement state in this system is to just store the entire
+//Multifile data, and have each Subfile keep an offset+length. In the future, once safe transmute is
+//a thing, I can "take" each header and what's left will be all the relevant file data.
+
+#[allow(dead_code)]
+pub struct Multifile {
+    data: DataCursor,
+    files: Vec<Subfile>,
+    version: Version,
+    timestamp: u32,
+}
 
 impl Multifile {
     pub const CURRENT_VERSION: Version = Version { major: 1, minor: 1 };
@@ -182,25 +214,8 @@ impl Multifile {
         pos
     }
 
-    /// Loads a [`Multifile`] and extracts all [`Subfiles`](self::Subfile). For use with other
-    /// functions, see [`extract`](Self::extract).
-    #[cfg(feature = "std")]
     #[inline]
-    pub fn extract_from_path<P: AsRef<Path>>(input: P, output: P, offset: usize) -> Result<()> {
-        let data = std::fs::read(input)?;
-        Self::extract_from(&data, output, offset)?;
-        Ok(())
-    }
-
-    /// Extracts all Subfiles from the given Multifile. For use with other functions, see
-    /// [`extract`](Self::extract).
-    #[cfg(feature = "std")]
-    #[inline]
-    pub fn extract_from<P: AsRef<Path>>(input: &[u8], output: P, _offset: usize) -> Result<()> {
-        //Use a DataCursorRef internally because it makes reading structured data a lot easier
-        let mut data = DataCursorRef::new(input, Endian::Little);
-        data.set_position(Self::parse_header_prefix(&data));
-
+    fn read_header<T: EndianRead + Read>(data: &mut T) -> Result<Header> {
         //Read the magic and make sure we're actually parsing a Multifile
         let mut magic = [0u8; 6];
         data.read_exact(&mut magic)?;
@@ -222,133 +237,154 @@ impl Multifile {
             true => data.read_u32()?,
             false => 0,
         };
+        Ok(Header {
+            version,
+            scale_factor,
+            timestamp,
+        })
+    }
+
+    #[inline]
+    pub fn count(&mut self) -> usize {
+        self.files.len()
+    }
+
+    #[cfg(feature = "std")]
+    #[inline]
+    #[must_use]
+    pub fn open<P: AsRef<Path>>(input: P, offset: usize) -> Result<Self> {
+        let mut data = DataCursor::new(std::fs::read(input)?, Endian::Little);
+        data.set_position(offset);
+        data.set_position(Self::parse_header_prefix(&data));
+
+        let header = Self::read_header(&mut data)?;
+        let mut multifile = Self {
+            data,
+            files: Vec::new(),
+            version: header.version,
+            timestamp: header.timestamp,
+        };
 
         // Loop through each Subfile, using next_index as a linked list
-        let mut next_index = data.read_u32()? * scale_factor;
+        let mut next_index = multifile.data.read_u32()? * header.scale_factor;
         while next_index != 0 {
-            let mut header = Subfile::read_header(&mut data, version)?;
-            header.offset *= scale_factor;
-            if header.timestamp == 0 {
-                header.timestamp = timestamp;
+            let mut subfile = Subfile::load(&mut multifile.data, header.version)?;
+            subfile.offset *= header.scale_factor;
+            if subfile.timestamp == 0 {
+                subfile.timestamp = header.timestamp;
             }
 
-            if !header.flags.contains(subfile::Flags::Signature) {
-                //extract file
-                let mut path = PathBuf::from(output.as_ref());
-                path.push(&header.filename);
+            multifile.data.set_position(next_index as usize);
+            next_index = multifile.data.read_u32()? * header.scale_factor;
+        }
 
-                if let Some(dir) = path.parent() {
-                    std::fs::create_dir_all(dir)?;
-                }
+        Ok(multifile)
+    }
 
-                let mut output = File::create(path)?;
-                data.set_position(header.offset as usize);
-                let file_data = data.get_slice(header.length as usize)?;
-                output.write_all(file_data)?;
+    #[inline]
+    #[must_use]
+    pub fn load<I: Into<Box<[u8]>>>(input: I, offset: usize) -> Result<Self> {
+        let mut data = DataCursor::new(input, Endian::Little);
+        data.set_position(offset);
+        data.set_position(Self::parse_header_prefix(&data));
+
+        let multifile = Self {
+            data,
+            files: Vec::new(),
+            version: Self::CURRENT_VERSION,
+            timestamp: 0,
+        };
+
+        Ok(multifile)
+    }
+
+    #[inline]
+    pub fn extract<P: AsRef<Path>>(&mut self, output: P) -> Result<usize> {
+        let mut saved_files = 0;
+        for subfile in &mut self.files {
+            if !subfile.flags.intersects(Flags::Signature | Flags::Compressed | Flags::Encrypted) {
+                self.data.set_position(subfile.offset as usize);
+                subfile.write_file(self.data.get_slice(subfile.length as usize)?, &output)?;
+                saved_files += 1;
+            }
+        }
+        Ok(saved_files)
+    }
+
+    /// Loads a [`Multifile`] and extracts all [`Subfiles`](self::Subfile). For use with other
+    /// functions, see [`extract`](Self::extract).
+    #[cfg(feature = "std")]
+    #[inline]
+    pub fn extract_from_path<P: AsRef<Path>>(input: P, output: P, offset: usize) -> Result<()> {
+        let data = std::fs::read(input)?;
+        Self::extract_from(&data, output, offset)?;
+        Ok(())
+    }
+
+    /// Extracts all Subfiles from the given Multifile. For use with other functions, see
+    /// [`extract`](Self::extract).
+    #[cfg(feature = "std")]
+    #[inline]
+    pub fn extract_from<P: AsRef<Path>>(input: &[u8], output: P, offset: usize) -> Result<()> {
+        //Use a DataCursorRef internally because it makes reading structured data a lot easier
+        let mut data = DataCursorRef::new(input, Endian::Little);
+        data.set_position(offset);
+        data.set_position(Self::parse_header_prefix(&data));
+
+        let header = Self::read_header(&mut data)?;
+
+        // Loop through each Subfile, using next_index as a linked list
+        let mut next_index = data.read_u32()? * header.scale_factor;
+        while next_index != 0 {
+            let mut subfile = Subfile::load(&mut data, header.version)?;
+            subfile.offset *= header.scale_factor;
+            if subfile.timestamp == 0 {
+                subfile.timestamp = header.timestamp;
+            }
+
+            data.set_position(subfile.offset as usize);
+            if !subfile.flags.contains(Flags::Signature) {
+                subfile.write_file(data.get_slice(subfile.length as usize)?, &output)?;
             } else {
-                println!("{:?}", header);
-                data.set_position(header.offset as usize);
-                let mut file_data =
-                    DataCursor::new(data.get_slice(header.length as usize)?, Endian::Little);
-                let signature_size = file_data.read_u32()?;
-                file_data.set_position(4 + signature_size as usize);
-                let certificate_count = file_data.read_u32()?;
-                let mut certificate_blob = DataCursor::new(
-                    vec![0u8; file_data.len() - file_data.position()],
-                    Endian::Little,
-                );
-                file_data.read_exact(&mut certificate_blob)?;
-
-                for n in 0..certificate_count {
-                    let certificate = orthrus_core::certificate::Certificate::from_der(
-                        certificate_blob.remaining_slice(),
-                    )
-                    .unwrap();
-                    println!("Certificate {n}:\n{certificate:?}");
-                    let remaining_length: usize = certificate.remaining_len.try_into().unwrap();
-                    certificate_blob.set_position(certificate_blob.len() - remaining_length);
-                }
+                println!("{:?}", subfile);
+                data.set_position(subfile.offset as usize);
+                Self::check_signatures(data.get_slice(subfile.length as usize)?)?;
             }
 
             data.set_position(next_index as usize);
-            next_index = data.read_u32()? * scale_factor;
+            next_index = data.read_u32()? * header.scale_factor;
         }
 
         Ok(())
     }
 
-    #[cfg(feature = "std")]
     #[inline]
-    pub fn extract<P: AsRef<Path>>(&self, _output: P) {}
+    pub fn check_signatures(input: &[u8]) -> Result<()> {
+        let mut file_data = DataCursor::new(input, Endian::Little);
+        let signature_size = file_data.read_u32()?;
+        file_data.set_position(4 + signature_size as usize);
+        let certificate_count = file_data.read_u32()?;
+        let mut certificate_blob = DataCursor::new(
+            vec![0u8; file_data.len() - file_data.position()],
+            Endian::Little,
+        );
+        file_data.read_exact(&mut certificate_blob)?;
+
+        for n in 0..certificate_count {
+            let certificate = orthrus_core::certificate::Certificate::from_der(
+                certificate_blob.remaining_slice(),
+            )
+            .unwrap();
+            println!("Certificate {n}:\n{certificate:?}");
+            let remaining_length: usize = certificate.remaining_len.try_into().unwrap();
+            certificate_blob.set_position(certificate_blob.len() - remaining_length);
+        }
+        Ok(())
+    }
 
     //Multifile::check_signatures parses and verifies the signature and certificates
 }
 
-#[allow(non_snake_case)]
-pub mod subfile {
-    //Use the same includes as the main Multifile
-    use bitflags::bitflags;
-
-    use super::*;
-
-    bitflags! {
-        #[derive(Debug, PartialEq, Default)]
-        pub(super)
-        struct Flags: u16 {
-            const Deleted = 1 << 0;
-            const IndexInvalid = 1 << 1;
-            const DataInvalid = 1 << 2;
-            const Compressed = 1 << 3;
-            const Encrypted = 1 << 4;
-            const Signature = 1 << 5;
-            const Text = 1 << 6;
-        }
-    }
-
-    #[derive(Default, Debug)]
-    #[allow(dead_code)]
-    pub(super) struct Header {
-        pub(super) offset: u32,
-        pub(super) length: u32,
-        pub(super) flags: Flags,
-        pub(super) timestamp: u32,
-        pub(super) filename: String,
-    }
-    pub struct Subfile {}
-
-    impl Subfile {
-        pub(super) fn read_header(input: &mut DataCursorRef, version: Version) -> Result<Header> {
-            let offset = input.read_u32()?;
-            let data_length = input.read_u32()?;
-            let flags = Flags::from_bits_truncate(input.read_u16()?);
-
-            let length = match flags.intersects(Flags::Compressed | Flags::Encrypted) {
-                true => input.read_u32()?,
-                false => data_length,
-            };
-
-            let timestamp = match version.minor >= 1 {
-                true => input.read_u32()?,
-                false => 0,
-            };
-
-            let name_length = input.read_u16()?;
-            let mut filename = String::with_capacity(name_length.into());
-            for _ in 0..name_length {
-                filename.push((255 - input.read_u8()?) as char);
-            }
-
-            Ok(Header {
-                offset,
-                length,
-                flags,
-                timestamp,
-                filename,
-            })
-        }
-    }
-}
-use subfile::Subfile;
 /*use core::fmt;
 use std::io::prelude::*;
 use std::path::Path;
