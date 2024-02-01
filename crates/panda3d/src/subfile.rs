@@ -6,14 +6,15 @@
 //! # Format
 //! Refer to the [Multifile format](crate::multifile#format) for more details.
 
-use crate::multifile::{Result, Version};
-#[cfg(not(feature = "std"))]
-use crate::no_std::*;
+#[cfg(feature = "std")]
+use std::path::{Path, PathBuf};
+
 use bitflags::bitflags;
 use orthrus_core::prelude::*;
 
-#[cfg(feature = "std")]
-use std::path::{Path, PathBuf};
+use crate::multifile::{Result, Version};
+#[cfg(not(feature = "std"))]
+use crate::no_std::*;
 
 bitflags! {
     #[derive(Debug, PartialEq, Default)]

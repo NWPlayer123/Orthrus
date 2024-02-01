@@ -12,8 +12,7 @@
 pub use crate::data::{
     DataCursor, DataCursorMut, DataCursorRef, DataCursorTrait, Endian, EndianRead, EndianWrite,
 };
-
-pub use crate::identify::{FileInfo, FileIdentifier, IdentifyFn};
+pub use crate::identify::{FileIdentifier, FileInfo, IdentifyFn};
 
 /// Includes [`data::Error`], which is used in Results returned by [`DataCursor`],
 /// [`DataCursorRef`], and [`DataCursorMut`].
@@ -29,9 +28,7 @@ pub mod util {
 /// Includes all time functionality, for working with timestamps and the current time.
 #[cfg(feature = "time")]
 pub mod time {
-    pub use crate::time::current_time;
-    pub use crate::time::format_timestamp;
-    pub use crate::time::get_local_offset;
+    pub use crate::time::{current_time, format_timestamp, get_local_offset};
 }
 
 /// Includes [`cert::read_certificate`], which allows for reading X.509 certificates.

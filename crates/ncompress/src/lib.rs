@@ -8,8 +8,7 @@
 mod no_std {
     extern crate alloc;
     pub use alloc::boxed::Box;
-    pub use alloc::vec;
-    pub use alloc::format;
+    pub use alloc::{format, vec};
 }
 
 // All public modules

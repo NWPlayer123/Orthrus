@@ -9,8 +9,8 @@ mod no_std {
     extern crate alloc;
     pub use alloc::boxed::Box;
     pub use alloc::string::String;
-    pub use alloc::vec::Vec;
     pub use alloc::vec;
+    pub use alloc::vec::Vec;
 }
 
 pub mod multifile;

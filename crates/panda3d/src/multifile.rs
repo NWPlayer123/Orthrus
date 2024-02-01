@@ -92,8 +92,8 @@
 //! These functions can be used without having to first create a Multifile, used for the
 //! following one-shot operations:
 //!
-//! * [`extract_from_path`](Multifile::extract_from_path): Reads a Multifile from disk, and
-//!   saves all [`Subfile`]s to a given folder
+//! * [`extract_from_path`](Multifile::extract_from_path): Reads a Multifile from disk, and saves
+//!   all [`Subfile`]s to a given folder
 //! * [`extract_from`](Multifile::extract_from): Reads the provided Multifile, and saves all
 //!   [`Subfile`]s to a given folder
 
@@ -104,10 +104,9 @@ use std::path::Path;
 use orthrus_core::prelude::*;
 use snafu::prelude::*;
 
-use crate::subfile::*;
-
 #[cfg(not(feature = "std"))]
 use crate::no_std::*;
+use crate::subfile::*;
 
 /// Error conditions for when working with Multifile archives.
 #[derive(Debug, Snafu)]
@@ -185,7 +184,8 @@ struct Header {
 
 //This is the current least terrible way to implement state in this system is to just store the
 //entire Multifile's data, and have each Subfile keep an offset+length. In the future, once safe
-//transmute is a thing, I can "take" each header and what's left will be all the relevant file data.
+//transmute is a thing, I can "take" each header and what's left will be all the relevant file
+// data.
 
 /// Used for working with Multifile archives, supports both stateless and stateful operations.
 ///

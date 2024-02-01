@@ -9,9 +9,8 @@ use owo_colors::OwoColorize;
 
 mod identify;
 mod menu;
-use menu::{exactly_one_true, Modules, NCompressModules, Panda3DModules};
-
 use anyhow::Result;
+use menu::{exactly_one_true, Modules, NCompressModules, Panda3DModules};
 
 fn color_level(level: Level) -> String {
     match level {

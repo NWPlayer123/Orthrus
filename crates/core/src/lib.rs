@@ -11,9 +11,9 @@
 #[cfg(not(feature = "std"))]
 mod no_std {
     extern crate alloc;
-    pub use alloc::string::String;
     pub use alloc::boxed::Box;
     pub use alloc::format;
+    pub use alloc::string::String;
 }
 
 //Always have data enabled

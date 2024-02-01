@@ -1,5 +1,5 @@
 //! Identification system that allows types to return information if they recognize a given type.
-//! 
+//!
 //! This has two systems: basic identification, which should only perform operations if they won't
 //! take a significant amount of time, and "deep identification", which is allowed to perform any
 //! computation even if it may take multiple seconds, along with allowing recursion into nested

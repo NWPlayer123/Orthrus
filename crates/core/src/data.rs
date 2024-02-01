@@ -1,5 +1,5 @@
 //! Endian-aware data manipulation for efficient byte slice operations.
-//! 
+//!
 //! This crate contains several types that are meant to wrap a byte slice and provide a convenient
 //! interface for reading and writing primitive data types from it.
 //! * [`DataCursor`] is the owned variant, where it owns the byte slice directly, for use as an
@@ -8,7 +8,7 @@
 //!   and provides reading.
 //! * [`DataCursorMut`] is the borrowed mutable variant, that wraps a reference to a byte slice and
 //!   provides reading and writing.
-//! 
+//!
 //! These cursors work similarly to the [`std::io`] module, wherein you have to include specific
 //! traits for functionality.
 //! * [`DataCursorTrait`] provides the basic methods for using a cursor, and allows for trait
@@ -211,7 +211,7 @@ pub trait EndianWrite {
 }
 
 /// An owned, in-memory file that allows endian-aware read and write.
-/// 
+///
 /// This is architected to assume a fixed length, which should work for the majority of use cases,
 /// as users should be minimizing allocations at all costs.
 #[derive(Debug, Default)]
@@ -528,7 +528,11 @@ impl Read for DataCursor {
         let length = core::cmp::min(buf.len(), self.len() - self.pos);
         //Unroll buf.copy_from_slice() since we are guaranteed to be in bounds
         unsafe {
-            core::ptr::copy_nonoverlapping(self.data.as_ptr().add(self.pos), buf.as_mut_ptr(), length);
+            core::ptr::copy_nonoverlapping(
+                self.data.as_ptr().add(self.pos),
+                buf.as_mut_ptr(),
+                length,
+            );
         }
         self.pos += length;
         Ok(length)
@@ -665,7 +669,7 @@ impl AsMut<[u8]> for DataCursor {
 }
 
 /// An immutably borrowed, in-memory file that allows endian-aware read.
-/// 
+///
 /// This is architected to assume a fixed length, which should work for the majority of use cases,
 /// as users should be minimizing allocations at all costs.
 #[derive(Debug, Default)]
@@ -851,7 +855,11 @@ impl Read for DataCursorRef<'_> {
         let length = core::cmp::min(buf.len(), self.len() - self.pos);
         //Unroll buf.copy_from_slice() since we are guaranteed to be in bounds
         unsafe {
-            core::ptr::copy_nonoverlapping(self.data.as_ptr().add(self.pos), buf.as_mut_ptr(), length);
+            core::ptr::copy_nonoverlapping(
+                self.data.as_ptr().add(self.pos),
+                buf.as_mut_ptr(),
+                length,
+            );
         }
         self.pos += length;
         Ok(length)
@@ -916,7 +924,7 @@ impl Deref for DataCursorRef<'_> {
 }
 
 /// A mutably borrowed, in-memory file that allows endian-aware read and write.
-/// 
+///
 /// This is architected to assume a fixed length, which should work for the majority of use cases,
 /// as users should be minimizing allocations at all costs.
 #[derive(Debug, Default)]
@@ -1220,7 +1228,11 @@ impl Read for DataCursorMut<'_> {
         let length = core::cmp::min(buf.len(), self.len() - self.pos);
         //Unroll buf.copy_from_slice() since we are guaranteed to be in bounds
         unsafe {
-            core::ptr::copy_nonoverlapping(self.data.as_ptr().add(self.pos), buf.as_mut_ptr(), length);
+            core::ptr::copy_nonoverlapping(
+                self.data.as_ptr().add(self.pos),
+                buf.as_mut_ptr(),
+                length,
+            );
         }
         self.pos += length;
         Ok(length)

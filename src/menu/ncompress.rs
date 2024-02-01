@@ -63,5 +63,3 @@ pub struct Yaz0Data {
     #[argp(description = "Output file to write to")]
     pub output: Option<String>,
 }
-
-

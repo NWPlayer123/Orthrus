@@ -6,7 +6,11 @@ use orthrus_panda3d::prelude::*;
 
 static SHALLOW_SCAN: [IdentifyFn; 3] = [Yay0::identify, Yaz0::identify, Multifile::identify];
 
-static DEEP_SCAN: [IdentifyFn; 3] = [Yay0::identify_deep, Yaz0::identify_deep, Multifile::identify_deep];
+static DEEP_SCAN: [IdentifyFn; 3] = [
+    Yay0::identify_deep,
+    Yaz0::identify_deep,
+    Multifile::identify_deep,
+];
 
 pub(crate) fn identify_file(input: String, deep_scan: bool) {
     let data = std::fs::read(&input).expect("Unable to open file for identification!");

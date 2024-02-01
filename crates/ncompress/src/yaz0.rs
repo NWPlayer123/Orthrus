@@ -39,17 +39,20 @@
 //! # Usage
 //! This module offers the following functionality:
 //! ## Decompression
-//! * [`decompress_from_path`](Yaz0::decompress_from_path): Provide a path, get decompressed data back
+//! * [`decompress_from_path`](Yaz0::decompress_from_path): Provide a path, get decompressed data
+//!   back
 //! * [`decompress_from`](Yaz0::decompress_from): Provide the input data, get decompressed data back
-//! * [`decompress`](Yaz0::decompress): Provide the input data and output buffer, run the decompression algorithm
+//! * [`decompress`](Yaz0::decompress): Provide the input data and output buffer, run the
+//!   decompression algorithm
 //! ## Compression
 //! * [`compress_from_path`](Yaz0::compress_from_path): Provide a path, get compressed data back
 //! * [`compress_from`](Yaz0::compress_from): Provide the input data, get compressed data back
-//! * [`compress_n64`](Yaz0::compress_n64): Provide the input data and output buffer, run the compression (older
-//!   matching algorithm)
+//! * [`compress_n64`](Yaz0::compress_n64): Provide the input data and output buffer, run the
+//!   compression (older matching algorithm)
 //! ## Utilities
 //! * [`read_header`](Yaz0::read_header): Returns the header information for a given Yaz0 file
-//! * [`worst_possible_size`](Yaz0::worst_possible_size): Calculates the worst possible compression size for a given filesize
+//! * [`worst_possible_size`](Yaz0::worst_possible_size): Calculates the worst possible compression
+//!   size for a given filesize
 
 #[cfg(feature = "std")]
 use std::path::Path;
