@@ -1,27 +1,24 @@
-use time::format_description::FormatItem;
-use time::macros::format_description;
-//re-export time::Error since we use it directly so other libraries can implement
-// From<time::Error>
+//! Utility module for working with timestamps and getting the current time.
+
+#[cfg(not(feature = "std"))]
+use crate::no_std::*;
+
+//re-export time::Error since we use it, so other libraries can implement From<time::Error>
 pub use time::Error;
 use time::{OffsetDateTime, UtcOffset};
 
-pub const TIME_FORMAT: &[FormatItem] =
-    format_description!("[year]-[month]-[day] [hour]:[minute]:[second]");
-
-/// This function will return a formatted [String] of the current local time.
-///
-/// # Errors
-/// Returns [`IndeterminateOffset`](time::Error::IndeterminateOffset) if unable to determine the
-/// current time zone.
+/// Returns a formatted [String] with the current time.
+/// 
+/// Note that this may be the local time, or may be based off UTC. If it matters, check whether
+/// [`get_local_offset`] returns an error.
 #[must_use]
 #[inline]
 pub fn current_time() -> String {
     let time = OffsetDateTime::now_local().unwrap_or_else(|_| OffsetDateTime::now_utc());
-    //Theoretically this should never fail
-    time.format(TIME_FORMAT).unwrap()
+    format!("{}-{}-{} {}:{}:{}", time.year(), time.month() as u8, time.day(), time.hour(), time.minute(), time.second())
 }
 
-/// This function tries to convert a timestamp into a formatted [String].
+/// Convert a timestamp into a formatted [`String`].
 ///
 /// # Errors
 /// Returns [`ComponentRange`](time::Error::ComponentRange) if unable to convert the timestamp to a
@@ -29,13 +26,11 @@ pub fn current_time() -> String {
 #[inline]
 pub fn format_timestamp(timestamp: i64) -> time::Result<String> {
     let time = OffsetDateTime::from_unix_timestamp(timestamp)?;
-    //Theoretically this should never fail
-    let formatted = time.format(TIME_FORMAT).unwrap();
-    Ok(formatted)
+    Ok(format!("{}-{}-{} {}:{}:{}", time.year(), time.month() as u8, time.day(), time.hour(), time.minute(), time.second()))
 }
 
-/// This function tries to return the time zone offset. This is useful for testing if the current
-/// system supports local time, or if we can only use UTC.
+/// Returns the local time zone offset. This is useful for testing if the current system supports
+/// local time, or only UTC is available.
 ///
 /// # Errors
 /// Returns [`IndeterminateOffset`](time::Error::IndeterminateOffset) if unable to determine the

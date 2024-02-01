@@ -9,13 +9,15 @@ repository.workspace = true
 [dependencies]
 snafu = { version = "0.8", default-features = false }
 
-time = { version = "0.3", features = ["formatting", "macros", "local-offset"], optional = true }
+# Required for time module
+time = { version = "0.3", features = ["local-offset"], optional = true }
 
+# Required for certificate module
 der = { version = "0.7", optional = true }
 x509-cert = { version = "0.2", optional = true }
 
 [features]
 default = ["std"]
-std = ["snafu/std"]
-time = ["dep:time", "std"]
+std = []
+time = ["dep:time"]
 certificate = ["der", "x509-cert"]

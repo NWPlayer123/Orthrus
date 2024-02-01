@@ -52,7 +52,7 @@
 //! * [`worst_possible_size`](Yaz0::worst_possible_size): Calculates the worst possible compression size for a given filesize
 
 #[cfg(feature = "std")]
-use std::{fmt::Display, path::Path};
+use std::path::Path;
 
 use orthrus_core::prelude::*;
 use snafu::prelude::*;
@@ -111,10 +111,17 @@ pub enum CompressionAlgo {
 
 /// See the module [header](self#header) for more information.
 pub struct Header {
+    /// The size of the decompressed data, needed for the output buffer.
     pub decompressed_size: u32,
+    /// Specifies the alignment needed for the output buffer. ***Non-zero starting with Wii U.***
     pub alignment: u32,
 }
 
+/// Utility struct for handling Yaz0 compression.
+///
+/// Yaz0 is stateless, and is merely a namespace for implementing certain traits.
+///
+/// See the [module documentation](self) for more information.
 pub struct Yaz0;
 
 impl Yaz0 {
@@ -182,7 +189,7 @@ impl Yaz0 {
     /// * [`InvalidMagic`](Error::InvalidMagic) if the header does not match a Yaz0 file
     #[cfg(feature = "std")]
     #[inline]
-    pub fn decompress_from_path<P: AsRef<Path> + Display>(path: P) -> Result<Box<[u8]>> {
+    pub fn decompress_from_path<P: AsRef<Path>>(path: P) -> Result<Box<[u8]>> {
         let input = std::fs::read(path)?;
         Self::decompress_from(&input)
     }
@@ -310,7 +317,7 @@ impl Yaz0 {
     #[inline]
     pub fn compress_from_path<P>(path: P, algo: CompressionAlgo, align: u32) -> Result<Box<[u8]>>
     where
-        P: AsRef<Path> + Display,
+        P: AsRef<Path>,
     {
         let input = std::fs::read(path)?;
         Self::compress_from(&input, algo, align)

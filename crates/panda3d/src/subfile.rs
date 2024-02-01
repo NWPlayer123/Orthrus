@@ -1,13 +1,19 @@
+//! Adds support for the Subfile format used inside of Multifiles.
+//!
+//! This module is mainly internal right now, as Subfiles are heavily tied to their associated
+//! [`Multifile`](crate::multifile::Multifile) for the moment.
+//!
+//! # Format
+//! Refer to the [Multifile format](crate::multifile#format) for more details.
+
 use crate::multifile::{Result, Version};
+#[cfg(not(feature = "std"))]
+use crate::no_std::*;
 use bitflags::bitflags;
 use orthrus_core::prelude::*;
 
 #[cfg(feature = "std")]
-use std::{
-    fs::File,
-    io::prelude::*,
-    path::{Path, PathBuf},
-};
+use std::path::{Path, PathBuf};
 
 bitflags! {
     #[derive(Debug, PartialEq, Default)]
@@ -22,7 +28,12 @@ bitflags! {
     }
 }
 
+/// Utility struct for handling Subfile data, for use with
+/// [`Multifile`](crate::multifile::Multifile) archives. Currently only for internal use.
+///
+/// For more details on the Multifile format, see the [module documentation](self#format).
 #[derive(Default, Debug)]
+#[allow(dead_code)]
 pub struct Subfile {
     pub(crate) offset: u32,
     pub(crate) length: u32,
@@ -32,10 +43,17 @@ pub struct Subfile {
 }
 
 impl Subfile {
-    pub(crate) fn load<T>(input: &mut T, version: Version) -> Result<Self>
-    where
-        T: EndianRead + Read,
-    {
+    /// Parses the header of a given [`Subfile`] and returns a new instance with its data.
+    ///
+    /// # Warnings
+    /// This function assumes that `input` is positioned at the start of a valid [`Subfile`] header.
+    /// It will happily try to parse whatever is given to it, which can lead to the filename going
+    /// out of bounds. Be careful!
+    ///
+    /// # Errors
+    /// Returns [`EndOfFile`] if it tries to read out of bounds.
+    #[allow(dead_code)]
+    pub(crate) fn load<T: EndianRead>(input: &mut T, version: Version) -> Result<Self> {
         let offset = input.read_u32()?;
         let data_length = input.read_u32()?;
         let flags = Flags::from_bits_truncate(input.read_u16()?);
@@ -65,12 +83,14 @@ impl Subfile {
         })
     }
 
+    /// Writes the [`Subfile`] data to disk, using the data from the associated [`Multifile`].
+    ///
+    /// # Errors
+    /// Returns an error if unable to create the necessary directories, or unable to create a file
+    /// to write to. See [`create_dir_all`](std::fs::create_dir_all) and [`write`](std::fs::write).
     #[cfg(feature = "std")]
     #[inline]
-    pub(crate) fn write_file<P: AsRef<Path>>(&mut self,
-        data: &[u8],
-        output: P,
-    ) -> Result<()> {
+    pub(crate) fn write_file<P: AsRef<Path>>(&mut self, data: &[u8], output: P) -> Result<()> {
         let mut path = PathBuf::from(output.as_ref());
         path.push(&self.filename);
 
@@ -78,8 +98,7 @@ impl Subfile {
             std::fs::create_dir_all(dir)?;
         }
 
-        let mut file = File::create(path)?;
-        file.write_all(data)?;
+        std::fs::write(path, data)?;
         Ok(())
     }
 }

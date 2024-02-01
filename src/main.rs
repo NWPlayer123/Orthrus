@@ -1,4 +1,3 @@
-use std::fs::File;
 use std::io::prelude::*;
 use std::path::PathBuf;
 
@@ -44,7 +43,7 @@ fn main() -> Result<()> {
     enable_ansi_support::enable_ansi_support()
         .expect("Please update to a modern operating system.");
 
-    //Build up a logger with custom formatting and set it to the verbosity from the command line
+    // Build up a logger with custom formatting and set it to the verbosity from the command line
     // args
     if args.verbose != 0 {
         Builder::new()
@@ -70,8 +69,9 @@ fn main() -> Result<()> {
                 if let Some(index) = exactly_one_true(&[params.decompress, params.compress]) {
                     match index {
                         0 => {
-                            let data = Yay0::decompress_from_path(&params.input).unwrap();
-                            let output_filename = match params.output {
+                            log::info!("Decompressing file {}", &params.input);
+                            let data = Yay0::decompress_from_path(&params.input)?;
+                            let output = match params.output {
                                 Some(output) => output,
                                 None => {
                                     let mut new_path = PathBuf::from(params.input);
@@ -79,26 +79,26 @@ fn main() -> Result<()> {
                                     new_path.to_string_lossy().into_owned()
                                 }
                             };
-                            let mut output = File::create(output_filename).unwrap();
-                            output.write_all(&data).unwrap();
+                            log::info!("Writing file {}", output);
+                            std::fs::write(output, data)?;
                         }
                         1 => {
+                            log::info!("Compressing file {}", &params.input);
                             let data = Yay0::compress_from_path(
                                 &params.input,
                                 yay0::CompressionAlgo::MatchingOld,
                                 0,
-                            )
-                            .unwrap();
-                            let output_filename = match params.output {
+                            )?;
+                            let output = match params.output {
                                 Some(output) => output,
                                 None => {
                                     let mut new_path = PathBuf::from(params.input);
-                                    new_path.set_extension("arc");
+                                    new_path.set_extension("szs");
                                     new_path.to_string_lossy().into_owned()
                                 }
                             };
-                            let mut output = File::create(output_filename).unwrap();
-                            output.write_all(&data).unwrap();
+                            log::info!("Writing file {}", output);
+                            std::fs::write(output, data)?;
                         }
                         _ => unreachable!("Oops! Forgot to cover all operations."),
                     }
@@ -110,8 +110,9 @@ fn main() -> Result<()> {
                 if let Some(index) = exactly_one_true(&[params.decompress, params.compress]) {
                     match index {
                         0 => {
-                            let data = Yaz0::decompress_from_path(&params.input).unwrap();
-                            let output_filename = match params.output {
+                            log::info!("Decompressing file {}", &params.input);
+                            let data = Yaz0::decompress_from_path(&params.input)?;
+                            let output = match params.output {
                                 Some(output) => output,
                                 None => {
                                     let mut new_path = PathBuf::from(params.input);
@@ -119,26 +120,26 @@ fn main() -> Result<()> {
                                     new_path.to_string_lossy().into_owned()
                                 }
                             };
-                            let mut output = File::create(output_filename).unwrap();
-                            output.write_all(&data).unwrap();
+                            log::info!("Writing file {}", output);
+                            std::fs::write(output, data)?;
                         }
                         1 => {
+                            log::info!("Compressing file {}", &params.input);
                             let data = Yaz0::compress_from_path(
                                 &params.input,
                                 yaz0::CompressionAlgo::MatchingOld,
                                 0,
-                            )
-                            .unwrap();
-                            let output_filename = match params.output {
+                            )?;
+                            let output = match params.output {
                                 Some(output) => output,
                                 None => {
                                     let mut new_path = PathBuf::from(params.input);
-                                    new_path.set_extension("arc");
+                                    new_path.set_extension("szs");
                                     new_path.to_string_lossy().into_owned()
                                 }
                             };
-                            let mut output = File::create(output_filename).unwrap();
-                            output.write_all(&data).unwrap();
+                            log::info!("Writing file {}", output);
+                            std::fs::write(output, data)?;
                         }
                         _ => unreachable!("Oops! Forgot to cover all operations."),
                     }
@@ -152,8 +153,8 @@ fn main() -> Result<()> {
                 if let Some(index) = exactly_one_true(&[data.extract]) {
                     match index {
                         0 => {
-                            let _multifile = Multifile::open(data.input, 0)?;
-                            //multifile.extract(data.output.unwrap_or_else(|| ".".to_string()));
+                            let output = data.output.unwrap_or_else(|| ".".to_string());
+                            Multifile::extract_from_path(data.input, output, 0)?;
                         }
                         _ => unreachable!("Oops! Forgot to cover all operations."),
                     }

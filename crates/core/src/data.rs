@@ -1,9 +1,23 @@
+//! Endian-aware data manipulation for efficient byte slice operations.
+//! 
+//! This crate contains several types that are meant to wrap a byte slice and provide a convenient
+//! interface for reading and writing primitive data types from it.
+//! * [`DataCursor`] is the owned variant, where it owns the byte slice directly, for use as an
+//!   in-memory file.
+//! * [`DataCursorRef`] is the borrowed immutable variant, that wraps a reference to a byte slice
+//!   and provides reading.
+//! * [`DataCursorMut`] is the borrowed mutable variant, that wraps a reference to a byte slice and
+//!   provides reading and writing.
+//! 
+//! These cursors work similarly to the [`std::io`] module, wherein you have to include specific
+//! traits for functionality.
+//! * [`DataCursorTrait`] provides the basic methods for using a cursor, and allows for trait
+//!   bounds.
+//! * [`EndianRead`] provides reading Rust primitives using the stored endianness.
+//! * [`EndianWrite`] provides writing Rust primitives using the stored endianness.
+
 //This whole module is held up on safe transmute
-#[cfg(feature = "std")]
-use core::cmp::min;
-use core::mem::size_of;
 use core::ops::{Deref, DerefMut};
-use core::ptr;
 #[cfg(feature = "std")]
 use std::{io::prelude::*, path::Path};
 
@@ -12,16 +26,20 @@ use snafu::prelude::*;
 #[cfg(not(feature = "std"))]
 use crate::no_std::*;
 
+/// Error conditions for when reading/writing data.
 #[derive(Debug, Snafu)]
 #[non_exhaustive]
 pub enum Error {
+    /// Thrown if reading/writing tries to go out of bounds.
     #[snafu(display("Unexpected End-Of-File!"))]
     EndOfFile,
+    /// Thrown if trying to resize a [`DataCursor`] to larger than the current size.
     #[snafu(display("Invalid End Size!"))]
     InvalidSize,
 }
 type Result<T> = core::result::Result<T, Error>;
 
+/// Allows specifying which endianness the cursor is currently working with.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Endian {
     Little,
@@ -42,21 +60,45 @@ impl Default for Endian {
     }
 }
 
-#[derive(Debug, Default)]
-pub struct DataCursor {
-    data: Box<[u8]>,
-    pos: usize,
-    endian: Endian,
+/// Shared cursor functionality, e.g. utilities
+pub trait DataCursorTrait {
+    /// Returns the current position of this cursor.
+    fn position(&self) -> usize;
+
+    /// Sets the position of this cursor.
+    fn set_position(&mut self, pos: usize);
+
+    /// Returns the current endianness of this cursor.
+    fn endian(&self) -> Endian;
+
+    /// Sets the endianness of this cursor.
+    fn set_endian(&mut self, endian: Endian);
+
+    /// Returns the remaining data from the current position.
+    fn remaining_slice(&self) -> &[u8];
+
+    /// Returns `true` if the remaining slice is empty.
+    fn is_empty(&self) -> bool;
+
+    /// Returns the length of the currently stored data.
+    fn len(&self) -> usize;
+
+    /// Returns a slice from the current position to some additional length.
+    fn get_slice(&self, length: usize) -> Result<&[u8]>;
+
+    /// Attempts to fill the buffer with data. Mainly intended for `no_std`, where the [`Read`]
+    /// trait is not available.
+    fn read_length(&mut self, buf: &mut [u8]) -> Result<()>;
 }
 
 macro_rules! datacursor_read {
     ($self:ident, $t:ty) => {{
-        const LENGTH: usize = size_of::<$t>();
+        const LENGTH: usize = core::mem::size_of::<$t>();
         // Bounds check to ensure we're within the valid data range
         ensure!($self.len() >= $self.pos + LENGTH, EndOfFileSnafu);
 
         unsafe {
-            // SAFETY: Box ensures that the pointer arithmetic here is safe
+            // SAFETY: pointer::add should always be safe if we have a valid box/slice
             let ptr: *const $t = $self.data.as_ptr().add($self.pos).cast();
             $self.pos += LENGTH;
 
@@ -69,6 +111,7 @@ macro_rules! datacursor_read {
     }};
 }
 
+/// Endian-aware reading of Rust primitives
 pub trait EndianRead {
     /// Reads one byte and return it as a `u8`.
     fn read_u8(&mut self) -> Result<u8>;
@@ -109,12 +152,12 @@ pub trait EndianRead {
 
 macro_rules! datacursor_write {
     ($self:ident, $value:expr, $t:ty) => {{
-        const LENGTH: usize = size_of::<$t>();
+        const LENGTH: usize = core::mem::size_of::<$t>();
         // Bounds check to ensure we're within the valid data range
         ensure!($self.len() >= $self.pos + LENGTH, EndOfFileSnafu);
 
         unsafe {
-            // SAFETY: Box ensures that the pointer arithmetic here is safe
+            // SAFETY: pointer::add should always be safe if we have a valid box/slice
             let ptr: *mut $t = $self.data.as_mut_ptr().add($self.pos).cast();
             $self.pos += LENGTH;
 
@@ -128,6 +171,7 @@ macro_rules! datacursor_write {
     }};
 }
 
+/// Endian-aware writing of Rust primitives
 pub trait EndianWrite {
     /// Writes one byte from a `u8`.
     fn write_u8(&mut self, value: u8) -> Result<()>;
@@ -166,30 +210,15 @@ pub trait EndianWrite {
     fn write_f64(&mut self, value: f64) -> Result<()>;
 }
 
-pub trait DataCursorTrait {
-    /// Returns the current position of this cursor.
-    fn position(&self) -> usize;
-
-    /// Sets the position of this cursor.
-    fn set_position(&mut self, pos: usize);
-
-    /// Returns the current endian type of this cursor.
-    fn endian(&self) -> Endian;
-
-    /// Sets the endian type of this cursor.
-    fn set_endian(&mut self, endian: Endian);
-
-    /// Returns the remaining data from the current position.
-    fn remaining_slice(&self) -> &[u8];
-
-    /// Returns `true` if the remaining slice is empty.
-    fn is_empty(&self) -> bool;
-
-    /// Returns the length of the currently stored data.
-    fn len(&self) -> usize;
-
-    /// Returns a slice from the current position to some additional length.
-    fn get_slice(&self, length: usize) -> Result<&[u8]>;
+/// An owned, in-memory file that allows endian-aware read and write.
+/// 
+/// This is architected to assume a fixed length, which should work for the majority of use cases,
+/// as users should be minimizing allocations at all costs.
+#[derive(Debug, Default)]
+pub struct DataCursor {
+    data: Box<[u8]>,
+    pos: usize,
+    endian: Endian,
 }
 
 impl DataCursor {
@@ -214,7 +243,7 @@ impl DataCursor {
         Ok(Self::new(std::fs::read(path)?, endian))
     }
 
-    /// Consumes this cursor, returning  the underlying data.
+    /// Consumes this cursor, returning the underlying data.
     #[inline]
     #[must_use]
     pub fn into_inner(self) -> Box<[u8]> {
@@ -239,7 +268,7 @@ impl DataCursor {
     /// Reads a byte from this [`DataCursor`] and writes it to the output [`DataCursor`].
     #[inline]
     pub fn copy_byte_to(&mut self, output: &mut Self) -> Result<()> {
-        const LENGTH: usize = size_of::<u8>();
+        const LENGTH: usize = core::mem::size_of::<u8>();
         // Bounds check to ensure we're within the valid data range
         ensure!(
             (output.len() >= output.pos + LENGTH) && (self.len() >= self.pos + LENGTH),
@@ -276,7 +305,7 @@ impl DataCursor {
             unsafe {
                 let src_ptr = self.data.as_ptr().add(src);
                 let dest_ptr = self.data.as_mut_ptr().add(self.pos);
-                ptr::copy_nonoverlapping(src_ptr, dest_ptr, length);
+                core::ptr::copy_nonoverlapping(src_ptr, dest_ptr, length);
             }
         }
 
@@ -332,12 +361,26 @@ impl DataCursorTrait for DataCursor {
         ensure!(self.len() >= self.pos + length, EndOfFileSnafu);
         Ok(&self.data[self.pos..self.pos + length])
     }
+
+    #[inline]
+    fn read_length(&mut self, buf: &mut [u8]) -> Result<()> {
+        ensure!(buf.len() <= self.data.len() - self.pos, EndOfFileSnafu);
+        unsafe {
+            core::ptr::copy_nonoverlapping(
+                self.data.as_ptr().add(self.pos),
+                buf.as_mut_ptr(),
+                buf.len(),
+            );
+        }
+        self.pos += buf.len();
+        Ok(())
+    }
 }
 
 impl EndianRead for DataCursor {
     #[inline]
     fn read_u8(&mut self) -> Result<u8> {
-        const LENGTH: usize = size_of::<u8>();
+        const LENGTH: usize = core::mem::size_of::<u8>();
         // Bounds check to ensure we're within the valid data range
         ensure!(self.len() >= self.pos + LENGTH, EndOfFileSnafu);
 
@@ -406,7 +449,7 @@ impl EndianRead for DataCursor {
 impl EndianWrite for DataCursor {
     #[inline]
     fn write_u8(&mut self, value: u8) -> Result<()> {
-        const LENGTH: usize = size_of::<u8>();
+        const LENGTH: usize = core::mem::size_of::<u8>();
         // Bounds check to ensure we're within the valid data range
         ensure!(self.len() >= self.pos + LENGTH, EndOfFileSnafu);
 
@@ -482,10 +525,10 @@ impl Read for DataCursor {
     /// This function is infallible and will not return an error under any circumstances.
     #[inline]
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        let length = min(buf.len(), self.len() - self.pos);
+        let length = core::cmp::min(buf.len(), self.len() - self.pos);
         //Unroll buf.copy_from_slice() since we are guaranteed to be in bounds
         unsafe {
-            ptr::copy_nonoverlapping(self.data.as_ptr().add(self.pos), buf.as_mut_ptr(), length);
+            core::ptr::copy_nonoverlapping(self.data.as_ptr().add(self.pos), buf.as_mut_ptr(), length);
         }
         self.pos += length;
         Ok(length)
@@ -516,7 +559,7 @@ impl Read for DataCursor {
 
         //Unroll buf.copy_from_slice() since we are guaranteed to be in bounds
         unsafe {
-            ptr::copy_nonoverlapping(
+            core::ptr::copy_nonoverlapping(
                 self.data.as_ptr().add(self.pos),
                 buf.as_mut_ptr(),
                 buf.len(),
@@ -535,7 +578,7 @@ impl Write for DataCursor {
     /// This function is infallible and will not return an error under any circumstances.
     #[inline]
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        let len = min(buf.len(), self.len() - self.pos);
+        let len = core::cmp::min(buf.len(), self.len() - self.pos);
         self.data[self.pos..self.pos + len].copy_from_slice(&buf[..len]);
         self.pos += len;
         Ok(len)
@@ -621,6 +664,10 @@ impl AsMut<[u8]> for DataCursor {
     }
 }
 
+/// An immutably borrowed, in-memory file that allows endian-aware read.
+/// 
+/// This is architected to assume a fixed length, which should work for the majority of use cases,
+/// as users should be minimizing allocations at all costs.
 #[derive(Debug, Default)]
 pub struct DataCursorRef<'a> {
     data: &'a [u8],
@@ -708,12 +755,26 @@ impl DataCursorTrait for DataCursorRef<'_> {
         ensure!(self.len() >= self.pos + length, EndOfFileSnafu);
         Ok(&self.data[self.pos..self.pos + length])
     }
+
+    #[inline]
+    fn read_length(&mut self, buf: &mut [u8]) -> Result<()> {
+        ensure!(buf.len() <= self.data.len() - self.pos, EndOfFileSnafu);
+        unsafe {
+            core::ptr::copy_nonoverlapping(
+                self.data.as_ptr().add(self.pos),
+                buf.as_mut_ptr(),
+                buf.len(),
+            );
+        }
+        self.pos += buf.len();
+        Ok(())
+    }
 }
 
 impl EndianRead for DataCursorRef<'_> {
     #[inline]
     fn read_u8(&mut self) -> Result<u8> {
-        const LENGTH: usize = size_of::<u8>();
+        const LENGTH: usize = core::mem::size_of::<u8>();
         // Bounds check to ensure we're within the valid data range
         ensure!(self.len() >= self.pos + LENGTH, EndOfFileSnafu);
 
@@ -787,10 +848,10 @@ impl Read for DataCursorRef<'_> {
     /// This function is infallible and will not return an error under any circumstances.
     #[inline]
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        let length = min(buf.len(), self.len() - self.pos);
+        let length = core::cmp::min(buf.len(), self.len() - self.pos);
         //Unroll buf.copy_from_slice() since we are guaranteed to be in bounds
         unsafe {
-            ptr::copy_nonoverlapping(self.data.as_ptr().add(self.pos), buf.as_mut_ptr(), length);
+            core::ptr::copy_nonoverlapping(self.data.as_ptr().add(self.pos), buf.as_mut_ptr(), length);
         }
         self.pos += length;
         Ok(length)
@@ -821,7 +882,7 @@ impl Read for DataCursorRef<'_> {
 
         //Unroll buf.copy_from_slice() since we are guaranteed to be in bounds
         unsafe {
-            ptr::copy_nonoverlapping(
+            core::ptr::copy_nonoverlapping(
                 self.data.as_ptr().add(self.pos),
                 buf.as_mut_ptr(),
                 buf.len(),
@@ -854,6 +915,10 @@ impl Deref for DataCursorRef<'_> {
     }
 }
 
+/// A mutably borrowed, in-memory file that allows endian-aware read and write.
+/// 
+/// This is architected to assume a fixed length, which should work for the majority of use cases,
+/// as users should be minimizing allocations at all costs.
 #[derive(Debug, Default)]
 pub struct DataCursorMut<'a> {
     data: &'a mut [u8],
@@ -895,7 +960,7 @@ impl<'a> DataCursorMut<'a> {
     /// Reads a byte from this [`DataCursor`] and writes it to the output [`DataCursor`].
     #[inline]
     pub fn copy_byte_to(&mut self, output: &mut Self) -> Result<()> {
-        const LENGTH: usize = size_of::<u8>();
+        const LENGTH: usize = core::mem::size_of::<u8>();
         // Bounds check to ensure we're within the valid data range
         ensure!(
             (output.len() >= output.pos + LENGTH) && (self.len() >= self.pos + LENGTH),
@@ -932,7 +997,7 @@ impl<'a> DataCursorMut<'a> {
             unsafe {
                 let src_ptr = self.data.as_ptr().add(src);
                 let dest_ptr = self.data.as_mut_ptr().add(self.pos);
-                ptr::copy_nonoverlapping(src_ptr, dest_ptr, length);
+                core::ptr::copy_nonoverlapping(src_ptr, dest_ptr, length);
             }
         }
 
@@ -988,12 +1053,26 @@ impl DataCursorTrait for DataCursorMut<'_> {
         ensure!(self.len() >= self.pos + length, EndOfFileSnafu);
         Ok(&self.data[self.pos..self.pos + length])
     }
+
+    #[inline]
+    fn read_length(&mut self, buf: &mut [u8]) -> Result<()> {
+        ensure!(buf.len() <= self.data.len() - self.pos, EndOfFileSnafu);
+        unsafe {
+            core::ptr::copy_nonoverlapping(
+                self.data.as_ptr().add(self.pos),
+                buf.as_mut_ptr(),
+                buf.len(),
+            );
+        }
+        self.pos += buf.len();
+        Ok(())
+    }
 }
 
 impl EndianRead for DataCursorMut<'_> {
     #[inline]
     fn read_u8(&mut self) -> Result<u8> {
-        const LENGTH: usize = size_of::<u8>();
+        const LENGTH: usize = core::mem::size_of::<u8>();
         // Bounds check to ensure we're within the valid data range
         ensure!(self.len() >= self.pos + LENGTH, EndOfFileSnafu);
 
@@ -1062,7 +1141,7 @@ impl EndianRead for DataCursorMut<'_> {
 impl EndianWrite for DataCursorMut<'_> {
     #[inline]
     fn write_u8(&mut self, value: u8) -> Result<()> {
-        const LENGTH: usize = size_of::<u8>();
+        const LENGTH: usize = core::mem::size_of::<u8>();
         // Bounds check to ensure we're within the valid data range
         ensure!(self.len() >= self.pos + LENGTH, EndOfFileSnafu);
 
@@ -1138,10 +1217,10 @@ impl Read for DataCursorMut<'_> {
     /// This function is infallible and will not return an error under any circumstances.
     #[inline]
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        let length = min(buf.len(), self.len() - self.pos);
+        let length = core::cmp::min(buf.len(), self.len() - self.pos);
         //Unroll buf.copy_from_slice() since we are guaranteed to be in bounds
         unsafe {
-            ptr::copy_nonoverlapping(self.data.as_ptr().add(self.pos), buf.as_mut_ptr(), length);
+            core::ptr::copy_nonoverlapping(self.data.as_ptr().add(self.pos), buf.as_mut_ptr(), length);
         }
         self.pos += length;
         Ok(length)
@@ -1172,7 +1251,7 @@ impl Read for DataCursorMut<'_> {
 
         //Unroll buf.copy_from_slice() since we are guaranteed to be in bounds
         unsafe {
-            ptr::copy_nonoverlapping(
+            core::ptr::copy_nonoverlapping(
                 self.data.as_ptr().add(self.pos),
                 buf.as_mut_ptr(),
                 buf.len(),
@@ -1191,7 +1270,7 @@ impl Write for DataCursorMut<'_> {
     /// This function is infallible and will not return an error under any circumstances.
     #[inline]
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        let len = min(buf.len(), self.len() - self.pos);
+        let len = core::cmp::min(buf.len(), self.len() - self.pos);
         self.data[self.pos..self.pos + len].copy_from_slice(&buf[..len]);
         self.pos += len;
         Ok(len)

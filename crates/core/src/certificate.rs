@@ -1,25 +1,23 @@
-use der::{Decode, Length, Reader, Result, SliceReader};
-use x509_cert::certificate::{CertificateInner, Rfc5280};
+//! Tools for working with X.509 certificates and signed data.
 
-#[derive(Debug)]
-pub struct Certificate {
-    pub certificate: CertificateInner<Rfc5280>,
-    pub remaining_len: Length,
-}
+use der::{Decode, Reader, Result, SliceReader};
+use x509_cert::certificate::Certificate;
 
-impl<'a> Decode<'a> for Certificate {
-    fn decode<R: Reader<'a>>(reader: &mut R) -> Result<Self> {
-        let inner = CertificateInner::<Rfc5280>::decode(reader)?;
-        Ok(Certificate {
-            certificate: inner,
-            remaining_len: Length::new(0),
-        })
-    }
-
-    fn from_der(bytes: &'a [u8]) -> Result<Self> {
-        let mut reader = SliceReader::new(bytes)?;
-        let mut result = Self::decode(&mut reader)?;
-        result.remaining_len = reader.remaining_len();
-        Ok(result)
-    }
+/// Parses X.509 certificate data, returning the valid [`Certificate`] and how many bytes remain
+/// after parsing.
+/// 
+/// This is intended to be used as an analog for `d2i_X509` from the OpenSSL API, allowing you to
+/// parse a blob containing certificate data without knowing its actual length.
+/// 
+/// # Errors
+/// Returns an error if `bytes` is larger than 0xFFF_FFFF, or if the decoding fails. See
+/// [`der::ErrorKind`] for more details.
+pub fn read_certificate(bytes: &[u8]) -> Result<(Certificate, usize)> {
+    // SliceReader will only fail if larger than 0xFFF_FFFF.
+    let mut reader = SliceReader::new(bytes)?;
+    // Decoding can be any of a number of different errors, just pass it along.
+    let certificate = Certificate::decode(&mut reader)?;
+    // This will always be able to fit in a usize, so just unwrap it.
+    let remaining: usize = reader.remaining_len().try_into().unwrap();
+    Ok((certificate, remaining))
 }
