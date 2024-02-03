@@ -7,7 +7,7 @@ use crate::no_std::*;
 ///
 /// This function condenses the length of a file until it can't be shrank any more and returns that
 /// with the relevant unit (bytes, KB, MB, GB, etc).
-/// 
+///
 /// # Warnings
 /// This function uses f64, which on a 64-bit system will lose precision if the length is too large,
 /// but it should still round to a close-enough value.

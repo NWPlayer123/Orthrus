@@ -84,14 +84,14 @@ pub trait DataCursorTrait {
     fn len(&self) -> usize;
 
     /// Returns a slice from the current position to some additional length.
-    /// 
+    ///
     /// # Errors
     /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds.
     fn get_slice(&self, length: usize) -> Result<&[u8]>;
 
     /// Attempts to fill the buffer with data. Mainly intended for `no_std`, where the [`Read`]
     /// trait is not available.
-    /// 
+    ///
     /// # Errors
     /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds.
     fn read_length(&mut self, buf: &mut [u8]) -> Result<()>;
@@ -120,73 +120,73 @@ macro_rules! datacursor_read {
 /// Endian-aware reading of Rust primitives
 pub trait EndianRead {
     /// Reads one byte and return it as a `u8`.
-    /// 
+    ///
     /// # Errors
     /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds.
     fn read_u8(&mut self) -> Result<u8>;
 
     /// Reads one byte and return it as an `i8`.
-    /// 
+    ///
     /// # Errors
     /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds.
     fn read_i8(&mut self) -> Result<i8>;
 
     /// Reads two bytes and return it as a `u16`.
-    /// 
+    ///
     /// # Errors
     /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds.
     fn read_u16(&mut self) -> Result<u16>;
 
     /// Reads two bytes and return it as an `i16`.
-    /// 
+    ///
     /// # Errors
     /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds.
     fn read_i16(&mut self) -> Result<i16>;
 
     /// Reads four bytes and return it as a `u32`.
-    /// 
+    ///
     /// # Errors
     /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds.
     fn read_u32(&mut self) -> Result<u32>;
 
     /// Reads four bytes and return it as an `i32`.
-    /// 
+    ///
     /// # Errors
     /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds.
     fn read_i32(&mut self) -> Result<i32>;
 
     /// Reads eight bytes and return it as a `u64`.
-    /// 
+    ///
     /// # Errors
     /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds.
     fn read_u64(&mut self) -> Result<u64>;
 
     /// Reads eight bytes and return it as an `i64`.
-    /// 
+    ///
     /// # Errors
     /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds.
     fn read_i64(&mut self) -> Result<i64>;
 
     /// Reads sixteen bytes and return it as a `u128`.
-    /// 
+    ///
     /// # Errors
     /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds.
     fn read_u128(&mut self) -> Result<u128>;
 
     /// Reads sixteen bytes and return it as an `i128`.
-    /// 
+    ///
     /// # Errors
     /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds.
     fn read_i128(&mut self) -> Result<i128>;
 
     /// Reads four bytes and return it as an `f32`.
-    /// 
+    ///
     /// # Errors
     /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds.
     fn read_f32(&mut self) -> Result<f32>;
 
     /// Reads eight bytes and return it as an `f64`.
-    /// 
+    ///
     /// # Errors
     /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds.
     fn read_f64(&mut self) -> Result<f64>;
@@ -216,73 +216,73 @@ macro_rules! datacursor_write {
 /// Endian-aware writing of Rust primitives
 pub trait EndianWrite {
     /// Writes one byte from a `u8`.
-    /// 
+    ///
     /// # Errors
     /// Returns [`EndOfFile`](Error::EndOfFile) if trying to write out of bounds.
     fn write_u8(&mut self, value: u8) -> Result<()>;
 
     /// Writes one byte from an `i8`.
-    /// 
+    ///
     /// # Errors
     /// Returns [`EndOfFile`](Error::EndOfFile) if trying to write out of bounds.
     fn write_i8(&mut self, value: i8) -> Result<()>;
 
     /// Writes two bytes from a `u16`.
-    /// 
+    ///
     /// # Errors
     /// Returns [`EndOfFile`](Error::EndOfFile) if trying to write out of bounds.
     fn write_u16(&mut self, value: u16) -> Result<()>;
 
     /// Writes two bytes from an `i16`.
-    /// 
+    ///
     /// # Errors
     /// Returns [`EndOfFile`](Error::EndOfFile) if trying to write out of bounds.
     fn write_i16(&mut self, value: i16) -> Result<()>;
 
     /// Writes four bytes from a `u32`.
-    /// 
+    ///
     /// # Errors
     /// Returns [`EndOfFile`](Error::EndOfFile) if trying to write out of bounds.
     fn write_u32(&mut self, value: u32) -> Result<()>;
 
     /// Writes four bytes from an `i32`.
-    /// 
+    ///
     /// # Errors
     /// Returns [`EndOfFile`](Error::EndOfFile) if trying to write out of bounds.
     fn write_i32(&mut self, value: i32) -> Result<()>;
 
     /// Writes eight bytes from a `u64`.
-    /// 
+    ///
     /// # Errors
     /// Returns [`EndOfFile`](Error::EndOfFile) if trying to write out of bounds.
     fn write_u64(&mut self, value: u64) -> Result<()>;
 
     /// Writes eight bytes from an `i64`.
-    /// 
+    ///
     /// # Errors
     /// Returns [`EndOfFile`](Error::EndOfFile) if trying to write out of bounds.
     fn write_i64(&mut self, value: i64) -> Result<()>;
 
     /// Writes sixteen bytes from a `u128`.
-    /// 
+    ///
     /// # Errors
     /// Returns [`EndOfFile`](Error::EndOfFile) if trying to write out of bounds.
     fn write_u128(&mut self, value: u128) -> Result<()>;
 
     /// Writes sixteen bytes from an `i128`.
-    /// 
+    ///
     /// # Errors
     /// Returns [`EndOfFile`](Error::EndOfFile) if trying to write out of bounds.
     fn write_i128(&mut self, value: i128) -> Result<()>;
 
     /// Writes four bytes from an `f32`.
-    /// 
+    ///
     /// # Errors
     /// Returns [`EndOfFile`](Error::EndOfFile) if trying to write out of bounds.
     fn write_f32(&mut self, value: f32) -> Result<()>;
 
     /// Writes eight bytes from an `f64`.
-    /// 
+    ///
     /// # Errors
     /// Returns [`EndOfFile`](Error::EndOfFile) if trying to write out of bounds.
     fn write_f64(&mut self, value: f64) -> Result<()>;
@@ -343,7 +343,7 @@ impl DataCursor {
     }
 
     /// Reads a byte from this cursor and writes it to the output.
-    /// 
+    ///
     /// # Errors
     /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read or write out of bounds.
     #[inline]
@@ -365,7 +365,7 @@ impl DataCursor {
     /// Copies a number of bytes from elsewhere in the cursor to the current position.
     ///
     /// `src` is an offset from the start of the cursor, `length` is the number of bytes to copy.
-    /// 
+    ///
     /// # Errors
     /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read or write out of bounds.
     #[inline]
@@ -1057,7 +1057,7 @@ impl<'a> DataCursorMut<'a> {
     }
 
     /// Copies a byte from the cursor to the output.
-    /// 
+    ///
     /// # Errors
     /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read or write out of bounds.
     #[inline]
@@ -1079,7 +1079,7 @@ impl<'a> DataCursorMut<'a> {
     /// Copies a number of bytes from elsewhere in the cursor to the current position.
     ///
     /// `src` is an offset from the start of the cursor, `length` is the number of bytes to copy.
-    /// 
+    ///
     /// # Errors
     /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read or write out of bounds.
     #[inline]
