@@ -20,7 +20,7 @@ orthrus-panda3d = { version = "0.1", path = "crates/panda3d" }
 orthrus-ncompress = { version = "0.2", path = "crates/ncompress" }
 
 argp = { version = "0.3", default-features = false }
-env_logger = { version = "0.10", default-features = false }
+env_logger = { version = "0.11", default-features = false }
 enable-ansi-support = "0.2"
 log = "0.4"
 owo-colors = "4.0"

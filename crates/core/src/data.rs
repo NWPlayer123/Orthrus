@@ -33,7 +33,7 @@ pub enum Error {
     /// Thrown if reading/writing tries to go out of bounds.
     #[snafu(display("Unexpected End-Of-File!"))]
     EndOfFile,
-    /// Thrown if trying to resize a [`DataCursor`] to larger than the current size.
+    /// Thrown if trying to resize a cursor to larger than the current size.
     #[snafu(display("Invalid End Size!"))]
     InvalidSize,
 }
@@ -84,10 +84,16 @@ pub trait DataCursorTrait {
     fn len(&self) -> usize;
 
     /// Returns a slice from the current position to some additional length.
+    /// 
+    /// # Errors
+    /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds.
     fn get_slice(&self, length: usize) -> Result<&[u8]>;
 
     /// Attempts to fill the buffer with data. Mainly intended for `no_std`, where the [`Read`]
     /// trait is not available.
+    /// 
+    /// # Errors
+    /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds.
     fn read_length(&mut self, buf: &mut [u8]) -> Result<()>;
 }
 
@@ -114,39 +120,75 @@ macro_rules! datacursor_read {
 /// Endian-aware reading of Rust primitives
 pub trait EndianRead {
     /// Reads one byte and return it as a `u8`.
+    /// 
+    /// # Errors
+    /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds.
     fn read_u8(&mut self) -> Result<u8>;
 
     /// Reads one byte and return it as an `i8`.
+    /// 
+    /// # Errors
+    /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds.
     fn read_i8(&mut self) -> Result<i8>;
 
     /// Reads two bytes and return it as a `u16`.
+    /// 
+    /// # Errors
+    /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds.
     fn read_u16(&mut self) -> Result<u16>;
 
     /// Reads two bytes and return it as an `i16`.
+    /// 
+    /// # Errors
+    /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds.
     fn read_i16(&mut self) -> Result<i16>;
 
     /// Reads four bytes and return it as a `u32`.
+    /// 
+    /// # Errors
+    /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds.
     fn read_u32(&mut self) -> Result<u32>;
 
     /// Reads four bytes and return it as an `i32`.
+    /// 
+    /// # Errors
+    /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds.
     fn read_i32(&mut self) -> Result<i32>;
 
     /// Reads eight bytes and return it as a `u64`.
+    /// 
+    /// # Errors
+    /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds.
     fn read_u64(&mut self) -> Result<u64>;
 
     /// Reads eight bytes and return it as an `i64`.
+    /// 
+    /// # Errors
+    /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds.
     fn read_i64(&mut self) -> Result<i64>;
 
     /// Reads sixteen bytes and return it as a `u128`.
+    /// 
+    /// # Errors
+    /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds.
     fn read_u128(&mut self) -> Result<u128>;
 
     /// Reads sixteen bytes and return it as an `i128`.
+    /// 
+    /// # Errors
+    /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds.
     fn read_i128(&mut self) -> Result<i128>;
 
     /// Reads four bytes and return it as an `f32`.
+    /// 
+    /// # Errors
+    /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds.
     fn read_f32(&mut self) -> Result<f32>;
 
     /// Reads eight bytes and return it as an `f64`.
+    /// 
+    /// # Errors
+    /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds.
     fn read_f64(&mut self) -> Result<f64>;
 }
 
@@ -174,39 +216,75 @@ macro_rules! datacursor_write {
 /// Endian-aware writing of Rust primitives
 pub trait EndianWrite {
     /// Writes one byte from a `u8`.
+    /// 
+    /// # Errors
+    /// Returns [`EndOfFile`](Error::EndOfFile) if trying to write out of bounds.
     fn write_u8(&mut self, value: u8) -> Result<()>;
 
     /// Writes one byte from an `i8`.
+    /// 
+    /// # Errors
+    /// Returns [`EndOfFile`](Error::EndOfFile) if trying to write out of bounds.
     fn write_i8(&mut self, value: i8) -> Result<()>;
 
     /// Writes two bytes from a `u16`.
+    /// 
+    /// # Errors
+    /// Returns [`EndOfFile`](Error::EndOfFile) if trying to write out of bounds.
     fn write_u16(&mut self, value: u16) -> Result<()>;
 
     /// Writes two bytes from an `i16`.
+    /// 
+    /// # Errors
+    /// Returns [`EndOfFile`](Error::EndOfFile) if trying to write out of bounds.
     fn write_i16(&mut self, value: i16) -> Result<()>;
 
     /// Writes four bytes from a `u32`.
+    /// 
+    /// # Errors
+    /// Returns [`EndOfFile`](Error::EndOfFile) if trying to write out of bounds.
     fn write_u32(&mut self, value: u32) -> Result<()>;
 
     /// Writes four bytes from an `i32`.
+    /// 
+    /// # Errors
+    /// Returns [`EndOfFile`](Error::EndOfFile) if trying to write out of bounds.
     fn write_i32(&mut self, value: i32) -> Result<()>;
 
     /// Writes eight bytes from a `u64`.
+    /// 
+    /// # Errors
+    /// Returns [`EndOfFile`](Error::EndOfFile) if trying to write out of bounds.
     fn write_u64(&mut self, value: u64) -> Result<()>;
 
     /// Writes eight bytes from an `i64`.
+    /// 
+    /// # Errors
+    /// Returns [`EndOfFile`](Error::EndOfFile) if trying to write out of bounds.
     fn write_i64(&mut self, value: i64) -> Result<()>;
 
     /// Writes sixteen bytes from a `u128`.
+    /// 
+    /// # Errors
+    /// Returns [`EndOfFile`](Error::EndOfFile) if trying to write out of bounds.
     fn write_u128(&mut self, value: u128) -> Result<()>;
 
     /// Writes sixteen bytes from an `i128`.
+    /// 
+    /// # Errors
+    /// Returns [`EndOfFile`](Error::EndOfFile) if trying to write out of bounds.
     fn write_i128(&mut self, value: i128) -> Result<()>;
 
     /// Writes four bytes from an `f32`.
+    /// 
+    /// # Errors
+    /// Returns [`EndOfFile`](Error::EndOfFile) if trying to write out of bounds.
     fn write_f32(&mut self, value: f32) -> Result<()>;
 
     /// Writes eight bytes from an `f64`.
+    /// 
+    /// # Errors
+    /// Returns [`EndOfFile`](Error::EndOfFile) if trying to write out of bounds.
     fn write_f64(&mut self, value: f64) -> Result<()>;
 }
 
@@ -250,8 +328,7 @@ impl DataCursor {
         self.data
     }
 
-    /// This function tries to resize the [`DataCursor`] to some new shorter length, consuming it
-    /// and returning a new one.
+    /// Tries to resize the cursor to a shorter length, consuming it and returning a new one.
     ///
     /// # Errors
     /// Returns [`InvalidSize`](Error::InvalidSize) if not actually shrinking the length.
@@ -265,7 +342,10 @@ impl DataCursor {
         Ok(Self::new(v, self.endian))
     }
 
-    /// Reads a byte from this [`DataCursor`] and writes it to the output [`DataCursor`].
+    /// Reads a byte from this cursor and writes it to the output.
+    /// 
+    /// # Errors
+    /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read or write out of bounds.
     #[inline]
     pub fn copy_byte_to(&mut self, output: &mut Self) -> Result<()> {
         const LENGTH: usize = core::mem::size_of::<u8>();
@@ -282,19 +362,21 @@ impl DataCursor {
         Ok(())
     }
 
-    /// Copies a number of bytes from elsewhere in the [`DataCursor`] to the current position.
+    /// Copies a number of bytes from elsewhere in the cursor to the current position.
     ///
-    /// `src` is an offset from the start of the [`DataCursor`], `length` is the number of bytes to
-    /// copy.
+    /// `src` is an offset from the start of the cursor, `length` is the number of bytes to copy.
+    /// 
+    /// # Errors
+    /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read or write out of bounds.
     #[inline]
     pub fn copy_within(&mut self, src: usize, length: usize) -> Result<()> {
-        //Bounds check to ensure both the source slice and current slice are within data bounds.
+        // Bounds check to ensure both the source slice and current slice are within data bounds.
         ensure!(
             (self.len() >= src + length) && (self.len() >= self.pos + length),
             EndOfFileSnafu
         );
 
-        //If the ranges are not overlapping, use the faster copy method
+        // Check if the ranges overlap, otherwise use the faster copy method
         if (src <= self.pos + length) && (self.pos <= src + length) {
             for n in 0..length {
                 unsafe {
@@ -356,7 +438,6 @@ impl DataCursorTrait for DataCursor {
     }
 
     #[inline]
-    #[must_use]
     fn get_slice(&self, length: usize) -> Result<&[u8]> {
         ensure!(self.len() >= self.pos + length, EndOfFileSnafu);
         Ok(&self.data[self.pos..self.pos + length])
@@ -519,14 +600,14 @@ impl EndianWrite for DataCursor {
 
 #[cfg(feature = "std")]
 impl Read for DataCursor {
-    /// This function fills `buf` either fully or until end-of-file is reached.
+    /// Fills `buf` either fully or until end-of-file.
     ///
     /// # Errors
     /// This function is infallible and will not return an error under any circumstances.
     #[inline]
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         let length = core::cmp::min(buf.len(), self.len() - self.pos);
-        //Unroll buf.copy_from_slice() since we are guaranteed to be in bounds
+
         unsafe {
             core::ptr::copy_nonoverlapping(
                 self.data.as_ptr().add(self.pos),
@@ -538,7 +619,7 @@ impl Read for DataCursor {
         Ok(length)
     }
 
-    /// This function reads all bytes until end-of-file and put them in `buf`.
+    /// Reads bytes until end-of-file and puts them in `buf`.
     ///
     /// # Errors
     /// This function is infallible and will not return an error under any circumstances.
@@ -550,7 +631,7 @@ impl Read for DataCursor {
         Ok(length)
     }
 
-    /// This function attempts to fill the entirety of `buf`.
+    /// Attempts to fill the entirety of `buf`.
     ///
     /// # Errors
     /// This function will return [`UnexpectedEof`](std::io::ErrorKind::UnexpectedEof) if there
@@ -561,7 +642,6 @@ impl Read for DataCursor {
             return Err(std::io::Error::from(std::io::ErrorKind::UnexpectedEof));
         }
 
-        //Unroll buf.copy_from_slice() since we are guaranteed to be in bounds
         unsafe {
             core::ptr::copy_nonoverlapping(
                 self.data.as_ptr().add(self.pos),
@@ -576,25 +656,32 @@ impl Read for DataCursor {
 
 #[cfg(feature = "std")]
 impl Write for DataCursor {
-    /// This function will write `buf` either fully, or until end-of-file.
+    /// Fills `buf` either fully, or until end-of-file.
     ///
     /// # Errors
     /// This function is infallible and will not return an error under any circumstances.
     #[inline]
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        let len = core::cmp::min(buf.len(), self.len() - self.pos);
-        self.data[self.pos..self.pos + len].copy_from_slice(&buf[..len]);
-        self.pos += len;
-        Ok(len)
+        let length = core::cmp::min(buf.len(), self.len() - self.pos);
+
+        unsafe {
+            core::ptr::copy_nonoverlapping(
+                buf.as_ptr(),
+                self.data.as_mut_ptr().add(self.pos),
+                length,
+            );
+        }
+        self.pos += length;
+        Ok(length)
     }
 
-    /// [`DataCursor`] is held entirely in memory, so `flush` is a no-op.
+    /// Cursor is held entirely in memory, so `flush` is a no-op.
     #[inline]
     fn flush(&mut self) -> std::io::Result<()> {
         Ok(())
     }
 
-    /// This function attempts to write the entirety of `buf`.
+    /// Attempts to fill the entirety of `buf`.
     ///
     /// # Errors
     /// This function will return [`WriteZero`](std::io::ErrorKind::WriteZero) if there
@@ -602,10 +689,18 @@ impl Write for DataCursor {
     #[inline]
     fn write_all(&mut self, buf: &[u8]) -> std::io::Result<()> {
         if self.pos + buf.len() > self.len() {
-            Err(std::io::Error::from(std::io::ErrorKind::WriteZero))
-        } else {
-            self.write(buf).map(|_| ())
+            return Err(std::io::Error::from(std::io::ErrorKind::WriteZero));
         }
+
+        unsafe {
+            core::ptr::copy_nonoverlapping(
+                buf.as_ptr(),
+                self.data.as_mut_ptr().add(self.pos),
+                buf.len(),
+            );
+        }
+        self.pos += buf.len();
+        Ok(())
     }
 }
 
@@ -682,6 +777,7 @@ pub struct DataCursorRef<'a> {
 impl<'a> DataCursorRef<'a> {
     /// Creates a new cursor using the provided data and endianness.
     #[inline]
+    #[must_use]
     pub fn new(data: &'a [u8], endian: Endian) -> Self {
         Self {
             data,
@@ -697,16 +793,14 @@ impl<'a> DataCursorRef<'a> {
         self.data
     }
 
-    /// This function tries to resize the [`DataCursor`] to some new shorter length, consuming it
-    /// and returning a new one.
+    /// Tries to resize the cursor to a shorter length, consuming it and returning a new one.
     ///
     /// # Errors
     /// Returns [`InvalidSize`](Error::InvalidSize) if not actually shrinking the length.
     #[inline]
     pub fn shrink_to(self, len: usize) -> Result<Self> {
-        //Make sure the new size is actually smaller. Length is unsigned, so it can't be negative
+        //Make sure the new size is actually smaller
         ensure!(len < self.len(), InvalidSizeSnafu);
-
         Ok(Self::new(&self.data[..len], self.endian))
     }
 }
@@ -754,7 +848,6 @@ impl DataCursorTrait for DataCursorRef<'_> {
     }
 
     #[inline]
-    #[must_use]
     fn get_slice(&self, length: usize) -> Result<&[u8]> {
         ensure!(self.len() >= self.pos + length, EndOfFileSnafu);
         Ok(&self.data[self.pos..self.pos + length])
@@ -782,7 +875,7 @@ impl EndianRead for DataCursorRef<'_> {
         // Bounds check to ensure we're within the valid data range
         ensure!(self.len() >= self.pos + LENGTH, EndOfFileSnafu);
 
-        // SAFETY: Box ensures that the pointer arithmetic here is safe
+        // SAFETY: u8 slices should always be valid
         let value = unsafe { *self.data.as_ptr().add(self.pos) };
         self.pos += LENGTH;
         Ok(value)
@@ -846,14 +939,14 @@ impl EndianRead for DataCursorRef<'_> {
 
 #[cfg(feature = "std")]
 impl Read for DataCursorRef<'_> {
-    /// This function fills `buf` either fully or until end-of-file is reached.
+    /// Fills `buf` either fully or until end-of-file.
     ///
     /// # Errors
     /// This function is infallible and will not return an error under any circumstances.
     #[inline]
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         let length = core::cmp::min(buf.len(), self.len() - self.pos);
-        //Unroll buf.copy_from_slice() since we are guaranteed to be in bounds
+
         unsafe {
             core::ptr::copy_nonoverlapping(
                 self.data.as_ptr().add(self.pos),
@@ -865,7 +958,7 @@ impl Read for DataCursorRef<'_> {
         Ok(length)
     }
 
-    /// This function reads all bytes until end-of-file and put them in `buf`.
+    /// Reads bytes until end-of-file and puts them in `buf`.
     ///
     /// # Errors
     /// This function is infallible and will not return an error under any circumstances.
@@ -877,7 +970,7 @@ impl Read for DataCursorRef<'_> {
         Ok(length)
     }
 
-    /// This function attempts to fill the entirety of `buf`.
+    /// Attempts to fill the entirety of `buf`.
     ///
     /// # Errors
     /// This function will return [`UnexpectedEof`](std::io::ErrorKind::UnexpectedEof) if there
@@ -888,7 +981,6 @@ impl Read for DataCursorRef<'_> {
             return Err(std::io::Error::from(std::io::ErrorKind::UnexpectedEof));
         }
 
-        //Unroll buf.copy_from_slice() since we are guaranteed to be in bounds
         unsafe {
             core::ptr::copy_nonoverlapping(
                 self.data.as_ptr().add(self.pos),
@@ -919,7 +1011,7 @@ impl Deref for DataCursorRef<'_> {
 
     #[inline]
     fn deref(&self) -> &Self::Target {
-        &self.data
+        self.data
     }
 }
 
@@ -952,20 +1044,22 @@ impl<'a> DataCursorMut<'a> {
         self.data
     }
 
-    /// This function tries to resize the [`DataCursor`] to some new shorter length, consuming it
-    /// and returning a new one.
+    /// Tries to resize the cursor to a shorter length, consuming it and returning a new one.
     ///
     /// # Errors
     /// Returns [`InvalidSize`](Error::InvalidSize) if not actually shrinking the length.
     #[inline]
     pub fn shrink_to(self, len: usize) -> Result<Self> {
-        //Make sure the new size is actually smaller. Length is unsigned, so it can't be negative
+        //Make sure the new size is actually smaller
         ensure!(len < self.len(), InvalidSizeSnafu);
 
         Ok(Self::new(&mut self.data[..len], self.endian))
     }
 
-    /// Reads a byte from this [`DataCursor`] and writes it to the output [`DataCursor`].
+    /// Copies a byte from the cursor to the output.
+    /// 
+    /// # Errors
+    /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read or write out of bounds.
     #[inline]
     pub fn copy_byte_to(&mut self, output: &mut Self) -> Result<()> {
         const LENGTH: usize = core::mem::size_of::<u8>();
@@ -975,26 +1069,28 @@ impl<'a> DataCursorMut<'a> {
             EndOfFileSnafu
         );
 
-        // SAFETY: Box ensures that the pointer arithmetic here is safe
+        // SAFETY: u8 slices should always be valid
         unsafe { *output.data.as_mut_ptr().add(output.pos) = *self.data.as_ptr().add(self.pos) };
         self.pos += LENGTH;
         output.pos += LENGTH;
         Ok(())
     }
 
-    /// Copies a number of bytes from elsewhere in the [`DataCursor`] to the current position.
+    /// Copies a number of bytes from elsewhere in the cursor to the current position.
     ///
-    /// `src` is an offset from the start of the [`DataCursor`], `length` is the number of bytes to
-    /// copy.
+    /// `src` is an offset from the start of the cursor, `length` is the number of bytes to copy.
+    /// 
+    /// # Errors
+    /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read or write out of bounds.
     #[inline]
     pub fn copy_within(&mut self, src: usize, length: usize) -> Result<()> {
-        //Bounds check to ensure both the source slice and current slice are within data bounds.
+        // Bounds check to ensure both the source slice and current slice are within data bounds.
         ensure!(
             (self.len() >= src + length) && (self.len() >= self.pos + length),
             EndOfFileSnafu
         );
 
-        //If the ranges are not overlapping, use the faster copy method
+        // Check if the ranges overlap, otherwise use the faster copy method
         if (src <= self.pos + length) && (self.pos <= src + length) {
             for n in 0..length {
                 unsafe {
@@ -1056,7 +1152,6 @@ impl DataCursorTrait for DataCursorMut<'_> {
     }
 
     #[inline]
-    #[must_use]
     fn get_slice(&self, length: usize) -> Result<&[u8]> {
         ensure!(self.len() >= self.pos + length, EndOfFileSnafu);
         Ok(&self.data[self.pos..self.pos + length])
@@ -1084,7 +1179,7 @@ impl EndianRead for DataCursorMut<'_> {
         // Bounds check to ensure we're within the valid data range
         ensure!(self.len() >= self.pos + LENGTH, EndOfFileSnafu);
 
-        // SAFETY: Box ensures that the pointer arithmetic here is safe
+        // SAFETY: u8 slices should always be valid
         let value = unsafe { *self.data.as_ptr().add(self.pos) };
         self.pos += LENGTH;
         Ok(value)
@@ -1153,7 +1248,7 @@ impl EndianWrite for DataCursorMut<'_> {
         // Bounds check to ensure we're within the valid data range
         ensure!(self.len() >= self.pos + LENGTH, EndOfFileSnafu);
 
-        // SAFETY: Box ensures that the pointer arithmetic here is safe
+        // SAFETY: u8 slices should always be valid
         unsafe {
             *self.data.as_mut_ptr().add(self.pos) = value;
         }
@@ -1219,14 +1314,14 @@ impl EndianWrite for DataCursorMut<'_> {
 
 #[cfg(feature = "std")]
 impl Read for DataCursorMut<'_> {
-    /// This function fills `buf` either fully or until end-of-file is reached.
+    /// Fills `buf` either fully or until end-of-file.
     ///
     /// # Errors
     /// This function is infallible and will not return an error under any circumstances.
     #[inline]
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         let length = core::cmp::min(buf.len(), self.len() - self.pos);
-        //Unroll buf.copy_from_slice() since we are guaranteed to be in bounds
+
         unsafe {
             core::ptr::copy_nonoverlapping(
                 self.data.as_ptr().add(self.pos),
@@ -1238,7 +1333,7 @@ impl Read for DataCursorMut<'_> {
         Ok(length)
     }
 
-    /// This function reads all bytes until end-of-file and put them in `buf`.
+    /// Reads bytes until end-of-file and puts them in `buf`.
     ///
     /// # Errors
     /// This function is infallible and will not return an error under any circumstances.
@@ -1250,7 +1345,7 @@ impl Read for DataCursorMut<'_> {
         Ok(length)
     }
 
-    /// This function attempts to fill the entirety of `buf`.
+    /// Attempts to fill the entirety of `buf`.
     ///
     /// # Errors
     /// This function will return [`UnexpectedEof`](std::io::ErrorKind::UnexpectedEof) if there
@@ -1261,7 +1356,6 @@ impl Read for DataCursorMut<'_> {
             return Err(std::io::Error::from(std::io::ErrorKind::UnexpectedEof));
         }
 
-        //Unroll buf.copy_from_slice() since we are guaranteed to be in bounds
         unsafe {
             core::ptr::copy_nonoverlapping(
                 self.data.as_ptr().add(self.pos),
@@ -1276,25 +1370,32 @@ impl Read for DataCursorMut<'_> {
 
 #[cfg(feature = "std")]
 impl Write for DataCursorMut<'_> {
-    /// This function will write `buf` either fully, or until end-of-file.
+    /// Fills `buf` either fully, or until end-of-file.
     ///
     /// # Errors
     /// This function is infallible and will not return an error under any circumstances.
     #[inline]
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        let len = core::cmp::min(buf.len(), self.len() - self.pos);
-        self.data[self.pos..self.pos + len].copy_from_slice(&buf[..len]);
-        self.pos += len;
-        Ok(len)
+        let length = core::cmp::min(buf.len(), self.len() - self.pos);
+
+        unsafe {
+            core::ptr::copy_nonoverlapping(
+                buf.as_ptr(),
+                self.data.as_mut_ptr().add(self.pos),
+                length,
+            );
+        }
+        self.pos += length;
+        Ok(length)
     }
 
-    /// [`DataCursor`] is held entirely in memory, so `flush` is a no-op.
+    /// Cursor is held entirely in memory, so `flush` is a no-op.
     #[inline]
     fn flush(&mut self) -> std::io::Result<()> {
         Ok(())
     }
 
-    /// This function attempts to write the entirety of `buf`.
+    /// Attempts to fill the entirety of `buf`.
     ///
     /// # Errors
     /// This function will return [`WriteZero`](std::io::ErrorKind::WriteZero) if there
@@ -1302,10 +1403,18 @@ impl Write for DataCursorMut<'_> {
     #[inline]
     fn write_all(&mut self, buf: &[u8]) -> std::io::Result<()> {
         if self.pos + buf.len() > self.len() {
-            Err(std::io::Error::from(std::io::ErrorKind::WriteZero))
-        } else {
-            self.write(buf).map(|_| ())
+            return Err(std::io::Error::from(std::io::ErrorKind::WriteZero));
         }
+
+        unsafe {
+            core::ptr::copy_nonoverlapping(
+                buf.as_ptr(),
+                self.data.as_mut_ptr().add(self.pos),
+                buf.len(),
+            );
+        }
+        self.pos += buf.len();
+        Ok(())
     }
 }
 
@@ -1327,20 +1436,20 @@ impl Deref for DataCursorMut<'_> {
 
     #[inline]
     fn deref(&self) -> &Self::Target {
-        &self.data
+        self.data
     }
 }
 
 impl DerefMut for DataCursorMut<'_> {
     #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.data
+        self.data
     }
 }
 
 impl AsMut<[u8]> for DataCursorMut<'_> {
     #[inline]
     fn as_mut(&mut self) -> &mut [u8] {
-        &mut self.data
+        self.data
     }
 }

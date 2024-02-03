@@ -86,7 +86,7 @@
 //!
 //! Once created, the following functions can be used to manipulate the archive:
 //!
-//! * [`extract`](Multifile::extract): Save all contained [`Subfile`]s to a given folder
+//! * [`extract_all`](Multifile::extract_all): Save all contained [`Subfile`]s to a given folder
 //!
 //! ## Stateless Functions
 //! These functions can be used without having to first create a Multifile, used for the
@@ -142,10 +142,7 @@ impl From<std::io::Error> for Error {
             std::io::ErrorKind::UnexpectedEof => Self::EndOfFile,
             std::io::ErrorKind::PermissionDenied => Self::PermissionDenied,
             kind => {
-                panic!(
-                    "Unexpected std::io::error: {}! Something has gone horribly wrong",
-                    kind
-                )
+                panic!("Unexpected std::io::error: {kind}! Something has gone horribly wrong")
             }
         }
     }
@@ -162,7 +159,7 @@ impl From<data::Error> for Error {
 }
 
 /// This struct is mainly for readability in place of an unnamed tuple
-#[derive(PartialEq, Eq, Clone, Copy)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug, Default)]
 pub struct Version {
     pub major: i16,
     pub minor: i16,
@@ -182,14 +179,14 @@ struct Header {
     timestamp: u32,
 }
 
-//This is the current least terrible way to implement state in this system is to just store the
-//entire Multifile's data, and have each Subfile keep an offset+length. In the future, once safe
-//transmute is a thing, I can "take" each header and what's left will be all the relevant file
-// data.
+// The current least terrible way to implement state in this system is to just store the entire
+// Multifile's data, and have each Subfile keep an offset+length. In the future, once safe transmute
+// is a thing, I can "take" each header and what's left will be all the relevant file data.
 
 /// Used for working with Multifile archives, supports both stateless and stateful operations.
 ///
 /// For more details on the Multifile format, see the [module documentation](self#format).
+#[derive(Debug)]
 #[allow(dead_code)]
 pub struct Multifile {
     data: DataCursor,
@@ -282,10 +279,9 @@ impl Multifile {
     /// new to be supported, or [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds.
     #[cfg(feature = "std")]
     #[inline]
-    #[must_use]
     pub fn open<P: AsRef<Path>>(input: P, offset: usize) -> Result<Self> {
         let data = std::fs::read(input)?;
-        Ok(Self::load(data, offset)?)
+        Self::load(data, offset)
     }
 
     /// Loads the data from the given file and parses it into a new instance of Multifile. The
@@ -296,7 +292,6 @@ impl Multifile {
     /// Multifile, [`UnknownVersion`](Error::UnknownVersion) if the Multifile version is too
     /// new to be supported, or [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds.
     #[inline]
-    #[must_use]
     pub fn load<I: Into<Box<[u8]>>>(input: I, offset: usize) -> Result<Self> {
         let mut data = DataCursor::new(input, Endian::Little);
         data.set_position(offset);
@@ -339,7 +334,7 @@ impl Multifile {
     /// [`write`](std::fs::write))
     #[inline]
     #[cfg(feature = "std")]
-    pub fn extract<P: AsRef<Path>>(&mut self, output: P) -> Result<usize> {
+    pub fn extract_all<P: AsRef<Path>>(&mut self, output: P) -> Result<usize> {
         let mut saved_files = 0;
         for subfile in &mut self.files {
             if !subfile.flags.intersects(Flags::Signature | Flags::Compressed | Flags::Encrypted) {
@@ -352,7 +347,7 @@ impl Multifile {
     }
 
     /// Loads a Multifile from disk and extracts all [`Subfile`]s. For use with other functions,
-    /// see [`extract`](Self::extract).
+    /// see [`extract`](Self::extract_all).
     ///
     /// # Errors
     /// Returns [`NotFound`](Error::NotFound) if the input file doesn't exist,
@@ -368,7 +363,7 @@ impl Multifile {
     }
 
     /// Extracts all [`Subfile`]s from the given Multifile. For use with other functions, see
-    /// [`extract`](Self::extract).
+    /// [`extract`](Self::extract_all).
     ///
     /// # Errors
     /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds, or an error if
@@ -479,10 +474,10 @@ impl FileIdentifier for Multifile {
             }
         );
 
-        if !details.is_empty() {
-            info.push_str(&format!(" ({details})."));
+        if details.is_empty() {
+            info.push('.');
         } else {
-            info.push_str(".");
+            info.push_str(&format!(" ({details})."));
         }
 
         Some(FileInfo::new(info, None))

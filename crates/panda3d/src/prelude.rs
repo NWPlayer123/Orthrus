@@ -7,8 +7,11 @@
 //! use orthrus_panda3d::prelude::*;
 //! ```
 
+#[doc(inline)]
 pub use crate::multifile::Multifile;
 
+/// Includes [`multifile::Error`] for Result handling, as well as Multifile versioning.
 pub mod multifile {
+    #[doc(inline)]
     pub use crate::multifile::{Error, Version};
 }

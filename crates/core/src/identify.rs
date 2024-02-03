@@ -9,6 +9,7 @@
 use crate::no_std::*;
 
 /// Contains the relevant file info to return after identification.
+#[derive(Default)]
 #[non_exhaustive]
 pub struct FileInfo {
     /// Contains plaintext info about the type, if recognized.
@@ -18,27 +19,24 @@ pub struct FileInfo {
 }
 
 impl FileInfo {
+    /// Creates a new instance to return information about a file.
+    #[must_use]
+    #[inline]
     pub fn new(info: String, payload: Option<Box<[u8]>>) -> Self {
         FileInfo { info, payload }
-    }
-}
-
-impl Default for FileInfo {
-    fn default() -> Self {
-        FileInfo {
-            info: String::new(),
-            payload: None,
-        }
     }
 }
 
 /// Trait that allows for identifying if a byte slice is of the same format as the type.
 pub trait FileIdentifier {
     /// Attempts to identify a specific type, and return human-readable info about it.
+    #[must_use]
     fn identify(data: &[u8]) -> Option<FileInfo>;
 
     /// Attempts to identify a specific type and any sub-type, and return human-readable info about
     /// it.
+    #[must_use]
+    #[inline]
     fn identify_deep(data: &[u8]) -> Option<FileInfo> {
         Self::identify(data)
     }

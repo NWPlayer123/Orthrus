@@ -12,8 +12,8 @@ static DEEP_SCAN: [IdentifyFn; 3] = [
     Multifile::identify_deep,
 ];
 
-pub(crate) fn identify_file(input: String, deep_scan: bool) {
-    let data = std::fs::read(&input).expect("Unable to open file for identification!");
+pub(crate) fn identify_file(input: &str, deep_scan: bool) {
+    let data = std::fs::read(input).expect("Unable to open file for identification!");
 
     let mut identified_types: Vec<FileInfo> = vec![];
     let scan_list = if deep_scan { &DEEP_SCAN } else { &SHALLOW_SCAN };
@@ -44,11 +44,11 @@ pub(crate) fn identify_file(input: String, deep_scan: bool) {
     }
 }
 
-fn identify_deep(data: &Box<[u8]>, indent: usize) {
+fn identify_deep(data: &[u8], indent: usize) {
     let mut identified_types: Vec<FileInfo> = vec![];
 
     for identifier in DEEP_SCAN {
-        if let Some(identity) = identifier(&data) {
+        if let Some(identity) = identifier(data) {
             identified_types.push(identity);
         }
     }
@@ -56,15 +56,15 @@ fn identify_deep(data: &Box<[u8]>, indent: usize) {
     let indentation = "    ".repeat(indent);
 
     match identified_types.len() {
-        0 => println!("{}- data", indentation),
+        0 => println!("{indentation}- data"),
         1 => {
-            println!("{}- {}", indentation, identified_types[0].info);
+            println!("{indentation}- {}", identified_types[0].info);
             if let Some(payload) = identified_types[0].payload.as_ref() {
                 identify_deep(payload, indent + 1);
             }
         }
         _ => {
-            println!("{}- Multiple possible filetypes identified:", indentation);
+            println!("{indentation}- Multiple possible filetypes identified:");
             for info in identified_types {
                 println!("- {}", info.info);
                 if let Some(payload) = info.payload.as_ref() {

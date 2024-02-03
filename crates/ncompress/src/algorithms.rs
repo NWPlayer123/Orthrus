@@ -1,5 +1,5 @@
-/// This file is for shared functions across multiple modules in this crate. The filename may
-/// change, and it's only for internal use right now.
+//! This file is for shared functions across multiple modules in this crate. The filename may
+//! change, and it's only for internal use right now.
 
 /// Maximum distance to look back in the buffer for a match (0xFFF for lower 3 nibbles + 1)
 const MAX_LOOKBACK: usize = 0x1000;

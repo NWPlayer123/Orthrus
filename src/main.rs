@@ -59,9 +59,11 @@ fn main() -> Result<()> {
             .init();
     }
 
+    // Apologies for this mess, I care more about the crate usage than the command line parsing,
+    // it'll get replaced by ui eventually
     match args.nested {
         Modules::IdentifyFile(params) => {
-            crate::identify::identify_file(params.input, params.deep_scan);
+            crate::identify::identify_file(&params.input, params.deep_scan);
         }
         Modules::NintendoCompression(module) => match module.nested {
             NCompressModules::Yay0(params) => {
@@ -70,13 +72,12 @@ fn main() -> Result<()> {
                         0 => {
                             log::info!("Decompressing file {}", &params.input);
                             let data = Yay0::decompress_from_path(&params.input)?;
-                            let output = match params.output {
-                                Some(output) => output,
-                                None => {
-                                    let mut new_path = PathBuf::from(params.input);
-                                    new_path.set_extension("arc");
-                                    new_path.to_string_lossy().into_owned()
-                                }
+                            let output = if let Some(output) = params.output {
+                                output
+                            } else {
+                                let mut new_path = PathBuf::from(params.input);
+                                new_path.set_extension("arc");
+                                new_path.to_string_lossy().into_owned()
                             };
                             log::info!("Writing file {}", output);
                             std::fs::write(output, data)?;
@@ -88,13 +89,12 @@ fn main() -> Result<()> {
                                 yay0::CompressionAlgo::MatchingOld,
                                 0,
                             )?;
-                            let output = match params.output {
-                                Some(output) => output,
-                                None => {
-                                    let mut new_path = PathBuf::from(params.input);
-                                    new_path.set_extension("szs");
-                                    new_path.to_string_lossy().into_owned()
-                                }
+                            let output = if let Some(output) = params.output {
+                                output
+                            } else {
+                                let mut new_path = PathBuf::from(params.input);
+                                new_path.set_extension("szp");
+                                new_path.to_string_lossy().into_owned()
                             };
                             log::info!("Writing file {}", output);
                             std::fs::write(output, data)?;
@@ -111,13 +111,12 @@ fn main() -> Result<()> {
                         0 => {
                             log::info!("Decompressing file {}", &params.input);
                             let data = Yaz0::decompress_from_path(&params.input)?;
-                            let output = match params.output {
-                                Some(output) => output,
-                                None => {
-                                    let mut new_path = PathBuf::from(params.input);
-                                    new_path.set_extension("arc");
-                                    new_path.to_string_lossy().into_owned()
-                                }
+                            let output = if let Some(output) = params.output {
+                                output
+                            } else {
+                                let mut new_path = PathBuf::from(params.input);
+                                new_path.set_extension("arc");
+                                new_path.to_string_lossy().into_owned()
                             };
                             log::info!("Writing file {}", output);
                             std::fs::write(output, data)?;
@@ -129,13 +128,12 @@ fn main() -> Result<()> {
                                 yaz0::CompressionAlgo::MatchingOld,
                                 0,
                             )?;
-                            let output = match params.output {
-                                Some(output) => output,
-                                None => {
-                                    let mut new_path = PathBuf::from(params.input);
-                                    new_path.set_extension("szs");
-                                    new_path.to_string_lossy().into_owned()
-                                }
+                            let output = if let Some(output) = params.output {
+                                output
+                            } else {
+                                let mut new_path = PathBuf::from(params.input);
+                                new_path.set_extension("szs");
+                                new_path.to_string_lossy().into_owned()
                             };
                             log::info!("Writing file {}", output);
                             std::fs::write(output, data)?;
@@ -152,6 +150,8 @@ fn main() -> Result<()> {
                 if let Some(index) = exactly_one_true(&[data.extract]) {
                     match index {
                         0 => {
+                            // Ideally I could log each file path as it's written but I would have
+                            // to refactor Multifile to use slice_take
                             let output = data.output.unwrap_or_else(|| ".".to_string());
                             Multifile::extract_from_path(data.input, output, 0)?;
                         }
