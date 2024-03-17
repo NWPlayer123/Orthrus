@@ -16,4 +16,9 @@ mod no_std {
 pub mod multifile;
 pub mod subfile;
 
+pub mod bam;
+
 pub mod prelude;
+pub mod common;
+
+mod nodes;

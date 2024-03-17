@@ -13,7 +13,11 @@ snafu = { version = "0.8", default-features = false }
 
 der = { version = "0.7", optional = true }
 
-bitflags = "2.3"
+hashbrown = "0.14"
+bitflags = "2.4"
+nalgebra = "0.32"
+enum_delegate = "0.2"
+enum_dispatch = "0.3"
 
 [features]
 default = ["std"]

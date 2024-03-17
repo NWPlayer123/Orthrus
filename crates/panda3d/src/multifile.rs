@@ -97,7 +97,6 @@
 //! * [`extract_from`](Multifile::extract_from): Reads the provided Multifile, and saves all
 //!   [`Subfile`]s to a given folder
 
-use core::fmt;
 #[cfg(feature = "std")]
 use std::path::Path;
 
@@ -107,6 +106,7 @@ use snafu::prelude::*;
 #[cfg(not(feature = "std"))]
 use crate::no_std::*;
 use crate::subfile::*;
+use crate::common::Version;
 
 /// Error conditions for when working with Multifile archives.
 #[derive(Debug, Snafu)]
@@ -155,20 +155,6 @@ impl From<data::Error> for Error {
             data::Error::EndOfFile => Self::EndOfFile,
             _ => panic!("Unexpected data::error! Something has gone horribly wrong"),
         }
-    }
-}
-
-/// This struct is mainly for readability in place of an unnamed tuple
-#[derive(PartialEq, Eq, Clone, Copy, Debug, Default)]
-pub struct Version {
-    pub major: i16,
-    pub minor: i16,
-}
-
-impl fmt::Display for Version {
-    #[inline]
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}.{}", self.major, self.minor)
     }
 }
 
@@ -241,8 +227,8 @@ impl Multifile {
         ensure!(magic == Self::MAGIC, InvalidMagicSnafu);
 
         let version = Version {
-            major: data.read_i16()?,
-            minor: data.read_i16()?,
+            major: data.read_u16()?,
+            minor: data.read_u16()?,
         };
         ensure!(
             Self::CURRENT_VERSION.major == version.major

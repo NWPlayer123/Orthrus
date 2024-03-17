@@ -150,10 +150,11 @@ fn main() -> Result<()> {
                 if let Some(index) = exactly_one_true(&[data.extract]) {
                     match index {
                         0 => {
-                            // Ideally I could log each file path as it's written but I would have
+                            /*// Ideally I could log each file path as it's written but I would have
                             // to refactor Multifile to use slice_take
                             let output = data.output.unwrap_or_else(|| ".".to_string());
-                            Multifile::extract_from_path(data.input, output, 0)?;
+                            Multifile::extract_from_path(data.input, output, 0)?;*/
+                            BinaryAsset::open(data.input)?;
                         }
                         _ => unreachable!("Oops! Forgot to cover all operations."),
                     }

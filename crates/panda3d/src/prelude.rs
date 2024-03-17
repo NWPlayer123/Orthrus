@@ -10,8 +10,23 @@
 #[doc(inline)]
 pub use crate::multifile::Multifile;
 
-/// Includes [`multifile::Error`] for Result handling, as well as Multifile versioning.
+/// Includes [`multifile::Error`] for Result handling.
 pub mod multifile {
     #[doc(inline)]
-    pub use crate::multifile::{Error, Version};
+    pub use crate::multifile::Error;
+}
+
+#[doc(inline)]
+pub use crate::bam::BinaryAsset;
+
+/// Includes [`bam::Error`] for Result handling.
+pub mod bam {
+    #[doc(inline)]
+    pub use crate::bam::Error;
+}
+
+/// Includes [`panda3d::Version`] for file format versions.
+pub mod panda3d {
+    #[doc(inline)]
+    pub use crate::common::Version;
 }

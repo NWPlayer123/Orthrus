@@ -36,6 +36,9 @@ pub enum Error {
     /// Thrown if trying to resize a cursor to larger than the current size.
     #[snafu(display("Invalid End Size!"))]
     InvalidSize,
+    /// Thrown if UTF-8 validation fails when converting a string.
+    #[snafu(display("Invalid UTF-8 String!"))]
+    InvalidUtf8,
 }
 type Result<T> = core::result::Result<T, Error>;
 
@@ -87,7 +90,7 @@ pub trait DataCursorTrait {
     ///
     /// # Errors
     /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds.
-    fn get_slice(&self, length: usize) -> Result<&[u8]>;
+    fn get_slice(&mut self, length: usize) -> Result<&[u8]>;
 
     /// Attempts to fill the buffer with data. Mainly intended for `no_std`, where the [`Read`]
     /// trait is not available.
@@ -438,9 +441,11 @@ impl DataCursorTrait for DataCursor {
     }
 
     #[inline]
-    fn get_slice(&self, length: usize) -> Result<&[u8]> {
+    fn get_slice(&mut self, length: usize) -> Result<&[u8]> {
         ensure!(self.len() >= self.pos + length, EndOfFileSnafu);
-        Ok(&self.data[self.pos..self.pos + length])
+        let slice = &self.data[self.pos..self.pos + length];
+        self.pos += length;
+        Ok(slice)
     }
 
     #[inline]
@@ -848,9 +853,11 @@ impl DataCursorTrait for DataCursorRef<'_> {
     }
 
     #[inline]
-    fn get_slice(&self, length: usize) -> Result<&[u8]> {
+    fn get_slice(&mut self, length: usize) -> Result<&[u8]> {
         ensure!(self.len() >= self.pos + length, EndOfFileSnafu);
-        Ok(&self.data[self.pos..self.pos + length])
+        let slice = &self.data[self.pos..self.pos + length];
+        self.pos += length;
+        Ok(slice)
     }
 
     #[inline]
@@ -1152,9 +1159,11 @@ impl DataCursorTrait for DataCursorMut<'_> {
     }
 
     #[inline]
-    fn get_slice(&self, length: usize) -> Result<&[u8]> {
+    fn get_slice(&mut self, length: usize) -> Result<&[u8]> {
         ensure!(self.len() >= self.pos + length, EndOfFileSnafu);
-        Ok(&self.data[self.pos..self.pos + length])
+        let slice = &self.data[self.pos..self.pos + length];
+        self.pos += length;
+        Ok(slice)
     }
 
     #[inline]
