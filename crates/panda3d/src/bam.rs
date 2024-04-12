@@ -20,7 +20,7 @@ use std::path::Path;
 use orthrus_core::prelude::*;
 use snafu::prelude::*;
 
-use crate::{common::*, nodes::dispatch::DatagramRead};
+use crate::common::*;
 
 use hashbrown::HashMap;
 
@@ -118,55 +118,7 @@ impl TryFrom<u8> for ObjectCode {
     }
 }
 
-/*#[derive(Debug)]
-enum PreserveTransform {
-    None,
-    Local,
-    Net,
-    DropNode,
-    NoTouch,
-}
-
-impl TryFrom<u8> for PreserveTransform {
-    type Error = Error;
-
-    fn try_from(value: u8) -> core::result::Result<Self, Self::Error> {
-        Ok(match value {
-            0 => PreserveTransform::None,
-            1 => PreserveTransform::Local,
-            2 => PreserveTransform::Net,
-            3 => PreserveTransform::DropNode,
-            4 => PreserveTransform::NoTouch,
-            _ => return Err(Error::InvalidEnum),
-        })
-    }
-}
-
-mod BoundingVolume {
-    #[derive(Debug)]
-    pub(crate) enum BoundsType {
-        Default,
-        Best,
-        Sphere,
-        Box,
-        Fastest,
-    }
-
-    impl TryFrom<u8> for BoundsType {
-        type Error = super::Error;
-
-        fn try_from(value: u8) -> core::result::Result<Self, Self::Error> {
-            Ok(match value {
-                0 => BoundsType::Default,
-                1 => BoundsType::Best,
-                2 => BoundsType::Sphere,
-                3 => BoundsType::Box,
-                4 => BoundsType::Fastest,
-                _ => return Err(super::Error::InvalidEnum),
-            })
-        }
-    }
-}
+/*
 
 mod TransformState {
     use bitflags::bitflags;
@@ -299,7 +251,8 @@ impl BinaryAsset {
         // Load initial datagram and parse the header
         let mut datagram = Datagram::new(&mut data, Endian::Little)?;
         let header = Self::read_header(&mut *datagram)?;
-        data.set_endian(header.endian);
+        datagram.set_endian(header.endian);
+        datagram.set_float_type(header.double);
 
         // Create the BinaryAsset instance so we can start constructing all the objects
         let mut bamfile = Self {
@@ -316,6 +269,7 @@ impl BinaryAsset {
 
         //Parse objects until we run out, used before 6.21.
         while bamfile.num_extra_objects > 0 {
+            println!("Datagram at {:#X}", data.position());
             datagram = Datagram::new(&mut data, Endian::Little)?;
             bamfile.read_object(&mut datagram)?;
             bamfile.num_extra_objects -= 1;
@@ -323,6 +277,7 @@ impl BinaryAsset {
 
         //Parse objects until we reach the initial nesting level, used starting with 6.21.
         while bamfile.nesting_level > 0 {
+            println!("Datagram at {:#X}", data.position());
             datagram = Datagram::new(&mut data, Endian::Little)?;
             bamfile.read_object(&mut datagram)?;
         }
@@ -417,16 +372,16 @@ impl BinaryAsset {
         Ok(object_id)
     }
 
-    pub(crate) fn read_pointer(&mut self, data: &mut Datagram) -> Result<bool> {
+    pub(crate) fn read_pointer(&mut self, data: &mut Datagram) -> Result<Option<u32>> {
         let object_id = self.read_object_id(data)?;
         println!("Object ID ptrto {}", object_id);
         if object_id != 0 {
             if self.header.version.minor < 21 {
                 self.num_extra_objects += 1;
             }
-            return Ok(true);
+            return Ok(Some(object_id));
         }
-        Ok(false)
+        Ok(None)
     }
 
     //should really be using make_from_bam as an entrypoint
@@ -434,15 +389,15 @@ impl BinaryAsset {
         match type_name {
             //3
             "TypedObject" => {
-                //Base class, nothing to fill in
+                // Base class, nothing to fill in
             }
             //4
             "ReferenceCount" => {
-                //Base class, nothing to fill in
+                // Base class, nothing to fill in
             }
             //12
             "Namable" => {
-                //Base class, nothing to fill in
+                // Base class, nothing to fill in
             }
             //48
             "TypedWritable" => {
@@ -458,33 +413,71 @@ impl BinaryAsset {
                 // * write_datagram into Object::write
             }
             //49
-            "PandaNode" => {}
+            "PandaNode" => {
+                //TypedWritable::fillin()
+                //remove_all_children()
+                let node = crate::nodes::panda_node::PandaNode::create(self, data)?;
+                println!("{:?}", node);
+            }
             //52
-            "TypedWritableReferenceCount" => {}
+            "TypedWritableReferenceCount" => {
+                // Base class, nothing to fill in
+            }
             //53
-            "CachedTypedWritableReferenceCount" => {}
+            "CachedTypedWritableReferenceCount" => {
+                // Base class, nothing to fill in
+            }
             //54
-            "CopyOnWriteObject" => {}
+            "CopyOnWriteObject" => {
+                // Base class, nothing to fill in
+            }
             //93
-            "RenderAttrib" => {}
+            "RenderAttrib" => {
+                // Base class, other Attrib derive from this
+            }
             //101
-            "ColorAttrib" => {}
+            "ColorAttrib" => {
+                let node = crate::nodes::color_attrib::ColorAttrib::create(self, data)?;
+                println!("{:?}", node);
+            }
             //108
-            "CullBinAttrib" => {}
+            "CullBinAttrib" => {
+                let node = crate::nodes::cull_bin_attrib::CullBinAttrib::create(self, data)?;
+                println!("{:?}", node);
+            }
             //124
-            "GeomNode" => {}
+            "GeomNode" => {
+                let node = crate::nodes::geom_node::GeomNode::create(self, data)?;
+                println!("{:?}", node);
+            }
             //136
-            "ModelNode" => {}
+            "ModelNode" => {
+                let node = crate::nodes::model_node::ModelNode::create(self, data)?;
+                println!("{:?}", node);
+            }
             //137
-            "ModelRoot" => {}
+            "ModelRoot" => {
+                Self::fillin(self, data, "ModelNode")?;
+            }
             //149
-            "RenderEffects" => {}
+            "RenderEffects" => {
+                let node = crate::nodes::render_effects::RenderEffects::create(self, data)?;
+                println!("{:?}", node);
+            }
             //151
-            "NodeCachedReferenceCount" => {}
+            "NodeCachedReferenceCount" => {
+                // Base class, nothing to fill in
+            }
             //152
-            "RenderState" => {}
+            "RenderState" => {
+                let node = crate::nodes::render_state::RenderState::create(self, data)?;
+                println!("{:?}", node);
+            }
             //166
-            "TextureAttrib" => {}
+            "TextureAttrib" => {
+                let node = crate::nodes::texture_attrib::TextureAttrib::create(self, data)?;
+                println!("{:?}", node);
+            }
             //168
             "TransformState" => {}
             //169

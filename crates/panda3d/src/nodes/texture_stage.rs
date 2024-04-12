@@ -1,14 +1,10 @@
-use crate::nodes::dispatch::{DatagramRead, DatagramWrite};
-use crate::{
-    bam::{self, BinaryAsset},
-    common::Datagram,
-};
-use orthrus_core::prelude::*;
+use super::prelude::*;
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Default)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Default, FromPrimitive)]
+#[repr(u8)]
 enum Mode {
-    #[default]
     //fixed-function pipeline
+    #[default]
     Modulate,
     Decal,
     Blend,
@@ -36,34 +32,8 @@ enum Mode {
     Emission,
 }
 
-impl TryFrom<u8> for Mode {
-    type Error = bam::Error;
-
-    fn try_from(value: u8) -> core::result::Result<Self, Self::Error> {
-        Ok(match value {
-            0 => Mode::Modulate,
-            1 => Mode::Decal,
-            2 => Mode::Blend,
-            3 => Mode::Replace,
-            4 => Mode::Add,
-            5 => Mode::Combine,
-            6 => Mode::BlendColorScale,
-            7 => Mode::ModulateGlow,
-            8 => Mode::ModulateGloss,
-            9 => Mode::Normal,
-            10 => Mode::NormalHeight,
-            11 => Mode::Glow,
-            12 => Mode::Gloss,
-            13 => Mode::Height,
-            14 => Mode::Selector,
-            15 => Mode::NormalGloss,
-            16 => Mode::Emission,
-            _ => return Err(bam::Error::InvalidEnum),
-        })
-    }
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Default)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Default, FromPrimitive)]
+#[repr(u8)]
 enum CombineMode {
     #[default]
     Undefined,
@@ -77,26 +47,8 @@ enum CombineMode {
     DotProduct3RGBA,
 }
 
-impl TryFrom<u8> for CombineMode {
-    type Error = bam::Error;
-
-    fn try_from(value: u8) -> core::result::Result<Self, Self::Error> {
-        Ok(match value {
-            0 => CombineMode::Undefined,
-            1 => CombineMode::Replace,
-            2 => CombineMode::Modulate,
-            3 => CombineMode::Add,
-            4 => CombineMode::AddSigned,
-            5 => CombineMode::Interpolate,
-            6 => CombineMode::Subtract,
-            7 => CombineMode::DotProduct3RGB,
-            8 => CombineMode::DotProduct3RGBA,
-            _ => return Err(bam::Error::InvalidEnum),
-        })
-    }
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Default)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Default, FromPrimitive)]
+#[repr(u8)]
 enum CombineSource {
     #[default]
     Undefined,
@@ -108,24 +60,8 @@ enum CombineSource {
     LastSavedResult,
 }
 
-impl TryFrom<u8> for CombineSource {
-    type Error = bam::Error;
-
-    fn try_from(value: u8) -> core::result::Result<Self, Self::Error> {
-        Ok(match value {
-            0 => CombineSource::Undefined,
-            1 => CombineSource::Texture,
-            2 => CombineSource::Constant,
-            3 => CombineSource::PrimaryColor,
-            4 => CombineSource::Previous,
-            5 => CombineSource::ConstantColorScale,
-            6 => CombineSource::LastSavedResult,
-            _ => return Err(bam::Error::InvalidEnum),
-        })
-    }
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Default)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Default, FromPrimitive)]
+#[repr(u8)]
 enum CombineOperand {
     #[default]
     Undefined,
@@ -133,21 +69,6 @@ enum CombineOperand {
     OneMinusSourceColor,
     SourceAlpha,
     OneMinusSourceAlpha,
-}
-
-impl TryFrom<u8> for CombineOperand {
-    type Error = bam::Error;
-
-    fn try_from(value: u8) -> core::result::Result<Self, Self::Error> {
-        Ok(match value {
-            0 => CombineOperand::Undefined,
-            1 => CombineOperand::SourceColor,
-            2 => CombineOperand::OneMinusSourceColor,
-            3 => CombineOperand::SourceAlpha,
-            4 => CombineOperand::OneMinusSourceAlpha,
-            _ => return Err(bam::Error::InvalidEnum),
-        })
-    }
 }
 
 #[derive(Default, Debug)]
@@ -161,15 +82,15 @@ struct CombineConfig {
 
 //TODO: make the flag check functions const, need const PartialEq which is only in nightly rn
 impl CombineConfig {
-    fn new(data: &mut Datagram) -> Result<Self, crate::bam::Error> {
-        let mode: CombineMode = data.read_u8()?.try_into()?;
+    pub fn create(_loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
+        let mode = CombineMode::from(data.read_u8()?);
         let num_operands = data.read_u8()?;
-        let source0: CombineSource = data.read_u8()?.try_into()?;
-        let operand0: CombineOperand = data.read_u8()?.try_into()?;
-        let source1: CombineSource = data.read_u8()?.try_into()?;
-        let operand1: CombineOperand = data.read_u8()?.try_into()?;
-        let source2: CombineSource = data.read_u8()?.try_into()?;
-        let operand2: CombineOperand = data.read_u8()?.try_into()?;
+        let source0 = CombineSource::from(data.read_u8()?);
+        let operand0 = CombineOperand::from(data.read_u8()?);
+        let source1 = CombineSource::from(data.read_u8()?);
+        let operand1 = CombineOperand::from(data.read_u8()?);
+        let source2 = CombineSource::from(data.read_u8()?);
+        let operand2 = CombineOperand::from(data.read_u8()?);
 
         Ok(Self {
             mode,
@@ -202,9 +123,11 @@ pub(crate) struct TextureStage {
     name: String,
     sort: i32,
     priority: i32,
+
+    texcoord_name: Option<u32>,
+
     mode: Mode,
-    //TODO: LVecBase4
-    color: [f32; 4],
+    color: [f64; 4],
     rgb_scale: u8,
     alpha_scale: u8,
     saved_result: bool,
@@ -219,7 +142,7 @@ pub(crate) struct TextureStage {
 }
 
 impl TextureStage {
-    pub fn create(loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, crate::bam::Error> {
+    pub fn create(loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
         //Check if we're just using the default, otherwise load in all the config data
         if data.read_bool()? {
             return Ok(Self::default());
@@ -229,15 +152,15 @@ impl TextureStage {
         let sort = data.read_i32()?;
         let priority = data.read_i32()?;
 
-        loader.read_pointer(data)?;
+        let texcoord_name = loader.read_pointer(data)?;
 
-        let mode: Mode = data.read_u8()?.try_into()?;
+        let mode = Mode::from(data.read_u8()?);
         //LColor -> LVecBase4
         let color = [
-            data.read_f32()?,
-            data.read_f32()?,
-            data.read_f32()?,
-            data.read_f32()?,
+            data.read_float()?,
+            data.read_float()?,
+            data.read_float()?,
+            data.read_float()?,
         ];
         let rgb_scale = data.read_u8()?;
         let alpha_scale = data.read_u8()?;
@@ -247,27 +170,14 @@ impl TextureStage {
             false => 0,
         };
 
-        let combine_rgb = CombineConfig::new(data)?;
-        let combine_alpha = CombineConfig::new(data)?;
+        let combine_rgb = CombineConfig::create(loader, data)?;
+        let combine_alpha = CombineConfig::create(loader, data)?;
 
-        let involves_color_scale = mode == Mode::BlendColorScale
-            || (mode == Mode::Combine
-                && (combine_rgb.involves_color_scale() || combine_alpha.involves_color_scale()));
-
-        let uses_color = mode == Mode::Blend
-            || mode == Mode::BlendColorScale
-            || (mode == Mode::Combine && (combine_rgb.uses_color() || combine_alpha.uses_color()));
-
-        let uses_primary_color = mode == Mode::Combine
-            && (combine_rgb.uses_primary_color() || combine_alpha.uses_primary_color());
-
-        let uses_last_saved_result = mode == Mode::Combine
-            && (combine_rgb.uses_last_saved_result() || combine_alpha.uses_last_saved_result());
-
-        Ok(Self {
+        let mut stage = Self {
             name,
             sort,
             priority,
+            texcoord_name,
             mode,
             color,
             rgb_scale,
@@ -276,23 +186,31 @@ impl TextureStage {
             tex_view_offset,
             combine_rgb,
             combine_alpha,
-            involves_color_scale,
-            uses_color,
-            uses_primary_color,
-            uses_last_saved_result,
-        })
-    }
-}
+            ..Default::default()
+        };
 
-impl DatagramRead for TextureStage {
-    fn finalize(&self) -> Result<(), crate::bam::Error> {
-        Ok(())
-    }
-}
+        stage.update_color_flags();
 
-impl DatagramWrite for TextureStage {
-    fn write(&self) -> Result<Datagram, crate::bam::Error> {
-        Err(bam::Error::EndOfFile)
+        Ok(stage)
+    }
+
+    fn update_color_flags(&mut self) {
+        self.involves_color_scale = self.mode == Mode::BlendColorScale
+            || (self.mode == Mode::Combine
+                && (self.combine_rgb.involves_color_scale()
+                    || self.combine_alpha.involves_color_scale()));
+
+        self.uses_color = self.mode == Mode::Blend
+            || self.mode == Mode::BlendColorScale
+            || (self.mode == Mode::Combine
+                && (self.combine_rgb.uses_color() || self.combine_alpha.uses_color()));
+
+        self.uses_primary_color = self.mode == Mode::Combine
+            && (self.combine_rgb.uses_primary_color() || self.combine_alpha.uses_primary_color());
+
+        self.uses_last_saved_result = self.mode == Mode::Combine
+            && (self.combine_rgb.uses_last_saved_result()
+                || self.combine_alpha.uses_last_saved_result());
     }
 }
 
@@ -302,40 +220,15 @@ impl Default for TextureStage {
             name: "default".to_owned(),
             sort: 0,
             priority: 0,
-            mode: Mode::Modulate,
+            texcoord_name: None,
+            mode: Mode::default(),
             color: [0.0, 0.0, 0.0, 1.0],
             rgb_scale: 1,
             alpha_scale: 1,
             saved_result: false,
             tex_view_offset: 0,
-            combine_rgb: CombineConfig {
-                mode: CombineMode::Undefined,
-                num_operands: 0,
-                sources: [
-                    CombineSource::Undefined,
-                    CombineSource::Undefined,
-                    CombineSource::Undefined,
-                ],
-                operands: [
-                    CombineOperand::Undefined,
-                    CombineOperand::Undefined,
-                    CombineOperand::Undefined,
-                ],
-            },
-            combine_alpha: CombineConfig {
-                mode: CombineMode::Undefined,
-                num_operands: 0,
-                sources: [
-                    CombineSource::Undefined,
-                    CombineSource::Undefined,
-                    CombineSource::Undefined,
-                ],
-                operands: [
-                    CombineOperand::Undefined,
-                    CombineOperand::Undefined,
-                    CombineOperand::Undefined,
-                ],
-            },
+            combine_rgb: CombineConfig::default(),
+            combine_alpha: CombineConfig::default(),
             involves_color_scale: false,
             uses_color: false,
             uses_primary_color: false,

@@ -1,4 +1,14 @@
-pub(crate) mod texture_stage;
-pub(crate) mod geom;
+pub(crate) mod bounding_volume;
+pub(crate) mod color_attrib;
+pub(crate) mod cull_bin_attrib;
 pub(crate) mod dispatch;
+pub(crate) mod geom_node;
+pub(crate) mod model_node;
+pub(crate) mod panda_node;
 pub(crate) mod prelude;
+pub(crate) mod render_effects;
+pub(crate) mod render_state;
+pub(crate) mod texture_attrib;
+pub(crate) mod texture_stage;
+pub(crate) mod sampler_state;
+pub(crate) mod geom_vertex_anim_spec;

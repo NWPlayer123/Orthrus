@@ -16,6 +16,7 @@ codegen-units = 1
 
 [dependencies]
 orthrus-core = { version = "0.2", path = "crates/core", features = ["time"] }
+orthrus-jsystem = { version = "0.1", path = "crates/jsystem" }
 orthrus-panda3d = { version = "0.1", path = "crates/panda3d" }
 orthrus-ncompress = { version = "0.2", path = "crates/ncompress" }
 

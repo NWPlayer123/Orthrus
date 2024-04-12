@@ -20,6 +20,7 @@ impl core::fmt::Display for Version {
 
 pub(crate) struct Datagram<'a> {
     data: DataCursorRef<'a>,
+    float_type: bool,
 }
 
 impl<'a> Datagram<'a> {
@@ -28,7 +29,12 @@ impl<'a> Datagram<'a> {
         let length = data.read_u32()? as usize;
         Ok(Self {
             data: DataCursorRef::new(data.get_slice(length)?, endian),
+            float_type: true,
         })
+    }
+
+    pub(crate) fn set_float_type(&mut self, float_type: bool) {
+        self.float_type = float_type;
     }
 
     pub(crate) fn read_string(&mut self) -> Result<String, data::Error> {
@@ -36,6 +42,14 @@ impl<'a> Datagram<'a> {
         let slice = self.data.get_slice(length.into())?;
         let string = core::str::from_utf8(slice).map_err(|_| data::Error::InvalidUtf8)?;
         Ok(string.to_owned())
+    }
+
+    pub(crate) fn read_float(&mut self) -> Result<f64, data::Error> {
+        if self.float_type == true {
+            self.data.read_f64()
+        } else {
+            Ok(self.data.read_f32()? as f64)
+        }
     }
 
     pub(crate) fn read_bool(&mut self) -> Result<bool, data::Error> {

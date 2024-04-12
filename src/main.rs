@@ -154,7 +154,10 @@ fn main() -> Result<()> {
                             // to refactor Multifile to use slice_take
                             let output = data.output.unwrap_or_else(|| ".".to_string());
                             Multifile::extract_from_path(data.input, output, 0)?;*/
+                            
                             BinaryAsset::open(data.input)?;
+
+                            //orthrus_jsystem::rarc::ResourceArchive::open(data.input)?;
                         }
                         _ => unreachable!("Oops! Forgot to cover all operations."),
                     }
