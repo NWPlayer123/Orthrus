@@ -1,10 +1,9 @@
 #[cfg(feature = "std")]
 use std::path::Path;
 
+use bitflags::bitflags;
 use orthrus_core::prelude::*;
 use snafu::prelude::*;
-
-use bitflags::bitflags;
 
 /// Error conditions for when working with RARC Archives.
 #[derive(Debug, Snafu)]
@@ -250,8 +249,6 @@ impl ResourceArchive {
         let mut data = DataCursor::new(input, Endian::Big);
         let header = Self::read_header(&mut data)?;
         let data_header = Self::read_data_header(&mut data)?;
-
-        
 
         //Now we should load a reference to the string table so we can build file/folder data to do
         //a single pass over the actual file data when writing

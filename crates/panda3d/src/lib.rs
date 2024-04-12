@@ -18,7 +18,7 @@ pub mod subfile;
 
 pub mod bam;
 
-pub mod prelude;
 pub mod common;
+pub mod prelude;
 
 mod nodes;

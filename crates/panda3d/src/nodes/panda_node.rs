@@ -1,6 +1,7 @@
-use super::prelude::*;
-use super::bounding_volume::BoundsType;
 use hashbrown::HashMap;
+
+use super::bounding_volume::BoundsType;
+use super::prelude::*;
 
 #[derive(Default, Debug)]
 #[allow(dead_code)]
@@ -16,7 +17,7 @@ pub(crate) struct PandaNode {
     into_collide_mask: u32,
 
     bounds_type: BoundsType,
-    
+
     tag_data: HashMap<String, String>,
 
     parents: Vec<Option<u32>>,

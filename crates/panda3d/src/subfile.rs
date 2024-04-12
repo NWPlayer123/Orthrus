@@ -12,8 +12,8 @@ use std::path::{Path, PathBuf};
 use bitflags::bitflags;
 use orthrus_core::prelude::*;
 
-use crate::multifile::Result;
 use crate::common::Version;
+use crate::multifile::Result;
 #[cfg(not(feature = "std"))]
 use crate::no_std::*;
 

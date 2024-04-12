@@ -17,12 +17,11 @@
 #[cfg(feature = "std")]
 use std::path::Path;
 
+use hashbrown::HashMap;
 use orthrus_core::prelude::*;
 use snafu::prelude::*;
 
 use crate::common::*;
-
-use hashbrown::HashMap;
 
 /// Error conditions for when working with Multifile archives.
 #[derive(Debug, Snafu)]
@@ -182,11 +181,6 @@ pub struct BinaryAsset {
 }
 
 impl BinaryAsset {
-    /// Earliest supported revision of the BAM format. For more info, see [here](self#revisions).
-    pub const MINIMUM_VERSION: Version = Version {
-        major: 6,
-        minor: 14,
-    };
     /// Latest revision of the BAM format. For more info, see [here](self#revisions).
     pub const CURRENT_VERSION: Version = Version {
         major: 6,
@@ -194,6 +188,11 @@ impl BinaryAsset {
     };
     /// Unique identifier that tells us if we're reading a Panda3D Binary Object.
     pub const MAGIC: [u8; 6] = *b"pbj\0\n\r";
+    /// Earliest supported revision of the BAM format. For more info, see [here](self#revisions).
+    pub const MINIMUM_VERSION: Version = Version {
+        major: 6,
+        minor: 14,
+    };
 
     #[inline]
     #[allow(dead_code)]
@@ -516,8 +515,7 @@ impl BinaryAsset {
             "InternalName" => {}
             //372
             "TextureStage" => {
-                let texture_stage =
-                    crate::nodes::texture_stage::TextureStage::create(self, data)?;
+                let texture_stage = crate::nodes::texture_stage::TextureStage::create(self, data)?;
                 println!("{:?}", texture_stage);
             }
             _ => todo!("{type_name}"),

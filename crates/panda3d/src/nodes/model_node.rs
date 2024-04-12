@@ -1,5 +1,5 @@
-use super::prelude::*;
 use super::panda_node::PandaNode;
+use super::prelude::*;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Default, FromPrimitive)]
 #[repr(u8)]

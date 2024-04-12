@@ -103,10 +103,10 @@ use std::path::Path;
 use orthrus_core::prelude::*;
 use snafu::prelude::*;
 
+use crate::common::Version;
 #[cfg(not(feature = "std"))]
 use crate::no_std::*;
 use crate::subfile::*;
-use crate::common::Version;
 
 /// Error conditions for when working with Multifile archives.
 #[derive(Debug, Snafu)]

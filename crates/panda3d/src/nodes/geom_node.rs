@@ -1,5 +1,5 @@
-use super::prelude::*;
 use super::panda_node::PandaNode;
+use super::prelude::*;
 
 #[derive(Debug)]
 #[allow(dead_code)]
@@ -11,7 +11,7 @@ pub(crate) struct GeomNode {
 impl GeomNode {
     pub fn create(loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
         let node = PandaNode::create(loader, data)?;
-        
+
         //Cycler data
         let num_geoms = data.read_u16()?;
         let mut geoms = Vec::with_capacity(num_geoms as usize);

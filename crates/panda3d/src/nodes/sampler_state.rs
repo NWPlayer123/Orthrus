@@ -97,16 +97,16 @@ impl Default for SamplerState {
             wrap_u: WrapMode::default(),
             wrap_v: WrapMode::default(),
             wrap_w: WrapMode::default(),
-        
+
             min_filter: FilterType::default(),
             mag_filter: FilterType::default(),
-        
+
             aniso_degree: 0,
             border_color: [0.0, 0.0, 0.0, 1.0],
 
             min_lod: -1000.0,
             max_lod: 1000.0,
-            lod_bias: 0.0
+            lod_bias: 0.0,
         }
     }
 }
