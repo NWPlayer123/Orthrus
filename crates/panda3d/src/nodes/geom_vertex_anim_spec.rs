@@ -1,16 +1,5 @@
 use super::prelude::*;
-
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Default, FromPrimitive)]
-#[repr(u8)]
-enum AnimationType {
-    #[default]
-    /// No vertex animation performed.
-    None,
-    /// Animations are processed on the CPU through Panda3D.
-    Panda,
-    /// Animations are hardware-accelerated on the GPU.
-    Hardware,
-}
+use super::geom_enums::AnimationType;
 
 #[derive(Default, Debug)]
 #[allow(dead_code)]

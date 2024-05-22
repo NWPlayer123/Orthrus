@@ -17,6 +17,7 @@ der = { version = "0.7", optional = true }
 hashbrown = "0.14"
 bitflags = "2.5"
 nalgebra = "0.32"
+approx = "0.5"
 #enum_delegate = "0.2"
 #enum_dispatch = "0.3"
 

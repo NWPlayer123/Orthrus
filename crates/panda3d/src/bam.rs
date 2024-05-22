@@ -85,7 +85,7 @@ pub(crate) struct Header {
     pub(crate) version: Version,
     endian: Endian,
     /// BAM files after 6.27 support reading either floats or doubles (false/true)
-    pub(crate) double: bool,
+    pub(crate) float_type: bool,
 }
 
 #[derive(Debug)]
@@ -118,34 +118,6 @@ impl TryFrom<u8> for ObjectCode {
 }
 
 /*
-
-mod TransformState {
-    use bitflags::bitflags;
-    bitflags! {
-        #[derive(Debug)]
-        pub(crate) struct Flags: u32 {
-            const Identity = 0x00001;
-            const Singular = 0x00002;
-            const SingularKnown = 0x00004;
-            const ComponentsGiven = 0x00008;
-            const ComponentsKnown = 0x00010;
-            const HasComponents = 0x00020;
-            const MatrixKnown = 0x00040;
-            const Invalid = 0x00080;
-            const QuaternionGiven = 0x00100;
-            const QuaternionKnown = 0x00200;
-            const HprGiven = 0x00400;
-            const HprKnown = 0x00800;
-            const UniformScale = 0x01000;
-            const IdentityScale = 0x02000;
-            const NonZeroShear = 0x04000;
-            const Destructing = 0x08000;
-            const TwoDimensional = 0x10000;
-            const NormalizedQuaternionKnown = 0x40000;
-        }
-    }
-}
-
 mod CollisionSolid {
     use bitflags::bitflags;
     bitflags! {
@@ -164,7 +136,8 @@ mod CollisionSolid {
             const InternalBoundsStale = 0x10;
         }
     }
-}*/
+}
+*/
 
 #[derive(Debug)]
 pub struct BinaryAsset {
@@ -215,7 +188,7 @@ impl BinaryAsset {
             _ => return Err(Error::InvalidEndian),
         };
 
-        let double = match version.minor >= 27 {
+        let float_type = match version.minor >= 27 {
             true => data.read_u8()? != 0,
             false => false,
         };
@@ -223,7 +196,7 @@ impl BinaryAsset {
         Ok(Header {
             version,
             endian,
-            double,
+            float_type,
         })
     }
 
@@ -248,10 +221,8 @@ impl BinaryAsset {
         ensure!(magic == Self::MAGIC, InvalidMagicSnafu);
 
         // Load initial datagram and parse the header
-        let mut datagram = Datagram::new(&mut data, Endian::Little)?;
+        let mut datagram = Datagram::new(&mut data, Endian::Little, false)?;
         let header = Self::read_header(&mut *datagram)?;
-        datagram.set_endian(header.endian);
-        datagram.set_float_type(header.double);
 
         // Create the BinaryAsset instance so we can start constructing all the objects
         let mut bamfile = Self {
@@ -263,13 +234,13 @@ impl BinaryAsset {
         };
 
         // Read the initial object
-        datagram = Datagram::new(&mut data, Endian::Little)?;
+        datagram = Datagram::new(&mut data, bamfile.header.endian, bamfile.header.float_type)?;
         bamfile.read_object(&mut datagram)?;
 
         //Parse objects until we run out, used before 6.21.
         while bamfile.num_extra_objects > 0 {
             println!("Datagram at {:#X}", data.position());
-            datagram = Datagram::new(&mut data, Endian::Little)?;
+            datagram = Datagram::new(&mut data, bamfile.header.endian, bamfile.header.float_type)?;
             bamfile.read_object(&mut datagram)?;
             bamfile.num_extra_objects -= 1;
         }
@@ -277,7 +248,7 @@ impl BinaryAsset {
         //Parse objects until we reach the initial nesting level, used starting with 6.21.
         while bamfile.nesting_level > 0 {
             println!("Datagram at {:#X}", data.position());
-            datagram = Datagram::new(&mut data, Endian::Little)?;
+            datagram = Datagram::new(&mut data, bamfile.header.endian, bamfile.header.float_type)?;
             bamfile.read_object(&mut datagram)?;
         }
 
@@ -416,7 +387,7 @@ impl BinaryAsset {
                 //TypedWritable::fillin()
                 //remove_all_children()
                 let node = crate::nodes::panda_node::PandaNode::create(self, data)?;
-                println!("{:?}", node);
+                println!("{:#?}", node);
             }
             //52
             "TypedWritableReferenceCount" => {
@@ -437,22 +408,22 @@ impl BinaryAsset {
             //101
             "ColorAttrib" => {
                 let node = crate::nodes::color_attrib::ColorAttrib::create(self, data)?;
-                println!("{:?}", node);
+                println!("{:#?}", node);
             }
             //108
             "CullBinAttrib" => {
                 let node = crate::nodes::cull_bin_attrib::CullBinAttrib::create(self, data)?;
-                println!("{:?}", node);
+                println!("{:#?}", node);
             }
             //124
             "GeomNode" => {
                 let node = crate::nodes::geom_node::GeomNode::create(self, data)?;
-                println!("{:?}", node);
+                println!("{:#?}", node);
             }
             //136
             "ModelNode" => {
                 let node = crate::nodes::model_node::ModelNode::create(self, data)?;
-                println!("{:?}", node);
+                println!("{:#?}", node);
             }
             //137
             "ModelRoot" => {
@@ -461,7 +432,7 @@ impl BinaryAsset {
             //149
             "RenderEffects" => {
                 let node = crate::nodes::render_effects::RenderEffects::create(self, data)?;
-                println!("{:?}", node);
+                println!("{:#?}", node);
             }
             //151
             "NodeCachedReferenceCount" => {
@@ -470,19 +441,28 @@ impl BinaryAsset {
             //152
             "RenderState" => {
                 let node = crate::nodes::render_state::RenderState::create(self, data)?;
-                println!("{:?}", node);
+                println!("{:#?}", node);
             }
             //166
             "TextureAttrib" => {
                 let node = crate::nodes::texture_attrib::TextureAttrib::create(self, data)?;
-                println!("{:?}", node);
+                println!("{:#?}", node);
             }
             //168
-            "TransformState" => {}
+            "TransformState" => {
+                let node = crate::nodes::transform_state::TransformState::create(self, data)?;
+                println!("{:#?}", node);
+            }
             //169
-            "TransparencyAttrib" => {}
+            "TransparencyAttrib" => {
+                let node = crate::nodes::transparency_attrib::TransparencyAttrib::create(self, data)?;
+                println!("{:#?}", node);
+            }
             //201
-            "Texture" => {}
+            "Texture" => {
+                let node = crate::nodes::texture::Texture::create(self, data)?;
+                println!("{:#?}", node);
+            }
             //237
             "CollisionSolid" => {}
             //249
@@ -516,7 +496,7 @@ impl BinaryAsset {
             //372
             "TextureStage" => {
                 let texture_stage = crate::nodes::texture_stage::TextureStage::create(self, data)?;
-                println!("{:?}", texture_stage);
+                println!("{:#?}", texture_stage);
             }
             _ => todo!("{type_name}"),
         }
