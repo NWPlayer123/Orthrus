@@ -1,7 +1,10 @@
 use core::default;
 
+use super::auto_texture_scale;
 use super::auto_texture_scale::AutoTextureScale;
-use super::{auto_texture_scale, geom_enums::UsageHint, prelude::*, sampler_state::SamplerState};
+use super::geom_enums::UsageHint;
+use super::prelude::*;
+use super::sampler_state::SamplerState;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Default, FromPrimitive)]
 #[repr(u8)]
@@ -26,8 +29,8 @@ enum CompressionMode {
     Off,
     On,
 
-    // Specific compression modes. You should only use these when you really want to use a specific
-    // compression algorithm.
+    // Specific compression modes. You should only use these when you really want to use a
+    // specific compression algorithm.
     /// 3DFX Texture Compression 1: older compression format
     FXT1,
     /// DirectX Texture Compression BC1: RGB with optional binary alpha
@@ -219,9 +222,7 @@ impl Texture {
     }
 
     fn fillin_body(
-        &self,
-        loader: &mut BinaryAsset,
-        data: &mut Datagram,
+        &self, loader: &mut BinaryAsset, data: &mut Datagram,
     ) -> Result<TextureBody, bam::Error> {
         let mut body = TextureBody::default();
 

@@ -155,7 +155,8 @@ fn main() -> Result<()> {
                             let output = data.output.unwrap_or_else(|| ".".to_string());
                             Multifile::extract_from_path(data.input, output, 0)?;*/
 
-                            BinaryAsset::open(data.input)?;
+                            use orthrus_nintendoware::switch::BFSAR;
+                            BFSAR::open(data.input)?;
 
                             //orthrus_jsystem::rarc::ResourceArchive::open(data.input)?;
                         }

@@ -157,11 +157,7 @@ impl Yay0 {
         let lookback_offset = u32::from_be_bytes([data[8], data[9], data[10], data[11]]);
         let copy_data_offset = u32::from_be_bytes([data[12], data[13], data[14], data[15]]);
 
-        Ok(Header {
-            decompressed_size,
-            lookback_offset,
-            copy_data_offset,
-        })
+        Ok(Header { decompressed_size, lookback_offset, copy_data_offset })
     }
 
     /// Calculates the filesize for the largest possible file that can be created with Yay0

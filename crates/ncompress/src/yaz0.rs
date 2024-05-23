@@ -155,10 +155,7 @@ impl Yaz0 {
         //0 on GC/Wii files
         let alignment = u32::from_be_bytes([data[8], data[9], data[10], data[11]]);
 
-        Ok(Header {
-            decompressed_size,
-            alignment,
-        })
+        Ok(Header { decompressed_size, alignment })
     }
 
     /// Calculates the filesize for the largest possible file that can be created with Yaz0

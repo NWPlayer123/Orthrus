@@ -1,5 +1,5 @@
-use super::prelude::*;
 use super::geom_enums::AnimationType;
+use super::prelude::*;
 
 #[derive(Default, Debug)]
 #[allow(dead_code)]
@@ -15,10 +15,6 @@ impl GeomVertexAnimationSpec {
         let num_transforms = data.read_u16()?;
         let indexed_transforms = data.read_bool()?;
 
-        Ok(Self {
-            animation_type,
-            num_transforms,
-            indexed_transforms,
-        })
+        Ok(Self { animation_type, num_transforms, indexed_transforms })
     }
 }

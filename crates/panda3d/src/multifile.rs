@@ -226,10 +226,7 @@ impl Multifile {
         data.read_length(&mut magic)?;
         ensure!(magic == Self::MAGIC, InvalidMagicSnafu);
 
-        let version = Version {
-            major: data.read_u16()?,
-            minor: data.read_u16()?,
-        };
+        let version = Version { major: data.read_u16()?, minor: data.read_u16()? };
         ensure!(
             Self::CURRENT_VERSION.major == version.major
                 && Self::CURRENT_VERSION.minor >= version.minor,
@@ -243,11 +240,7 @@ impl Multifile {
             false => 0,
         };
 
-        Ok(Header {
-            version,
-            scale_factor,
-            timestamp,
-        })
+        Ok(Header { version, scale_factor, timestamp })
     }
 
     /// Returns the number of [`Subfile`]s currently stored in the Multifile.

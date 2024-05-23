@@ -25,7 +25,9 @@ pub(crate) struct Datagram<'a> {
 
 impl<'a> Datagram<'a> {
     #[inline]
-    pub(crate) fn new<T: DataCursorTrait + EndianRead>(data: &'a mut T, endian: Endian, float_type: bool) -> Result<Self, data::Error> {
+    pub(crate) fn new<T: DataCursorTrait + EndianRead>(
+        data: &'a mut T, endian: Endian, float_type: bool,
+    ) -> Result<Self, data::Error> {
         let length = data.read_u32()? as usize;
         Ok(Self {
             data: DataCursorRef::new(data.get_slice(length)?, endian),

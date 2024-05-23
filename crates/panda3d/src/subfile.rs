@@ -76,13 +76,7 @@ impl Subfile {
             filename.push((255 - input.read_u8()?) as char);
         }
 
-        Ok(Self {
-            offset,
-            length,
-            flags,
-            timestamp,
-            filename,
-        })
+        Ok(Self { offset, length, flags, timestamp, filename })
     }
 
     /// Writes the [`Subfile`] data to disk, using the data from the associated [`Multifile`].

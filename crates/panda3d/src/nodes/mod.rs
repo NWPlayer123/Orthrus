@@ -1,7 +1,9 @@
+pub(crate) mod auto_texture_scale;
 pub(crate) mod bounding_volume;
 pub(crate) mod color_attrib;
 pub(crate) mod cull_bin_attrib;
 pub(crate) mod dispatch;
+pub(crate) mod geom_enums;
 pub(crate) mod geom_node;
 pub(crate) mod geom_vertex_anim_spec;
 pub(crate) mod model_node;
@@ -15,5 +17,3 @@ pub(crate) mod texture_attrib;
 pub(crate) mod texture_stage;
 pub(crate) mod transform_state;
 pub(crate) mod transparency_attrib;
-pub(crate) mod geom_enums;
-pub(crate) mod auto_texture_scale;

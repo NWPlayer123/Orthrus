@@ -14,9 +14,7 @@ pub(crate) struct StageNode {
 
 impl StageNode {
     pub fn create(
-        loader: &mut BinaryAsset,
-        data: &mut Datagram,
-        mut implicit_sort: u16,
+        loader: &mut BinaryAsset, data: &mut Datagram, mut implicit_sort: u16,
     ) -> Result<Self, bam::Error> {
         //StageNode*
         let texture_stage = loader.read_pointer(data)?;
@@ -86,10 +84,6 @@ impl TextureAttrib {
             on_stages.push(stage_node);
         }
 
-        Ok(Self {
-            off_all_stages,
-            off_stages,
-            on_stages,
-        })
+        Ok(Self { off_all_stages, off_stages, on_stages })
     }
 }

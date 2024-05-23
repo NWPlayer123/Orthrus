@@ -306,11 +306,7 @@ impl DataCursor {
     /// Creates a new cursor using the provided data and endianness.
     #[inline]
     pub fn new<I: Into<Box<[u8]>>>(data: I, endian: Endian) -> Self {
-        Self {
-            data: data.into(),
-            pos: 0,
-            endian,
-        }
+        Self { data: data.into(), pos: 0, endian }
     }
 
     /// Creates a new cursor using the provided path and endianness.
@@ -725,11 +721,7 @@ impl BufRead for DataCursor {
 impl From<Box<[u8]>> for DataCursor {
     #[inline]
     fn from(value: Box<[u8]>) -> Self {
-        Self {
-            data: value,
-            pos: 0,
-            endian: Endian::default(),
-        }
+        Self { data: value, pos: 0, endian: Endian::default() }
     }
 }
 
@@ -784,11 +776,7 @@ impl<'a> DataCursorRef<'a> {
     #[inline]
     #[must_use]
     pub fn new(data: &'a [u8], endian: Endian) -> Self {
-        Self {
-            data,
-            pos: 0,
-            endian,
-        }
+        Self { data, pos: 0, endian }
     }
 
     /// Consumes this cursor, returning  the underlying data.
@@ -1037,11 +1025,7 @@ impl<'a> DataCursorMut<'a> {
     /// Creates a new cursor using the provided data and endianness.
     #[inline]
     pub fn new(data: &'a mut [u8], endian: Endian) -> Self {
-        Self {
-            data,
-            pos: 0,
-            endian,
-        }
+        Self { data, pos: 0, endian }
     }
 
     /// Consumes this cursor, returning  the underlying data.

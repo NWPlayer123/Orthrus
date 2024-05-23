@@ -1,0 +1,16 @@
+[package]
+name = "orthrus-nintendoware"
+version = "0.1.0"
+edition = "2021"
+description = "Orthrus module supporting NintendoWare targets"
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+orthrus-core = { version = "0.2.0", path = "../core" }
+
+snafu = { version = "0.8", default-features = false }
+
+[features]
+default = ["std"]
+std = []

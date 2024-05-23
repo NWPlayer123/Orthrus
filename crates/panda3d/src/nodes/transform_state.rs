@@ -1,7 +1,8 @@
-use super::prelude::*;
 use approx::relative_eq;
 use bitflags::bitflags;
 use nalgebra::{matrix, point, vector, Matrix4, Point3, Vector3, Vector4};
+
+use super::prelude::*;
 
 bitflags! {
     #[derive(Default, Debug)]

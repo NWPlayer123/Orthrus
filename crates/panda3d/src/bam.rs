@@ -155,25 +155,16 @@ pub struct BinaryAsset {
 
 impl BinaryAsset {
     /// Latest revision of the BAM format. For more info, see [here](self#revisions).
-    pub const CURRENT_VERSION: Version = Version {
-        major: 6,
-        minor: 45,
-    };
+    pub const CURRENT_VERSION: Version = Version { major: 6, minor: 45 };
     /// Unique identifier that tells us if we're reading a Panda3D Binary Object.
     pub const MAGIC: [u8; 6] = *b"pbj\0\n\r";
     /// Earliest supported revision of the BAM format. For more info, see [here](self#revisions).
-    pub const MINIMUM_VERSION: Version = Version {
-        major: 6,
-        minor: 14,
-    };
+    pub const MINIMUM_VERSION: Version = Version { major: 6, minor: 14 };
 
     #[inline]
     #[allow(dead_code)]
     fn read_header<T: EndianRead>(data: &mut T) -> Result<Header> {
-        let version = Version {
-            major: data.read_u16()?,
-            minor: data.read_u16()?,
-        };
+        let version = Version { major: data.read_u16()?, minor: data.read_u16()? };
 
         ensure!(
             version.major == Self::CURRENT_VERSION.major
@@ -193,11 +184,7 @@ impl BinaryAsset {
             false => false,
         };
 
-        Ok(Header {
-            version,
-            endian,
-            float_type,
-        })
+        Ok(Header { version, endian, float_type })
     }
 
     pub fn get_minor_version(&self) -> u16 {
@@ -272,9 +259,11 @@ impl BinaryAsset {
                     return Ok(());
                 }
                 ObjectCode::Adjunct => {}
-                _ => todo!(
-                    "Remove and FileData are unimplemented, need a test case, pls message me."
-                ),
+                _ => {
+                    todo!(
+                        "Remove and FileData are unimplemented, need a test case, pls message me."
+                    )
+                }
             }
         }
 
@@ -455,7 +444,8 @@ impl BinaryAsset {
             }
             //169
             "TransparencyAttrib" => {
-                let node = crate::nodes::transparency_attrib::TransparencyAttrib::create(self, data)?;
+                let node =
+                    crate::nodes::transparency_attrib::TransparencyAttrib::create(self, data)?;
                 println!("{:#?}", node);
             }
             //201

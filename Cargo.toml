@@ -19,6 +19,7 @@ orthrus-core = { version = "0.2", path = "crates/core", features = ["time"] }
 orthrus-jsystem = { version = "0.1", path = "crates/jsystem" }
 orthrus-panda3d = { version = "0.1", path = "crates/panda3d" }
 orthrus-ncompress = { version = "0.2", path = "crates/ncompress" }
+orthrus-nintendoware = { version = "0.1", path = "crates/nintendoware" }
 
 argp = { version = "0.3", default-features = false }
 env_logger = { version = "0.11", default-features = false }

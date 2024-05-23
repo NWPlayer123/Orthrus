@@ -27,10 +27,6 @@ impl ModelNode {
         let transform = PreserveTransform::from(data.read_u8()?);
         let attributes = data.read_u16()?;
 
-        Ok(Self {
-            node,
-            transform,
-            attributes,
-        })
+        Ok(Self { node, transform, attributes })
     }
 }
