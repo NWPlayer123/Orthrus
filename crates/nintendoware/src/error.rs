@@ -21,6 +21,9 @@ pub enum Error {
     /// Thrown when encountering unexpected values.
     #[snafu(display("Unexpected value encountered! Reason: {}", reason))]
     InvalidData { reason: &'static str },
+    /// Thrown if UTF-8 validation fails when converting a string.
+    #[snafu(display("Invalid UTF-8 String!"))]
+    InvalidUtf8,
 }
 pub(crate) type Result<T> = core::result::Result<T, Error>;
 

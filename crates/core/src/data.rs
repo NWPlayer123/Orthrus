@@ -63,6 +63,12 @@ impl Default for Endian {
     }
 }
 
+pub enum SeekFrom {
+    Start(usize),
+    End(isize),
+    Current(isize),
+}
+
 /// Shared cursor functionality, e.g. utilities
 pub trait DataCursorTrait {
     /// Returns the current position of this cursor.
@@ -70,6 +76,9 @@ pub trait DataCursorTrait {
 
     /// Sets the position of this cursor.
     fn set_position(&mut self, pos: usize);
+
+    /// Sets the position of this cursor.
+    fn seek(&mut self, style: SeekFrom) -> Result<usize>;
 
     /// Returns the current endianness of this cursor.
     fn endian(&self) -> Endian;
@@ -405,6 +414,25 @@ impl DataCursorTrait for DataCursor {
     #[inline]
     fn set_position(&mut self, pos: usize) {
         self.pos = pos;
+    }
+
+    #[inline]
+    fn seek(&mut self, style: SeekFrom) -> Result<usize> {
+        let (base_pos, offset) = match style {
+            SeekFrom::Start(n) => {
+                self.pos = n;
+                return Ok(n);
+            }
+            SeekFrom::End(n) => (self.data.len(), n),
+            SeekFrom::Current(n) => (self.pos, n),
+        };
+        match base_pos.checked_add_signed(offset) {
+            Some(n) => {
+                self.pos = n;
+                Ok(self.pos)
+            }
+            None => EndOfFileSnafu.fail()?,
+        }
     }
 
     #[inline]
@@ -812,6 +840,25 @@ impl DataCursorTrait for DataCursorRef<'_> {
     }
 
     #[inline]
+    fn seek(&mut self, style: SeekFrom) -> Result<usize> {
+        let (base_pos, offset) = match style {
+            SeekFrom::Start(n) => {
+                self.pos = n;
+                return Ok(n);
+            }
+            SeekFrom::End(n) => (self.data.len(), n),
+            SeekFrom::Current(n) => (self.pos, n),
+        };
+        match base_pos.checked_add_signed(offset) {
+            Some(n) => {
+                self.pos = n;
+                Ok(self.pos)
+            }
+            None => EndOfFileSnafu.fail()?,
+        }
+    }
+
+    #[inline]
     #[must_use]
     fn endian(&self) -> Endian {
         self.endian
@@ -1111,6 +1158,25 @@ impl DataCursorTrait for DataCursorMut<'_> {
     #[inline]
     fn set_position(&mut self, pos: usize) {
         self.pos = pos;
+    }
+
+    #[inline]
+    fn seek(&mut self, style: SeekFrom) -> Result<usize> {
+        let (base_pos, offset) = match style {
+            SeekFrom::Start(n) => {
+                self.pos = n;
+                return Ok(n);
+            }
+            SeekFrom::End(n) => (self.data.len(), n),
+            SeekFrom::Current(n) => (self.pos, n),
+        };
+        match base_pos.checked_add_signed(offset) {
+            Some(n) => {
+                self.pos = n;
+                Ok(self.pos)
+            }
+            None => EndOfFileSnafu.fail()?,
+        }
     }
 
     #[inline]

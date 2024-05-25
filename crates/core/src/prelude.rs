@@ -11,6 +11,7 @@
 #[doc(inline)]
 pub use crate::data::{
     DataCursor, DataCursorMut, DataCursorRef, DataCursorTrait, Endian, EndianRead, EndianWrite,
+    SeekFrom,
 };
 #[doc(inline)]
 pub use crate::identify::{FileIdentifier, FileInfo, IdentifyFn};
