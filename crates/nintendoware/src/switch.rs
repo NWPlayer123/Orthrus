@@ -1,3 +1,4 @@
+use core::marker::PhantomData;
 #[cfg(feature = "std")]
 use std::path::Path;
 
@@ -71,24 +72,52 @@ impl core::fmt::Display for Version {
 struct BinaryHeader {
     magic: [u8; 4],
     byte_order: ByteOrderMark,
-    //header_size: u16, should be known at compile time
+    size: u16,
     version: Version,
     file_size: u32,
-    //num_sections: u16, should be known at compile time
-    //pasdding: [u8; 2]
+    num_sections: u16,
+    //padding: [u8; 2]
+}
+
+impl Read for BinaryHeader {
+    fn read<T: DataCursorTrait + EndianRead>(data: &mut T) -> Result<Self> {
+        // Create a header, so we can copy in its magic
+        let mut header = Self::default();
+
+        // Read in the magic
+        data.read_length(&mut header.magic)?;
+
+        // Read the Byte Order Mark and use it to update our endianness
+        header.byte_order = ByteOrderMark(data.read_u16()?);
+        let endian = match header.byte_order {
+            ByteOrderMark::Little => Endian::Little,
+            ByteOrderMark::Big => Endian::Big,
+            _ => InvalidDataSnafu { reason: "Invalid Byte Order Mark!" }.fail()?,
+        };
+        data.set_endian(endian);
+
+        //Read the rest of the data
+        header.size = data.read_u16()?;
+        header.version = Version::read(data)?;
+        header.file_size = data.read_u32()?;
+        header.num_sections = data.read_u16()?;
+        data.set_position(data.position() + 2); //Skip alignment
+        
+        Ok(header)
+    }
 }
 
 //-------------------------------------------------------------------------------------------------
 
 #[derive(Default, Debug)]
-struct Reference {
+struct SizedReference {
     identifier: u16,
     //2 bytes of padding to align
     offset: u32,
     size: u32,
 }
 
-impl Reference {
+impl Read for SizedReference {
     fn read<T: DataCursorTrait + EndianRead>(data: &mut T) -> Result<Self> {
         let identifier = data.read_u16()?;
         data.seek(SeekFrom::Current(2))?;
@@ -96,12 +125,21 @@ impl Reference {
         let size = data.read_u32()?;
         Ok(Self { identifier, offset, size })
     }
+}
 
-    fn read_no_size<T: DataCursorTrait + EndianRead>(data: &mut T) -> Result<Self> {
+#[derive(Default, Debug)]
+struct Reference {
+    identifier: u16,
+    //2 bytes of padding to align
+    offset: u32,
+}
+
+impl Read for Reference {
+    fn read<T: DataCursorTrait + EndianRead>(data: &mut T) -> Result<Self> {
         let identifier = data.read_u16()?;
         data.seek(SeekFrom::Current(2))?;
         let offset = data.read_u32()?;
-        Ok(Self { identifier, offset, size: 0 })
+        Ok(Self { identifier, offset })
     }
 }
 
@@ -113,40 +151,38 @@ struct SectionHeader {
     size: u32,
 }
 
-impl SectionHeader {
+impl Read for SectionHeader {
     fn read<T: DataCursorTrait + EndianRead>(data: &mut T) -> Result<Self> {
         let mut header = SectionHeader::default();
-
         data.read_length(&mut header.magic)?;
-
         header.size = data.read_u32()?;
-
         Ok(header)
     }
 }
 
 //-------------------------------------------------------------------------------------------------
 
-#[derive(Default, Debug)]
+#[derive(Debug)]
 struct Table<V: Read> {
-    values: Vec<V>,
+    _marker: PhantomData<V>
 }
 
 impl<V: Read> Table<V> {
-    fn read<T: DataCursorTrait + EndianRead>(data: &mut T) -> Result<Self> {
+    fn read<T: DataCursorTrait + EndianRead>(data: &mut T) -> Result<Vec<V>> {
         let count = data.read_u32()?;
-        let mut values = Vec::with_capacity(count as usize);
 
-        for value in &mut values {
-            *value = V::read(data)?;
+        let mut values = Vec::with_capacity(count as usize);
+        for _ in 0..count {
+            values.push(V::read(data)?);
         }
-        Ok(Self { values })
+
+        Ok(values)
     }
 }
 
 //-------------------------------------------------------------------------------------------------
 
-#[derive(Default, Debug)]
+#[derive(Debug)]
 struct PatriciaNode {
     flags: u16,
     search_index: u16,
@@ -156,7 +192,7 @@ struct PatriciaNode {
     item_id: u32,
 }
 
-impl PatriciaNode {
+impl Read for PatriciaNode {
     fn read<T: DataCursorTrait + EndianRead>(data: &mut T) -> Result<Self> {
         Ok(Self {
             flags: data.read_u16()?,
@@ -169,11 +205,69 @@ impl PatriciaNode {
     }
 }
 
+impl Default for PatriciaNode {
+    fn default() -> Self {
+        Self {
+            flags: 0,
+            search_index: 0xFFFF,
+            left_index: 0xFFFFFFFF,
+            right_index: 0xFFFFFFFF,
+            string_id: 0xFFFFFFFF,
+            item_id: 0xFFFFFFFF,
+        }
+    }
+}
+
+#[derive(Default, Debug)]
+struct PatriciaTree {
+    root_index: u32,
+    nodes: Vec<PatriciaNode>,
+}
+
+impl PatriciaTree {
+    fn get_node(&self, string: String) -> Result<&PatriciaNode> {
+        let mut node = self.nodes.get(self.root_index as usize).ok_or(Error::NodeNotFound)?;
+        let bytes = string.as_bytes();
+
+        // Loop as long as we haven't hit a leaf node
+        while (node.flags & 1) == 0 {
+            // Separate out the string position and the bit location
+            let pos = (node.search_index >> 3) as usize;
+            let bit = (node.search_index & 7) as usize;
+
+            let node_index;
+            if (bytes[pos] & (1 << (7 - bit))) == 1 {
+                node_index = node.right_index as usize;
+            } else {
+                node_index = node.left_index as usize;
+            }
+            node = self.nodes.get(node_index).ok_or(Error::NodeNotFound)?;
+        }
+
+        Ok(node)
+    }
+}
+
+impl Read for PatriciaTree {
+    fn read<T: DataCursorTrait + EndianRead>(data: &mut T) -> Result<Self> {
+        let mut tree = Self::default();
+
+        // First, get the root index
+        tree.root_index = data.read_u32()?;
+
+        // Then, we can load in the node table
+        tree.nodes = Table::read(data)?;
+
+        Ok(tree)
+    }
+}
+
 //-------------------------------------------------------------------------------------------------
 
 #[derive(Default, Debug)]
 struct StringBlock {
-    strings: Vec<String>,
+    table: Vec<String>,
+    tree: PatriciaTree,
 }
 
 impl StringBlock {
@@ -184,21 +278,13 @@ impl StringBlock {
         // Store relative position
         let offset = data.position();
 
-        // Read the number of strings in the table
-        let string_count = data.read_u32()?;
+        // Read in the reference table
+        let references: Vec<SizedReference> = Table::read(data)?;
 
-        //Now let's read all references sequentially to help with caching
-        let mut references = Vec::with_capacity(string_count as usize);
-        for _ in 0..string_count {
-            references.push(Reference::read(data)?);
-        }
-
-        //Then we can process all strings and store them, pre-allocate since we know the count
-        // ahead of time
-        let mut strings = Vec::with_capacity(string_count as usize);
-        for n in 0..string_count {
+        // Then we can process all strings, pre-allocate since we know the count ahead of time
+        let mut strings = Vec::with_capacity(references.len() as usize);
+        for reference in &references {
             // Go to that position in the string blob
-            let reference = &references[n as usize];
             data.set_position(offset + reference.offset as usize);
 
             // Read the string and store it, includes the trailing \0
@@ -208,53 +294,9 @@ impl StringBlock {
 
         Ok(strings)
     }
+}
 
-    fn read_patricia_tree<T: DataCursorTrait + EndianRead>(
-        data: &mut T,
-    ) -> Result<Vec<PatriciaNode>> {
-        // Get the root index
-        let root_index = data.read_u32()?;
-
-        // Now get the number of entries
-        let node_count = data.read_u32()?;
-
-        let mut nodes = Vec::with_capacity(node_count as usize);
-
-        for _ in 0..node_count {
-            let node = PatriciaNode::read(data)?;
-            /*if node.flags == 1 { //Leaf node
-                println!("String: {}, Item: {}", node.string_id, node.item_id);
-            }
-            else {
-                println!("Position: {}, Bit: {}, Left: {}, Right: {}", node.search_index >> 3, node.search_index & 7, node.left_index, node.right_index);
-            }*/
-            nodes.push(node);
-        }
-
-        let lookup = *b"BGM_BTL_Boss_S5_Win\0";
-
-        let mut node = nodes.get(root_index as usize).expect("No root node!");
-        println!("{:?}", node);
-
-        let length = lookup.len();
-
-        while (node.flags & 1) == 0 {
-            let pos = node.search_index >> 3;
-            let bit = node.search_index & 7;
-            println!("pos: {}, bit: {}", pos, bit);
-            let node_index;
-            if (lookup[pos as usize] & (1 << (7 - bit))) == 1 {
-                node_index = node.right_index;
-            } else {
-                node_index = node.left_index;
-            }
-            node = nodes.get(node_index as usize).expect("Need a valid node!");
-        }
-        println!("{:?}", node);
-
-        Ok(nodes)
-    }
-
+impl Read for StringBlock {
     fn read<T: DataCursorTrait + EndianRead>(data: &mut T) -> Result<Self> {
         // Store relative position
         let offset = data.position();
@@ -263,27 +305,28 @@ impl StringBlock {
         let mut sections: [Reference; 2] = Default::default();
 
         for section in &mut sections {
-            *section = Reference::read_no_size(data)?;
+            *section = Reference::read(data)?;
         }
 
         // Then process each section
-        let mut strings: Vec<String> = Default::default();
+        let mut strings = Self::default();
+
         for section in &mut sections {
             data.set_position(offset + section.offset as usize);
             match section.identifier {
                 0x2400 => {
                     // String Table
-                    strings = Self::read_string_table(data)?;
+                    strings.table = Self::read_string_table(data)?;
                 }
                 0x2401 => {
                     // Patricia Tree
-                    let tree = Self::read_patricia_tree(data)?;
+                    strings.tree = PatriciaTree::read(data)?;
                 }
                 _ => InvalidDataSnafu { reason: "Unexpected String Section Identifier!" }.fail()?,
             }
         }
 
-        Ok(Self { strings })
+        Ok(strings)
     }
 }
 
@@ -314,8 +357,7 @@ impl InfoBlock {
         // Read all references
         let mut sections: [Reference; 8] = Default::default();
         for section in &mut sections {
-            *section = Reference::read_no_size(data)?;
-            println!("{:?} {:X}", *section, section.identifier);
+            *section = Reference::read(data)?;
         }
 
         for section in &mut sections {
@@ -350,7 +392,6 @@ impl InfoBlock {
             }
         }
 
-        println!("{:?}", sections);
         Ok(Self {})
     }
 }
@@ -385,43 +426,27 @@ impl BFSAR {
     #[inline]
     #[allow(dead_code)]
     fn read_header<T: DataCursorTrait + EndianRead>(data: &mut T) -> Result<BinaryHeader> {
-        //We start by verifying the magic and BOM, so we can update DataCursor with the right
-        // endian
-        let mut header = BinaryHeader::default();
+        // Read the header
+        let header = BinaryHeader::read(data)?;
 
-        data.read_length(&mut header.magic)?;
+        //Now we need to verify that it's what we actually expected
         ensure!(
             header.magic == Self::MAGIC,
             InvalidMagicSnafu { expected: Self::MAGIC }
         );
 
-        header.byte_order = ByteOrderMark(data.read_u16()?);
-        let endian = match header.byte_order {
-            ByteOrderMark::Little => Endian::Little,
-            ByteOrderMark::Big => Endian::Big,
-            _ => InvalidDataSnafu { reason: "Invalid Byte Order Mark!" }.fail()?,
-        };
-        data.set_endian(endian);
-
-        let header_size = data.read_u16()?;
         ensure!(
-            header_size == 0x40,
+            header.size == 0x40,
             InvalidDataSnafu { reason: "Header size must be 0x40!" }
         );
-
-        //Read the rest of the data
-        header.version = Version::read(data)?;
-        header.file_size = data.read_u32()?;
-        let section_count = data.read_u16()?;
-        data.set_position(data.position() + 2); //Skip alignment
-
-        //Now verify that the header is sane
+        
         ensure!(
             data.len() == header.file_size as usize,
             InvalidDataSnafu { reason: "Unexpected file size!" }
         );
+
         ensure!(
-            section_count == 3,
+            header.num_sections == 3,
             InvalidDataSnafu { reason: "Unexpected section count!" }
         );
 
@@ -447,17 +472,17 @@ impl BFSAR {
         archive.header = Self::read_header(&mut data)?;
 
         // Read the references to all sections
-        let mut sections: [Reference; 3] = Default::default();
-        for n in 0..3 {
-            sections[n] = Reference::read(&mut data)?;
+        let mut sections: [SizedReference; 3] = Default::default();
+        for n in 0..sections.len() {
+            sections[n] = SizedReference::read(&mut data)?;
         }
 
         // Align to a 32-byte boundary
         data.set_position((data.position() + 31) & !31);
 
         // Then read all the section data
-        for n in 0..3 {
-            data.set_position(sections[n].offset as usize);
+        for section in &sections {
+            data.set_position(section.offset as usize);
 
             let section = SectionHeader::read(&mut data)?;
             match section.magic {

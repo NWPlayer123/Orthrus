@@ -24,6 +24,9 @@ pub enum Error {
     /// Thrown if UTF-8 validation fails when converting a string.
     #[snafu(display("Invalid UTF-8 String!"))]
     InvalidUtf8,
+    /// Thrown if unable to find a specific node in the tree.
+    #[snafu(display("Node not found!"))]
+    NodeNotFound,
 }
 pub(crate) type Result<T> = core::result::Result<T, Error>;
 
