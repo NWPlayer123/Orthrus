@@ -1,6 +1,6 @@
 [package]
 name = "orthrus-ncompress"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 description = "Orthrus module supporting Nintendo compression formats"
 license.workspace = true
