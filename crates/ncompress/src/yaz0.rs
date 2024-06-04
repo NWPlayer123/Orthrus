@@ -384,14 +384,15 @@ impl Yaz0 {
         output[4..8].copy_from_slice(&u32::to_be_bytes(input.len() as u32));
         //Older files do not have alignment so this just leaves it as zero
 
+        let mut window = crate::algorithms::Window::new(input, 0x111);
+
         let mut input_pos = 0;
         let mut output_pos = 0x11;
         let mut flag_byte_pos = 0x10;
         let mut flag_byte_shift = 0x80;
 
         while input_pos < input.len() {
-            let (mut group_offset, mut group_size) =
-                crate::algorithms::find_match(input, input_pos);
+            let (mut group_offset, mut group_size) = window.search(input_pos);
             if group_size <= 2 {
                 //If the group is less than two bytes, it's smaller to just copy a byte
                 output[flag_byte_pos] |= flag_byte_shift;
@@ -400,7 +401,7 @@ impl Yaz0 {
                 output_pos += 1;
             } else {
                 //Check one byte after this, see if we can get a better match
-                let (new_offset, new_size) = crate::algorithms::find_match(input, input_pos + 1);
+                let (new_offset, new_size) = window.search(input_pos + 1);
                 if group_size + 1 < new_size {
                     //If we did find a better match, copy a byte and then use the new slice
                     output[flag_byte_pos] |= flag_byte_shift;
@@ -423,7 +424,7 @@ impl Yaz0 {
                 }
 
                 //Calculate the lookback offset
-                group_offset = input_pos - group_offset - 1;
+                group_offset = input_pos as u32 - group_offset - 1;
 
                 //If we can't fit the size in the upper nibble, write a third byte for the length
                 if group_size >= 0x12 {
@@ -436,7 +437,7 @@ impl Yaz0 {
                     output[output_pos + 1] = (group_offset) as u8;
                     output_pos += 2;
                 }
-                input_pos += group_size;
+                input_pos += group_size as usize;
             }
 
             //Check if we need to create a new flag byte

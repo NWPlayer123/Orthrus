@@ -406,11 +406,12 @@ impl Yay0 {
         let mut lookback_data = vec![0u8; input.len()];
         let mut lookback_pos = 0;
 
+        let mut window = crate::algorithms::Window::new(input, 0x111);
+
         let mut input_pos = 0;
 
         while input_pos < input.len() {
-            let (mut group_offset, mut group_size) =
-                crate::algorithms::find_match(input, input_pos);
+            let (mut group_offset, mut group_size) = window.search(input_pos);
             if group_size <= 2 {
                 //If the group is less than two bytes, it's smaller to just copy a byte
                 flag_byte |= flag_shift;
@@ -419,7 +420,7 @@ impl Yay0 {
                 copy_pos += 1;
             } else {
                 //Check one byte after this, see if we can get a better match
-                let (new_offset, new_size) = crate::algorithms::find_match(input, input_pos + 1);
+                let (new_offset, new_size) = window.search(input_pos + 1);
                 if group_size + 1 < new_size {
                     //If we did find a better match, copy a byte and then use the new slice
                     flag_byte |= flag_shift;
@@ -442,7 +443,7 @@ impl Yay0 {
                 }
 
                 //Calculate the lookback offset
-                group_offset = input_pos - group_offset - 1;
+                group_offset = input_pos as u32 - group_offset - 1;
 
                 //If we can't fit the size in the upper nibble, write a third byte for the length
                 if group_size >= 0x12 {
@@ -458,7 +459,7 @@ impl Yay0 {
                     lookback_data[lookback_pos + 1] = (group_offset) as u8;
                     lookback_pos += 2;
                 }
-                input_pos += group_size;
+                input_pos += group_size as usize;
             }
 
             //Check if we need to create a new flag byte
