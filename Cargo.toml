@@ -11,7 +11,7 @@ keywords = ["modding", "gamedev"]
 
 [profile.release]
 strip = true
-lto = "fat"
+lto = true
 codegen-units = 1
 
 [dependencies]
