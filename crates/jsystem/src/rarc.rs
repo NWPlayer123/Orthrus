@@ -213,8 +213,8 @@ impl ResourceArchive {
     #[inline]
     pub fn load<I: Into<Box<[u8]>>>(input: I) -> Result<Self> {
         let mut data = DataCursor::new(input, Endian::Big);
-        let header = Self::read_header(&mut data)?;
-        let data_header = Self::read_data_header(&mut data)?;
+        let _header = Self::read_header(&mut data)?;
+        let _data_header = Self::read_data_header(&mut data)?;
 
         Err(Error::EndOfFile)
     }
@@ -245,10 +245,10 @@ impl ResourceArchive {
     /// [`write`](std::fs::write)).
     #[cfg(feature = "std")]
     #[inline]
-    pub fn extract_from<P: AsRef<Path>>(input: &[u8], output: P) -> Result<()> {
+    pub fn extract_from<P: AsRef<Path>>(input: &[u8], _output: P) -> Result<()> {
         let mut data = DataCursor::new(input, Endian::Big);
-        let header = Self::read_header(&mut data)?;
-        let data_header = Self::read_data_header(&mut data)?;
+        let _header = Self::read_header(&mut data)?;
+        let _data_header = Self::read_data_header(&mut data)?;
 
         //Now we should load a reference to the string table so we can build file/folder data to do
         //a single pass over the actual file data when writing

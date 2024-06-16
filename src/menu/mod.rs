@@ -1,7 +1,14 @@
 use argp::FromArgs;
+
+mod jsystem;
+pub use jsystem::JSystemModules;
+use jsystem::JSystemOption;
 mod ncompress;
 pub use ncompress::NCompressModules;
 use ncompress::NCompressOption;
+mod nintendoware;
+pub use nintendoware::NintendoWareModules;
+use nintendoware::NintendoWareOption;
 mod panda3d;
 pub use panda3d::Panda3DModules;
 use panda3d::Panda3DOption;
@@ -28,6 +35,8 @@ pub enum Modules {
     IdentifyFile(IdentifyOption),
     NintendoCompression(NCompressOption),
     Panda3D(Panda3DOption),
+    JSystem(JSystemOption),
+    NintendoWare(NintendoWareOption),
 }
 
 /// Command to try to identify what a given file is.
@@ -63,3 +72,29 @@ pub fn exactly_one_true(bools: &[bool]) -> Option<usize> {
 
     (count == 1).then_some(index)
 }
+
+// Some interaction with argp/argh's derives breaks doc comment macro expansion, so I can't use `#[doc = concat!("", stringify!($module_str), "")]`
+macro_rules! create_submodule {
+    ($module_name:ident, $module_description:expr, $( $submodule_name:ident($submodule_type:ty) ),* ) => {
+        use paste::paste;
+        paste! {
+            // This is the command for the `$module_str` module.
+            #[derive(FromArgs, PartialEq, Debug)]
+            #[argp(subcommand, name = $module_name:lower)]
+            #[argp(description = $module_description)]
+            pub struct [<$module_name Option>] {
+                #[argp(subcommand)]
+                pub nested: [<$module_name Modules>],
+            }
+
+            // These are all supported files within `$module_str`.
+            #[derive(FromArgs, PartialEq, Debug)]
+            #[argp(subcommand)]
+            #[non_exhaustive]
+            pub enum [<$module_name Modules>] {
+                $( $submodule_name($submodule_type) ),*
+            }
+        }
+    };
+}
+pub(crate) use create_submodule;

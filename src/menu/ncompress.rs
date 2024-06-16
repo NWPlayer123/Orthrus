@@ -1,28 +1,17 @@
+use super::create_submodule;
 use argp::FromArgs;
 
-/// This is the command for the `ncompress` module.
-#[derive(FromArgs, PartialEq, Debug)]
-#[argp(subcommand, name = "ncompress")]
-#[argp(description = "Support for Nintendo compression formats")]
-pub struct NCompressOption {
-    #[argp(subcommand)]
-    pub nested: NCompressModules,
-}
+create_submodule!(
+    NCompress,
+    "Support for Nintendo compression formats",
+    Yay0(Yay0Flags),
+    Yaz0(Yaz0Flags)
+);
 
-/// These are all supported types within `ncompress`.
-#[derive(FromArgs, PartialEq, Debug)]
-#[argp(subcommand)]
-#[non_exhaustive]
-pub enum NCompressModules {
-    Yay0(Yay0Data),
-    Yaz0(Yaz0Data),
-}
-
-/// Command-line flags for Yaz0 compression support
 #[derive(FromArgs, PartialEq, Debug)]
 #[argp(subcommand, name = "yay0")]
-#[argp(description = "Nintendo Yay0-compressed Data")]
-pub struct Yay0Data {
+#[argp(description = "Nintendo Yay0-compressed data")]
+pub struct Yay0Flags {
     #[argp(switch, short = 'd')]
     #[argp(description = "Decompress a Yay0-compressed file")]
     pub decompress: bool,
@@ -41,11 +30,10 @@ pub struct Yay0Data {
     pub output: Option<String>,
 }
 
-/// Command-line flags for Yaz0 compression support
 #[derive(FromArgs, PartialEq, Debug)]
 #[argp(subcommand, name = "yaz0")]
-#[argp(description = "Nintendo Yaz0-compressed Data")]
-pub struct Yaz0Data {
+#[argp(description = "Nintendo Yaz0-compressed data")]
+pub struct Yaz0Flags {
     #[argp(switch, short = 'd')]
     #[argp(description = "Decompress a Yaz0-compressed file")]
     pub decompress: bool,

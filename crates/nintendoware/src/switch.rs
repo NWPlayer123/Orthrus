@@ -1,3 +1,5 @@
+#![allow(dead_code)] //Tell rust to shut up 
+
 use core::marker::PhantomData;
 #[cfg(feature = "std")]
 use std::path::Path;
@@ -317,6 +319,7 @@ struct StreamSoundExtension {
     stream_type_info: u32,
     loop_start_frame: u32,
     loop_end_frame: u32,
+    temp_position: usize,
 }
 
 impl Read for StreamSoundExtension {
@@ -325,6 +328,7 @@ impl Read for StreamSoundExtension {
             stream_type_info: data.read_u32()?,
             loop_start_frame: data.read_u32()?,
             loop_end_frame: data.read_u32()?,
+            temp_position: data.position() - 8,
         })
     }
 }
@@ -1045,20 +1049,18 @@ impl BFSAR {
             }
         }
 
-        /*
-        Good lord this took so long to be able to do
         for info in archive.info.sounds {
             match info.details {
-                SoundDetails::Stream(stream) => {
-                    let filename = archive.strings.table[info.string_id as usize].clone();
+                SoundDetails::Stream(ref stream) => {
+                    let filename = &archive.strings.table[info.string_id as usize];
                     println!(
-                        "{} has loop {} to {}", filename.split_at(filename.len() - 1).0,
-                        stream.extension.loop_start_frame, stream.extension.loop_end_frame
+                        "    [\"{}\", {}, {}, {}],", &filename[..filename.len() - 1],
+                        stream.extension.loop_start_frame, stream.extension.loop_end_frame, stream.extension.temp_position
                     );
                 }
                 _ => (),
             }
-        }*/
+        }
 
         Ok(())
     }

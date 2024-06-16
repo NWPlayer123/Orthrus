@@ -1,4 +1,4 @@
-use crate::common::Datagram;
+/*use crate::common::Datagram;
 //use crate::nodes::prelude::*;
 
 //#[enum_dispatch]
@@ -11,7 +11,7 @@ pub(crate) trait DatagramWrite {
     fn write(&self) -> Result<Datagram, crate::bam::Error>;
 }
 
-/*enum Node {
+enum Node {
     TextureStage(TextureStage),
     GeomVertexAnimationSpec(GeomVertexAnimationSpec),
 }

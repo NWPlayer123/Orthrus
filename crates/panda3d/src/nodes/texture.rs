@@ -1,6 +1,3 @@
-use core::default;
-
-use super::auto_texture_scale;
 use super::auto_texture_scale::AutoTextureScale;
 use super::geom_enums::UsageHint;
 use super::prelude::*;
@@ -139,6 +136,21 @@ enum Format {
     RGBA32I,
 }
 
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Default, FromPrimitive)]
+#[repr(u8)]
+enum ComponentType {
+    #[default]
+    UnsignedByte,
+    UnsignedShort,
+    Float,
+    UnsignedInt24, //packed
+    Int,
+    Byte,
+    Short,
+    HalfFloat, //cursed
+
+}
+
 #[derive(Default, Debug)]
 #[allow(dead_code)]
 pub(crate) struct Texture {
@@ -151,6 +163,7 @@ pub(crate) struct Texture {
     has_rawdata: bool,
     texture_type: TextureType,
     body: TextureBody,
+    data: TextureData,
     has_read_mipmaps: bool,
 }
 
@@ -171,6 +184,17 @@ pub(crate) struct TextureBody {
     simple_image_date_generated: i32,
     image: Vec<u8>,
     clear_color: Option<[f64; 4]>,
+}
+
+#[derive(Default, Debug)]
+#[allow(dead_code)]
+pub(crate) struct TextureData {
+    // x, y, z
+    size: [u32; 3],
+    // x, y, z
+    pad_size: [u32; 3],
+    num_views: u32,
+    component_type: ComponentType,
 }
 
 impl Texture {
@@ -213,6 +237,7 @@ impl Texture {
             //do_fillin_body
             texture.body = texture.fillin_body(loader, data)?;
             //do_fillin_rawdata
+            texture.data = texture.fillin_rawdata(loader, data)?;
         } else {
             //do_fillin_body
             texture.body = texture.fillin_body(loader, data)?;
@@ -280,6 +305,32 @@ impl Texture {
         Ok(body)
     }
 
+    fn fillin_rawdata(
+        &self, loader: &mut BinaryAsset, data: &mut Datagram,
+    ) -> Result<TextureData, bam::Error> {
+        let size = [
+            data.read_u32()?,
+            data.read_u32()?,
+            data.read_u32()?,
+        ];
+
+        let pad_size = match loader.get_minor_version() >= 30 {
+            true => [
+                data.read_u32()?,
+                data.read_u32()?,
+                data.read_u32()?,
+            ],
+            false => [0, 0, 0]
+        };
+        let num_views = match loader.get_minor_version() >= 26 {
+            true => data.read_u32()?,
+            false => 1,
+        };
+        let component_type = ComponentType::from(data.read_u8()?);
+        Ok(TextureData { size, pad_size, num_views, component_type })
+    }
+
+    #[allow(dead_code)]
     pub fn has_simple_ram_image(&self) -> bool {
         !self.body.image.is_empty()
     }

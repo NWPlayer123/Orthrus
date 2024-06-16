@@ -2,11 +2,13 @@
 //!
 //! The contents of this module can be used by including the following in any module:
 //! ```
-//! use orthrus_nintendoware::prelude::*;
+//! use orthrus_jsystem::prelude::*;
 //! ```
 
-#[allow(non_snake_case)]
-pub mod Switch {
+#[doc(inline)]
+pub use crate::rarc::ResourceArchive;
+
+pub mod rarc {
     #[doc(inline)]
-    pub use crate::switch::BFSAR;
+    pub use crate::rarc::Error;
 }
