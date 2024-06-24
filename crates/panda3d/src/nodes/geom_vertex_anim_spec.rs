@@ -10,7 +10,7 @@ pub(crate) struct GeomVertexAnimationSpec {
 }
 
 impl GeomVertexAnimationSpec {
-    fn _create(_loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
+    pub fn create(_loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
         let animation_type = AnimationType::from(data.read_u8()?);
         let num_transforms = data.read_u16()?;
         let indexed_transforms = data.read_bool()?;

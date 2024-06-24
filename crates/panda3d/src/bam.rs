@@ -18,6 +18,7 @@
 use std::path::Path;
 
 use hashbrown::HashMap;
+use num_enum::FromPrimitive;
 use orthrus_core::prelude::*;
 use snafu::prelude::*;
 
@@ -52,7 +53,6 @@ pub enum Error {
     #[snafu(display("Invalid Enum Variant! Malformed BAM file?"))]
     InvalidEnum,
 }
-pub(crate) type Result<T> = core::result::Result<T, Error>;
 
 #[cfg(feature = "std")]
 impl From<std::io::Error> for Error {
@@ -79,22 +79,40 @@ impl From<data::Error> for Error {
     }
 }
 
-#[derive(Debug)]
-#[allow(dead_code)]
+#[derive(Debug, Default)]
 pub(crate) struct Header {
     pub(crate) version: Version,
     endian: Endian,
-    /// BAM files after 6.27 support reading either floats or doubles (false/true)
-    pub(crate) float_type: bool,
+    /// BAM files starting with 6.27 support reading either floats or doubles (false/true)
+    pub(crate) use_double: bool,
 }
 
-#[derive(Debug)]
+impl Header {
+    #[inline]
+    fn create(data: &mut Datagram) -> Result<Self, self::Error> {
+        let version = Version { major: data.read_u16()?, minor: data.read_u16()? };
+        let endian = match data.read_u8()? {
+            0 => Endian::Big,
+            1 => Endian::Little,
+            _ => Endian::default(),
+        };
+        let use_double = match version.minor >= 27 {
+            true => data.read_u8()? != 0,
+            false => false,
+        };
+        Ok(Self { version, endian, use_double })
+    }
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Default, FromPrimitive)]
+#[repr(u8)]
 enum ObjectCode {
     /// Includes an object definition, always paired with a Pop.
     Push,
     /// Paired with a Push in order to allow for nesting.
     Pop,
     /// Includes an object definition, does not change nesting level.
+    #[default]
     Adjunct,
     /// List of object IDs that were deallocated by the sender, ???
     Remove,
@@ -102,55 +120,31 @@ enum ObjectCode {
     FileData,
 }
 
-impl TryFrom<u8> for ObjectCode {
-    type Error = Error;
+#[derive(Debug, Eq, PartialEq)]
+enum ObjectsLeft {
+    /// Prior to BAM 6.21
+    ObjectCount { num_extra_objects: i32 },
+    /// Starting with BAM 6.21
+    NestingLevel { nesting_level: i32 },
+}
 
-    fn try_from(value: u8) -> core::result::Result<Self, Self::Error> {
-        Ok(match value {
-            0 => ObjectCode::Push,
-            1 => ObjectCode::Pop,
-            2 => ObjectCode::Adjunct,
-            3 => ObjectCode::Remove,
-            4 => ObjectCode::FileData,
-            _ => return Err(Error::InvalidEnum),
-        })
+impl Default for ObjectsLeft {
+    fn default() -> Self {
+        Self::NestingLevel { nesting_level: 0 }
     }
 }
 
-/*
-mod CollisionSolid {
-    use bitflags::bitflags;
-    bitflags! {
-        #[derive(Debug)]
-        pub(crate) struct Flags: u8 {
-            /// Allows this to actually interact with other objects.
-            const Tangible = 0x01;
-            /// Lets us know we actually have an effective normal to worry about.
-            const EffectiveNormal = 0x02;
-            /// Lets us know if we need to update the GeomNode for visualization of the solid.
-            const VisualizationStale = 0x04;
-            /// Only checked if the collision solid is used as a collider. Uses the true normal
-            /// instead.
-            const IgnoreEffectiveNormal = 0x08;
-            /// Lets us know we need to re-calculate the bounding volume.
-            const InternalBoundsStale = 0x10;
-        }
-    }
-}
-*/
-
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct BinaryAsset {
     /// Holds all BAM metadata needed for parsing
     pub(crate) header: Header,
-    //TODO: combine these into a single value?
-    /// Before BAM 6.21
-    num_extra_objects: i32,
-    /// Starting with BAM 6.21
-    nesting_level: i32,
-    /// Used if there are more than 0xFFFF ObjectIDs
+    /// Used to store whether the BAM stream has more objects to read
+    objects_left: ObjectsLeft,
+    /// Used if there are more than 65535 Object IDs
     long_object_id: bool,
-    registry: HashMap<u16, String>,
+    /// Used if there are more than 65535 Pointer to Array IDs
+    long_pta_id: bool,
+    type_registry: HashMap<u16, String>,
 }
 
 impl BinaryAsset {
@@ -161,45 +155,19 @@ impl BinaryAsset {
     /// Earliest supported revision of the BAM format. For more info, see [here](self#revisions).
     pub const MINIMUM_VERSION: Version = Version { major: 6, minor: 14 };
 
-    #[inline]
-    #[allow(dead_code)]
-    fn read_header<T: EndianRead>(data: &mut T) -> Result<Header> {
-        let version = Version { major: data.read_u16()?, minor: data.read_u16()? };
-
-        ensure!(
-            version.major == Self::CURRENT_VERSION.major
-                && version.minor >= Self::MINIMUM_VERSION.minor
-                && version.minor <= Self::CURRENT_VERSION.minor,
-            InvalidVersionSnafu
-        );
-
-        let endian = match data.read_u8()? {
-            0 => Endian::Big,
-            1 => Endian::Little,
-            _ => return Err(Error::InvalidEndian),
-        };
-
-        let float_type = match version.minor >= 27 {
-            true => data.read_u8()? != 0,
-            false => false,
-        };
-
-        Ok(Header { version, endian, float_type })
-    }
-
     pub fn get_minor_version(&self) -> u16 {
         self.header.version.minor
     }
 
     #[cfg(feature = "std")]
     #[inline]
-    pub fn open<P: AsRef<Path>>(input: P) -> Result<Self> {
+    pub fn open<P: AsRef<Path>>(input: P) -> Result<Self, self::Error> {
         let data = std::fs::read(input)?;
         Self::load(data)
     }
 
     #[inline]
-    pub fn load<I: Into<Box<[u8]>>>(input: I) -> Result<Self> {
+    pub fn load<I: Into<Box<[u8]>>>(input: I) -> Result<Self, self::Error> {
         let mut data = DataCursor::new(input, Endian::Little);
 
         // Read the magic and make sure we're actually parsing a BAM file
@@ -207,64 +175,91 @@ impl BinaryAsset {
         data.read_length(&mut magic)?;
         ensure!(magic == Self::MAGIC, InvalidMagicSnafu);
 
-        // Load initial datagram and parse the header
+        // The first datagram is always the header data
         let mut datagram = Datagram::new(&mut data, Endian::Little, false)?;
-        let header = Self::read_header(&mut *datagram)?;
+        let header = Header::create(&mut datagram)?;
+        ensure!(
+            header.version.major == Self::CURRENT_VERSION.major
+                && header.version.minor >= Self::MINIMUM_VERSION.minor
+                && header.version.minor <= Self::CURRENT_VERSION.minor,
+            InvalidVersionSnafu
+        );
 
         // Create the BinaryAsset instance so we can start constructing all the objects
+        let objects_left = match header.version.minor >= 21 {
+            true => ObjectsLeft::NestingLevel { nesting_level: 0 },
+            false => ObjectsLeft::ObjectCount { num_extra_objects: 0 },
+        };
         let mut bamfile = Self {
             header,
-            num_extra_objects: 0,
-            nesting_level: 0,
-            long_object_id: false,
-            registry: HashMap::new(),
+            type_registry: HashMap::new(),
+            objects_left,
+            ..Default::default()
         };
 
         // Read the initial object
-        datagram = Datagram::new(&mut data, bamfile.header.endian, bamfile.header.float_type)?;
+        datagram = Datagram::new(&mut data, bamfile.header.endian, bamfile.header.use_double)?;
         bamfile.read_object(&mut datagram)?;
 
-        //Parse objects until we run out, used before 6.21.
-        while bamfile.num_extra_objects > 0 {
-            println!("Datagram at {:#X}", data.position());
-            datagram = Datagram::new(&mut data, bamfile.header.endian, bamfile.header.float_type)?;
-            bamfile.read_object(&mut datagram)?;
-            bamfile.num_extra_objects -= 1;
+        loop {
+            match bamfile.objects_left {
+                ObjectsLeft::ObjectCount { mut num_extra_objects } => {
+                    if num_extra_objects > 0 {
+                        datagram = Datagram::new(
+                            &mut data,
+                            bamfile.header.endian,
+                            bamfile.header.use_double,
+                        )?;
+                        bamfile.read_object(&mut datagram)?;
+                        num_extra_objects -= 1;
+                        bamfile.objects_left = ObjectsLeft::ObjectCount { num_extra_objects }
+                    } else {
+                        break;
+                    }
+                }
+                ObjectsLeft::NestingLevel { nesting_level } => {
+                    if nesting_level > 0 {
+                        datagram = Datagram::new(
+                            &mut data,
+                            bamfile.header.endian,
+                            bamfile.header.use_double,
+                        )?;
+                        bamfile.read_object(&mut datagram)?;
+                    } else {
+                        break;
+                    }
+                }
+            }
         }
 
-        //Parse objects until we reach the initial nesting level, used starting with 6.21.
-        while bamfile.nesting_level > 0 {
-            println!("Datagram at {:#X}", data.position());
-            datagram = Datagram::new(&mut data, bamfile.header.endian, bamfile.header.float_type)?;
-            bamfile.read_object(&mut datagram)?;
-        }
-
-        println!("{:?}", bamfile.registry);
+        println!("{:?}", bamfile.type_registry);
 
         Ok(bamfile)
     }
 
-    fn read_object(&mut self, data: &mut Datagram) -> Result<()> {
-        // Try to read and handle ObjectCode control flow
-        if self.header.version.minor >= 21 {
-            // If we're past 6.21, "BamObjectCode" control flow codes are in the data stream
-            let object_code = data.read_u8()?.try_into()?;
-            println!("Object Code: {:?}", object_code);
-            match object_code {
-                ObjectCode::Push => {
-                    self.nesting_level += 1;
-                }
-                ObjectCode::Pop => {
-                    self.nesting_level -= 1;
-                    return Ok(());
-                }
-                ObjectCode::Adjunct => {}
-                _ => {
-                    todo!(
-                        "Remove and FileData are unimplemented, need a test case, pls message me."
-                    )
+    fn read_object(&mut self, data: &mut Datagram) -> Result<(), self::Error> {
+        // If we're reading a file 6.21 or newer, control flow codes are in the data stream, so
+        // match against the enum variant
+        match self.objects_left {
+            ObjectsLeft::NestingLevel { ref mut nesting_level } => {
+                let object_code = ObjectCode::from(data.read_u8()?);
+                match object_code {
+                    ObjectCode::Push => {
+                        *nesting_level += 1;
+                    }
+                    ObjectCode::Pop => {
+                        *nesting_level -= 1;
+                        return Ok(());
+                    }
+                    ObjectCode::Adjunct => {}
+                    _ => {
+                        todo!(
+                            "Remove and FileData are unimplemented, need a test case, pls message me."
+                        )
+                    }
                 }
             }
+            _ => (),
         }
 
         // Check the type handle, see if we need to register any new types
@@ -272,44 +267,46 @@ impl BinaryAsset {
         // Read the Object ID and process it
         let object_id = self.read_object_id(data)?;
         println!("Object ID {}", object_id);
-        println!(
-            "Finished at {:#X}, Data size {:#X}\n",
+        /*println!(
+            "Initial type data {:#X}, Data size {:#X}\n",
             data.position(),
             data.len()
-        );
+        );*/
 
         if type_handle != 0 {
             // Now we need to read the data of the associated type using the "fillin" functions
             // For now I'm combining them into a single function
-            let type_name = self.registry.get_mut(&type_handle).expect("a").to_owned();
-            println!("Filling in {} from {:#X}", type_name, data.position());
+            let type_name = self.type_registry.get_mut(&type_handle).expect("a").to_owned();
+            //println!("Filling in {} from {:#X}", type_name, data.position());
             self.fillin(data, &type_name)?;
         }
-        println!(
-            "Finished at {:#X}, Data size {:#X}\n",
-            data.position(),
-            data.len()
-        );
+        if data.position() != data.len() {
+            println!(
+                "Finished at {:#X}, Data size {:#X}\n",
+                data.position(),
+                data.len()
+            );
+        }
         Ok(())
     }
 
-    fn read_handle(&mut self, data: &mut Datagram) -> Result<u16> {
+    fn read_handle(&mut self, data: &mut Datagram) -> Result<u16, self::Error> {
         let type_handle = data.read_u16()?;
 
         // Found a new type, read its string and register it
-        if !self.registry.contains_key(&type_handle) {
+        if !self.type_registry.contains_key(&type_handle) {
             //read_slice
             let length = data.read_u16()?;
             let slice = data.get_slice(length as usize)?;
 
             let type_name =
                 core::str::from_utf8(&slice).map_err(|_| Error::InvalidType)?.to_owned();
-            println!("Registering Type {type_name} -> {type_handle}");
-            self.registry.insert(type_handle, type_name);
+            //println!("Registering Type {type_name} -> {type_handle}");
+            self.type_registry.insert(type_handle, type_name);
 
             //Check for any parent classes we need to register
             let parent_count = data.read_u8()?;
-            println!("Parent Count: {parent_count}");
+            //println!("Parent Count: {parent_count}");
             for _ in 0..parent_count {
                 self.read_handle(data)?;
             }
@@ -318,7 +315,7 @@ impl BinaryAsset {
         Ok(type_handle)
     }
 
-    fn read_object_id(&mut self, data: &mut Datagram) -> Result<u32> {
+    fn read_object_id(&mut self, data: &mut Datagram) -> Result<u32, self::Error> {
         let object_id;
         if self.long_object_id {
             object_id = data.read_u32()?;
@@ -331,12 +328,29 @@ impl BinaryAsset {
         Ok(object_id)
     }
 
-    pub(crate) fn read_pointer(&mut self, data: &mut Datagram) -> Result<Option<u32>> {
+    pub(crate) fn read_pta_id(&mut self, data: &mut Datagram) -> Result<u32, self::Error> {
+        let pta_id;
+        if self.long_pta_id {
+            pta_id = data.read_u32()?;
+        } else {
+            pta_id = data.read_u16()?.into();
+            if pta_id == 0xFFFF {
+                self.long_pta_id = true;
+            }
+        }
+        Ok(pta_id)
+    }
+
+    pub(crate) fn read_pointer(&mut self, data: &mut Datagram) -> Result<Option<u32>, self::Error> {
         let object_id = self.read_object_id(data)?;
-        println!("Object ID ptrto {}", object_id);
+        //println!("Object ID ptrto {}", object_id);
         if object_id != 0 {
-            if self.header.version.minor < 21 {
-                self.num_extra_objects += 1;
+            // objects_left will only be ObjectCount on pre-6.21 so this should be safe
+            match self.objects_left {
+                ObjectsLeft::ObjectCount { ref mut num_extra_objects } => {
+                    *num_extra_objects -= 1;
+                }
+                _ => (),
             }
             return Ok(Some(object_id));
         }
@@ -344,21 +358,17 @@ impl BinaryAsset {
     }
 
     //should really be using make_from_bam as an entrypoint
-    fn fillin(&mut self, data: &mut Datagram, type_name: &str) -> Result<()> {
+    fn fillin(&mut self, data: &mut Datagram, type_name: &str) -> Result<(), self::Error> {
         match type_name {
-            //3
             "TypedObject" => {
                 // Base class, nothing to fill in
             }
-            //4
             "ReferenceCount" => {
                 // Base class, nothing to fill in
             }
-            //12
             "Namable" => {
                 // Base class, nothing to fill in
             }
-            //48
             "TypedWritable" => {
                 // Base class, everything derived from here.
                 //
@@ -371,393 +381,120 @@ impl BinaryAsset {
                 // * complete_pointers, finalize, and _num_GenericPointers into Object::finalize
                 // * write_datagram into Object::write
             }
-            //49
             "PandaNode" => {
-                //TypedWritable::fillin()
-                //remove_all_children()
                 let node = crate::nodes::panda_node::PandaNode::create(self, data)?;
                 println!("{:#?}", node);
             }
-            //52
             "TypedWritableReferenceCount" => {
                 // Base class, nothing to fill in
             }
-            //53
             "CachedTypedWritableReferenceCount" => {
                 // Base class, nothing to fill in
             }
-            //54
             "CopyOnWriteObject" => {
                 // Base class, nothing to fill in
             }
-            //93
             "RenderAttrib" => {
                 // Base class, other Attrib derive from this
             }
-            //101
             "ColorAttrib" => {
                 let node = crate::nodes::color_attrib::ColorAttrib::create(self, data)?;
                 println!("{:#?}", node);
             }
-            //108
             "CullBinAttrib" => {
                 let node = crate::nodes::cull_bin_attrib::CullBinAttrib::create(self, data)?;
                 println!("{:#?}", node);
             }
-            //124
             "GeomNode" => {
                 let node = crate::nodes::geom_node::GeomNode::create(self, data)?;
                 println!("{:#?}", node);
             }
-            //136
             "ModelNode" => {
                 let node = crate::nodes::model_node::ModelNode::create(self, data)?;
                 println!("{:#?}", node);
             }
-            //137
             "ModelRoot" => {
                 Self::fillin(self, data, "ModelNode")?;
             }
-            //149
             "RenderEffects" => {
                 let node = crate::nodes::render_effects::RenderEffects::create(self, data)?;
                 println!("{:#?}", node);
             }
-            //151
             "NodeCachedReferenceCount" => {
                 // Base class, nothing to fill in
             }
-            //152
             "RenderState" => {
                 let node = crate::nodes::render_state::RenderState::create(self, data)?;
                 println!("{:#?}", node);
             }
-            //166
             "TextureAttrib" => {
                 let node = crate::nodes::texture_attrib::TextureAttrib::create(self, data)?;
                 println!("{:#?}", node);
             }
-            //168
             "TransformState" => {
                 let node = crate::nodes::transform_state::TransformState::create(self, data)?;
                 println!("{:#?}", node);
             }
-            //169
             "TransparencyAttrib" => {
                 let node =
                     crate::nodes::transparency_attrib::TransparencyAttrib::create(self, data)?;
                 println!("{:#?}", node);
             }
-            //201
             "Texture" => {
                 let node = crate::nodes::texture::Texture::create(self, data)?;
                 println!("{:#?}", node);
             }
-            //237
             "CollisionSolid" => {}
-            //249
             "CollisionSphere" => {}
-            //254
             "CollisionPlane" => {}
-            //255
             "CollisionPolygon" => {}
-            //257
             "CollisionNode" => {}
-            //328
-            "Geom" => {}
-            //335
+            "CollisionTube" => {}
+            "Geom" => {
+                let node = crate::nodes::geom::Geom::create(self, data)?;
+                println!("{:#?}", node);
+            }
             "GeomPrimitive" => {}
-            //341
             "GeomTriangles" => {}
-            //343
-            "GeomTristrips" => {}
-            //344
-            "GeomVertexArrayData" => {}
-            //347
-            "GeomVertexArrayFormat" => {}
-            //348
-            "GeomVertexData" => {}
-            //354
+            "GeomTristrips" => {
+                let node = crate::nodes::geom_tristrips::GeomTristrips::create(self, data)?;
+                println!("{:#?}", node);
+            }
+            "GeomVertexArrayData" => {
+                let node =
+                    crate::nodes::geom_vertex_array_data::GeomVertexArrayData::create(self, data)?;
+                println!("{:#?}", node);
+            }
+            "GeomVertexArrayFormat" => {
+                let node = crate::nodes::geom_vertex_array_format::GeomVertexArrayFormat::create(
+                    self, data,
+                )?;
+                println!("{:#?}", node);
+            }
+            "GeomVertexData" => {
+                let node = crate::nodes::geom_vertex_data::GeomVertexData::create(self, data)?;
+                println!("{:#?}", node);
+            }
             "GeomVertexFormat" => {
-                //TypedWritableReferenceCount::fillin
+                let node = crate::nodes::geom_vertex_format::GeomVertexFormat::create(self, data)?;
+                println!("{:#?}", node);
             }
-            //356
-            "InternalName" => {}
-            //372
+            "InternalName" => {
+                let node = crate::nodes::internal_name::InternalName::create(self, data)?;
+                println!("{:#?}", node);
+            }
             "TextureStage" => {
-                let texture_stage = crate::nodes::texture_stage::TextureStage::create(self, data)?;
-                println!("{:#?}", texture_stage);
+                let node = crate::nodes::texture_stage::TextureStage::create(self, data)?;
+                println!("{:#?}", node);
             }
+            "BillboardEffect" => {
+                let node = crate::nodes::billboard_effect::BillboardEffect::create(self, data)?;
+                println!("{:#?}", node);
+            }
+            "DepthWriteAttrib" => {}
+            "CullFaceAttrib" => {}
             _ => todo!("{type_name}"),
         }
-        /*match type_name {
-            //3
-            "TypedObject" => {
-                //empty, used by TypedWritable
-            }
-            //4
-            "ReferenceCount" => {
-                //empty, used by TypedWritable
-            }
-            //12
-            "Namable" => {
-                //empty, used by TypedWritable
-            }
-            //48
-            "TypedWritable" => {
-                //empty, base class
-            }
-            //49
-            "PandaNode" => {
-                self.fillin(data, "TypedWritable")?;
-
-                //remove_all_children
-                let length = data.read_u16()?;
-                let slice = data.get_slice(length as usize)?;
-                let name = core::str::from_utf8(&slice).map_err(|_| Error::InvalidType)?;
-                println!("PandaNode name: {:?}", name);
-
-                //PandaNode::CData::fillin
-                //state
-                self.read_pointer(data)?;
-                //transform
-                self.read_pointer(data)?;
-                //effects
-                self.read_pointer(data)?;
-
-                if self.header.version.minor < 2 {
-                    let draw_mask = data.read_u32()?;
-                    //some additional processing that I don't need to set
-                    println!("PandaNode Draw Mask: {:#08X}", draw_mask);
-                } else {
-                    let draw_control_mask = data.read_u32()?;
-                    let draw_show_mask = data.read_u32()?;
-                    println!(
-                        "PandaNode Draw Mask: Control {:#08X}, Show {:#08X}",
-                        draw_control_mask, draw_show_mask
-                    );
-                }
-
-                let into_collide_mask = data.read_u32()?;
-                println!("PandaNode Collide Mask: {:#08X}", into_collide_mask);
-
-                if self.header.version.minor >= 19 {
-                    let bounds_type: BoundingVolume::BoundsType = data.read_u8()?.try_into()?;
-                    println!("PandaNode BoundsType: {:?}", bounds_type);
-                }
-
-                let num_tags = data.read_u32()?;
-                for _ in 0..num_tags {
-                    let mut length = data.read_u16()?;
-                    let mut slice = data.get_slice(length as usize)?;
-                    let key =
-                        core::str::from_utf8(&slice).map_err(|_| Error::InvalidType)?.to_owned();
-                    length = data.read_u16()?;
-                    slice = data.get_slice(length as usize)?;
-                    let value =
-                        core::str::from_utf8(&slice).map_err(|_| Error::InvalidType)?.to_owned();
-                    println!("PandaNode Key-Value {} -> {}", key, value);
-                }
-
-                //fillin_up_list up
-                let num_parents = data.read_u16()?;
-                println!("PandaNode Parent Count: {}", num_parents);
-                for _ in 0..num_parents {
-                    self.read_pointer(data)?;
-                }
-                //fillin_down_list down
-                let mut num_children = data.read_u16()?;
-                println!("PandaNode Children Count: {}", num_children);
-                for _ in 0..num_children {
-                    self.read_pointer(data)?;
-                    let sort = data.read_u32()?;
-                    println!("Sort {}", sort);
-                }
-                //fillin_down_list stashed
-                num_children = data.read_u16()?;
-                println!("PandaNode Stashed Count: {}", num_children);
-                for _ in 0..num_children {
-                    self.read_pointer(data)?;
-                    let sort = data.read_u32()?;
-                    println!("Sort {}", sort);
-                }
-            }
-            //52
-            "TypedWritableReferenceCount" => {
-                //empty, used by CachedTypedWritableReferenceCount
-            }
-            //53
-            "CachedTypedWritableReferenceCount" => {
-                //empty, used by NodeCachedReferenceCount
-            }
-            //54
-            "CopyOnWriteObject" => {
-                //empty, used by CollisionSolid
-            }
-            //124
-            "GeomNode" => {
-                self.fillin(data, "PandaNode")?;
-
-                //fill in cycle data
-                let num_geoms = data.read_u16()?;
-                println!("GeomNode Count: {num_geoms}");
-                for _ in 0..num_geoms {
-                    //Geom, RenderState?
-                    self.read_pointer(data)?;
-                    self.read_pointer(data)?;
-                }
-            }
-            //136
-            "ModelNode" => {
-                self.fillin(data, "PandaNode")?;
-
-                let preserve_transform: PreserveTransform = data.read_u8()?.try_into()?;
-                //SceneGraphReducer::AttribTypes that can't be overwritten
-                let preserve_attributes = data.read_u16()?;
-                println!(
-                    "ModelNode: Transform {:?}, Attributes {:#X}",
-                    preserve_transform, preserve_attributes
-                );
-            }
-            //137
-            "ModelRoot" => {
-                self.fillin(data, "ModelNode")?;
-            }
-            //149
-            "RenderEffects" => {
-                self.fillin(data, "TypedWritable")?;
-
-                let num_effects = data.read_u16()?;
-                for _ in 0..num_effects {
-                    //self.read_pointer(data)?;
-                }
-                println!("RenderEffects count: {num_effects}");
-
-                //reserve this many effects
-            }
-            //151
-            "NodeCachedReferenceCount" => {
-                //empty, used by RenderState
-            }
-            //152
-            "RenderState" => {
-                self.fillin(data, "TypedWritable")?;
-
-                let num_attributes = data.read_u16()?;
-                let mut read_overrides = vec![0i32; num_attributes as usize];
-
-                for _ in 0..num_attributes {
-                    self.read_pointer(data)?;
-                    let read_override = data.read_i32()?;
-                    read_overrides.push(read_override);
-                }
-                println!("RenderState read_overrides: {:?}", read_overrides);
-            }
-            //168
-            "TransformState" => {
-                self.fillin(data, "TypedWritable")?;
-
-                let flags = TransformState::Flags::from_bits_truncate(data.read_u32()?);
-                println!("TransformState flags: {:?}", flags);
-                if flags.contains(TransformState::Flags::ComponentsGiven) {
-                    let position = [data.read_i32()?, data.read_i32()?, data.read_i32()?];
-                    println!("Position: {:?}", position);
-                    if flags.contains(TransformState::Flags::QuaternionGiven) {
-                        let quaternion = [
-                            data.read_i32()?,
-                            data.read_i32()?,
-                            data.read_i32()?,
-                            data.read_i32()?,
-                        ];
-                        println!("Quaternion: {:?}", quaternion);
-                    } else {
-                        let hpr = [data.read_i32()?, data.read_i32()?, data.read_i32()?];
-                        println!("Heading, Pitch, Roll: {:?}", hpr);
-                    }
-                    let scale = [data.read_i32()?, data.read_i32()?, data.read_i32()?];
-                    println!("Scale: {:?}", scale);
-                    let shear = [data.read_i32()?, data.read_i32()?, data.read_i32()?];
-                    println!("Shear: {:?}", shear);
-                }
-
-                if flags.contains(TransformState::Flags::MatrixKnown) {
-                    //4x4 matrix
-                    if self.header.double {
-                        let matrix = [
-                            [
-                                data.read_f64()?,
-                                data.read_f64()?,
-                                data.read_f64()?,
-                                data.read_f64()?,
-                            ],
-                            [
-                                data.read_f64()?,
-                                data.read_f64()?,
-                                data.read_f64()?,
-                                data.read_f64()?,
-                            ],
-                            [
-                                data.read_f64()?,
-                                data.read_f64()?,
-                                data.read_f64()?,
-                                data.read_f64()?,
-                            ],
-                            [
-                                data.read_f64()?,
-                                data.read_f64()?,
-                                data.read_f64()?,
-                                data.read_f64()?,
-                            ],
-                        ];
-                        println!("Matrix: {:?}", matrix);
-                    } else {
-                        let matrix = [
-                            [
-                                data.read_f32()?,
-                                data.read_f32()?,
-                                data.read_f32()?,
-                                data.read_f32()?,
-                            ],
-                            [
-                                data.read_f32()?,
-                                data.read_f32()?,
-                                data.read_f32()?,
-                                data.read_f32()?,
-                            ],
-                            [
-                                data.read_f32()?,
-                                data.read_f32()?,
-                                data.read_f32()?,
-                                data.read_f32()?,
-                            ],
-                            [
-                                data.read_f32()?,
-                                data.read_f32()?,
-                                data.read_f32()?,
-                                data.read_f32()?,
-                            ],
-                        ];
-                        println!("Matrix: {:?}", matrix);
-                    }
-                }
-            }
-            //237
-            ""
-            //257
-            "CollisionNode" => {
-                self.fillin(data, "PandaNode")?;
-
-                let mut num_solids: u32 = data.read_u16()? as u32;
-                if num_solids == 0xFFFF {
-                    num_solids = data.read_u32()?;
-                }
-
-                for _ in 0..num_solids {
-                    self.read_pointer(data)?;
-                }
-            }
-            _ => todo!("{}", type_name),
-        }*/
         Ok(())
     }
 }

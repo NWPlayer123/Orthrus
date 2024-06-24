@@ -44,10 +44,6 @@ fn main() -> Result<()> {
     //Parse command line input
     let args: menu::Orthrus = argp::parse_args_or_exit(argp::DEFAULT);
 
-    //This is needed for pretty colors on Windows
-    enable_ansi_support::enable_ansi_support()
-        .expect("Please update to a modern operating system.");
-
     // Build up a logger with custom formatting and set it to the verbosity from the command line
     // args
     if args.verbose != 0 {

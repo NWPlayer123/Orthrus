@@ -23,6 +23,10 @@ struct Identifier;
 impl Identifier {
     const STRING: u16 = 0x1F01;
 
+    const STRING_BLOCK: u16 = 0x2000;
+    const INFO_BLOCK: u16 = 0x2001;
+    const FILE_BLOCK: u16 = 0x2002;
+
     const SOUND_INFO_SECTION: u16 = 0x2100;
     const BANK_INFO_SECTION: u16 = 0x2101;
     const PLAYER_INFO_SECTION: u16 = 0x2102;
@@ -855,7 +859,11 @@ impl StringBlock {
 
 impl Read for StringBlock {
     fn read<T: DataCursorTrait + EndianRead>(data: &mut T) -> Result<Self> {
-        // Store relative position
+        // Read the header and make sure we're actually reading a String Block
+        let header = SectionHeader::read(data)?;
+        ensure!(header.magic == Self::MAGIC, InvalidMagicSnafu { expected: Self::MAGIC });
+
+        // Store the relative position for all offsets
         let offset = data.position();
 
         // Read both sections
@@ -897,6 +905,8 @@ impl InfoBlock {
     pub const MAGIC: [u8; 4] = *b"INFO";
 
     fn read<T: DataCursorTrait + EndianRead>(data: &mut T) -> Result<Self> {
+        let _header = SectionHeader::read(data)?;
+
         // Store relative position
         let offset = data.position();
 
@@ -980,6 +990,7 @@ impl BFSAR {
     fn read_header<T: DataCursorTrait + EndianRead>(data: &mut T) -> Result<BinaryHeader> {
         // Read the header
         let header = BinaryHeader::read(data)?;
+        println!("{:?}", header);
 
         //Now we need to verify that it's what we actually expected
         ensure!(
@@ -1036,15 +1047,16 @@ impl BFSAR {
         for section in &sections {
             data.set_position(section.offset as usize);
 
-            let section = SectionHeader::read(&mut data)?;
-            match section.magic {
-                StringBlock::MAGIC => {
+            match section.identifier {
+                Identifier::STRING_BLOCK => {
                     archive.strings = StringBlock::read(&mut data)?;
                 }
-                InfoBlock::MAGIC => {
+                Identifier::INFO_BLOCK => {
                     archive.info = InfoBlock::read(&mut data)?;
                 }
-                FileBlock::MAGIC => {}
+                Identifier::FILE_BLOCK => {
+
+                }
                 _ => InvalidDataSnafu { reason: "Unexpected BFSAR Section!" }.fail()?,
             }
         }

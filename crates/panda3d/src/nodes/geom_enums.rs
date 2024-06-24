@@ -31,3 +31,62 @@ pub(crate) enum UsageHint {
     #[default]
     Unspecified,
 }
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Default, FromPrimitive)]
+#[repr(u8)]
+pub(crate) enum NumericType {
+    #[default]
+    U8,
+    U16,
+    U32,
+    /// DirectX ABGR
+    PackedDCBA,
+    /// DirectX ARGB
+    PackedDABC,
+    F32,
+    F64,
+    /// Single/Double-Precision Float
+    StdFloat,
+    I8,
+    I16,
+    I32,
+    /// Three 10/11-bit float components packed in a u32
+    PackedUFloat,
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Default, FromPrimitive)]
+#[repr(u8)]
+pub(crate) enum Contents {
+    #[default]
+    Other,
+    Point,
+    ClipPoint,
+    Vector,
+    TexCoord,
+    Color,
+    Index,
+    MorphDelta,
+    Matrix,
+    Normal,
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Default, FromPrimitive)]
+#[repr(u8)]
+pub(crate) enum ShadeModel {
+    #[default]
+    Uniform,
+    Smooth,
+    FlatFirstVertex,
+    FlatLastVertex,
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Default, FromPrimitive)]
+#[repr(u8)]
+pub(crate) enum PrimitiveType {
+    #[default]
+    None,
+    Polygons,
+    Lines,
+    Points,
+    Patches,
+}

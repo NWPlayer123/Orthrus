@@ -1,7 +1,7 @@
 use super::panda_node::PandaNode;
 use super::prelude::*;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 #[allow(dead_code)]
 pub(crate) struct GeomNode {
     node: PandaNode,

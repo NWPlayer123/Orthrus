@@ -1,6 +1,6 @@
 use approx::relative_eq;
 use bitflags::bitflags;
-use nalgebra::{matrix, point, vector, Matrix4, Point3, Vector3, Vector4};
+use glam::{dmat4, dvec3, dvec4, DMat4, DVec3, DVec4};
 
 use super::prelude::*;
 
@@ -32,12 +32,12 @@ bitflags! {
 #[allow(dead_code)]
 pub(crate) struct TransformState {
     flags: Flags,
-    position: Point3<f64>,
-    quaternion: Vector4<f64>,
-    rotation: Vector3<f64>,
-    scale: Vector3<f64>,
-    shear: Vector3<f64>,
-    matrix: Matrix4<f64>,
+    position: DVec3,
+    quaternion: DVec4,
+    rotation: DVec3,
+    scale: DVec3,
+    shear: DVec3,
+    matrix: DMat4,
 }
 
 impl TransformState {
@@ -46,63 +46,43 @@ impl TransformState {
 
         state.flags = Flags::from_bits_truncate(data.read_u32()?);
         if state.flags.contains(Flags::ComponentsGiven) {
-            state.position = point![data.read_float()?, data.read_float()?, data.read_float()?];
+            state.position = DVec3::read(data)?;
 
             if state.flags.contains(Flags::QuaternionGiven) {
-                state.quaternion = vector![
-                    data.read_float()?,
-                    data.read_float()?,
-                    data.read_float()?,
-                    data.read_float()?,
-                ];
+                state.quaternion = DVec4::read(data)?;
             } else {
                 // Heading, Pitch, Roll
-                state.rotation =
-                    vector![data.read_float()?, data.read_float()?, data.read_float()?];
+                state.rotation = DVec3::read(data)?;
             }
-            state.scale = vector![data.read_float()?, data.read_float()?, data.read_float()?];
-            state.shear = vector![data.read_float()?, data.read_float()?, data.read_float()?];
+            state.scale = DVec3::read(data)?;
+            state.shear = DVec3::read(data)?;
 
             // This needs to be called directly after reading the values
             state.check_uniform_scale();
         }
 
         if state.flags.contains(Flags::MatrixKnown) {
-            //TODO: make this less awful lol
-            state.matrix = matrix![
-                data.read_float()?,
-                data.read_float()?,
-                data.read_float()?,
-                data.read_float()?;
-                data.read_float()?,
-                data.read_float()?,
-                data.read_float()?,
-                data.read_float()?;
-                data.read_float()?,
-                data.read_float()?,
-                data.read_float()?,
-                data.read_float()?;
-                data.read_float()?,
-                data.read_float()?,
-                data.read_float()?,
-                data.read_float()?;
-            ];
+            state.matrix = DMat4::read(data)?;
         }
 
         Ok(state)
     }
 
     fn check_uniform_scale(&mut self) {
-        if relative_eq!(self.scale[0], self.scale[1], epsilon = 1.0e-6)
-            && relative_eq!(self.scale[0], self.scale[2], epsilon = 1.0e-6)
+        const EPSILON: f64 = 1.0e-6;
+        if relative_eq!(self.scale.x, self.scale.y, epsilon = EPSILON)
+            && relative_eq!(self.scale[0], self.scale[2], epsilon = EPSILON)
         {
             self.flags |= Flags::UniformScale;
-            if relative_eq!(self.scale[0], 1.0, epsilon = 1.0e-6) {
+            if relative_eq!(self.scale[0], 1.0, epsilon = EPSILON) {
                 self.flags |= Flags::IdentityScale;
             }
         }
 
-        if relative_eq!(self.shear, Vector3::zeros(), epsilon = 1.0e-6) {
+        if relative_eq!(self.shear.x, DVec3::ZERO.x, epsilon = EPSILON)
+            && relative_eq!(self.shear.y, DVec3::ZERO.y, epsilon = EPSILON)
+            && relative_eq!(self.shear.z, DVec3::ZERO.z, epsilon = EPSILON)
+        {
             self.flags |= Flags::NonZeroShear;
         }
     }

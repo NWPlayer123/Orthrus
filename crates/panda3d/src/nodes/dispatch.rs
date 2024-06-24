@@ -16,3 +16,7 @@ enum Node {
     GeomVertexAnimationSpec(GeomVertexAnimationSpec),
 }
 */
+
+enum PandaObject {
+    
+}

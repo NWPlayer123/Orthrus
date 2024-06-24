@@ -148,7 +148,6 @@ enum ComponentType {
     Byte,
     Short,
     HalfFloat, //cursed
-
 }
 
 #[derive(Default, Debug)]
@@ -195,6 +194,10 @@ pub(crate) struct TextureData {
     pad_size: [u32; 3],
     num_views: u32,
     component_type: ComponentType,
+    component_width: u8,
+    ram_image_compression: CompressionMode,
+    ram_image_count: u8,
+    ram_images: Vec<Vec<u8>>,
 }
 
 impl Texture {
@@ -308,26 +311,46 @@ impl Texture {
     fn fillin_rawdata(
         &self, loader: &mut BinaryAsset, data: &mut Datagram,
     ) -> Result<TextureData, bam::Error> {
-        let size = [
-            data.read_u32()?,
-            data.read_u32()?,
-            data.read_u32()?,
-        ];
+        let size = [data.read_u32()?, data.read_u32()?, data.read_u32()?];
 
         let pad_size = match loader.get_minor_version() >= 30 {
-            true => [
-                data.read_u32()?,
-                data.read_u32()?,
-                data.read_u32()?,
-            ],
-            false => [0, 0, 0]
+            true => [data.read_u32()?, data.read_u32()?, data.read_u32()?],
+            false => [0, 0, 0],
         };
         let num_views = match loader.get_minor_version() >= 26 {
             true => data.read_u32()?,
             false => 1,
         };
         let component_type = ComponentType::from(data.read_u8()?);
-        Ok(TextureData { size, pad_size, num_views, component_type })
+        let component_width = data.read_u8()?;
+        let ram_image_compression = match loader.get_minor_version() >= 1 {
+            true => CompressionMode::from(data.read_u8()?),
+            false => CompressionMode::Off,
+        };
+
+        let ram_image_count = match loader.get_minor_version() >= 3 {
+            true => data.read_u8()?,
+            false => 1,
+        };
+
+        let mut ram_images = Vec::new();
+        for _ in 0..ram_image_count {
+            let size = data.read_u32()?;
+            let mut allocation = Vec::with_capacity(size as usize);
+            allocation.copy_from_slice(data.get_slice(size as usize)?);
+            ram_images.push(allocation);
+        }
+
+        Ok(TextureData {
+            size,
+            pad_size,
+            num_views,
+            component_type,
+            component_width,
+            ram_image_compression,
+            ram_image_count,
+            ram_images,
+        })
     }
 
     #[allow(dead_code)]
