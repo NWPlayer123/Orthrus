@@ -17,6 +17,4 @@ enum Node {
 }
 */
 
-enum PandaObject {
-    
-}
+enum PandaObject {}

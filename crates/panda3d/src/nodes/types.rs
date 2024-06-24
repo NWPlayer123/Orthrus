@@ -1,5 +1,6 @@
-use super::prelude::*;
 use glam::{dmat4, dvec3, dvec4, DMat4, DVec3, DVec4};
+
+use super::prelude::*;
 
 pub trait DatagramRead {
     fn read(data: &mut Datagram) -> Result<Self, bam::Error>

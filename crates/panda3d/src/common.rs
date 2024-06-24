@@ -42,7 +42,6 @@ impl<'a> Datagram<'a> {
         Ok(string.to_owned())
     }
 
-    
     pub(crate) fn read_float(&mut self) -> Result<f64, data::Error> {
         if self.float_type == true {
             self.data.read_f64()

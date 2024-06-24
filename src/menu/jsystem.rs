@@ -1,5 +1,6 @@
-use super::create_submodule;
 use argp::FromArgs;
+
+use super::create_submodule;
 
 create_submodule!(
     JSystem,

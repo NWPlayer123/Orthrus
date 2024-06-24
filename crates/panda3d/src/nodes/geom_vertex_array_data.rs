@@ -1,4 +1,5 @@
-use super::{geom_enums::UsageHint, prelude::*};
+use super::geom_enums::UsageHint;
+use super::prelude::*;
 
 #[derive(Default, Debug)]
 #[allow(dead_code)]

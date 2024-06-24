@@ -1,4 +1,5 @@
-use super::{geom_vertex_anim_spec::GeomVertexAnimationSpec, prelude::*};
+use super::geom_vertex_anim_spec::GeomVertexAnimationSpec;
+use super::prelude::*;
 
 #[derive(Debug, Default)]
 #[allow(dead_code)]
@@ -11,9 +12,7 @@ impl GeomVertexFormat {
     pub fn create(loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
         let animation = GeomVertexAnimationSpec::create(loader, data)?;
 
-        let mut format = Self {
-            animation, ..Default::default()
-        };
+        let mut format = Self { animation, ..Default::default() };
 
         let num_arrays = data.read_u16()?;
         for _ in 0..num_arrays {

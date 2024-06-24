@@ -73,7 +73,8 @@ pub fn exactly_one_true(bools: &[bool]) -> Option<usize> {
     (count == 1).then_some(index)
 }
 
-// Some interaction with argp/argh's derives breaks doc comment macro expansion, so I can't use `#[doc = concat!("", stringify!($module_str), "")]`
+// Some interaction with argp/argh's derives breaks doc comment macro expansion, so I can't use
+// `#[doc = concat!("", stringify!($module_str), "")]`
 macro_rules! create_submodule {
     ($module_name:ident, $module_description:expr, $( $submodule_name:ident($submodule_type:ty) ),* ) => {
         use paste::paste;

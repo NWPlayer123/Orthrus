@@ -1,4 +1,4 @@
-#![allow(dead_code)] //Tell rust to shut up 
+#![allow(dead_code)] //Tell rust to shut up
 
 use core::marker::PhantomData;
 #[cfg(feature = "std")]
@@ -861,7 +861,10 @@ impl Read for StringBlock {
     fn read<T: DataCursorTrait + EndianRead>(data: &mut T) -> Result<Self> {
         // Read the header and make sure we're actually reading a String Block
         let header = SectionHeader::read(data)?;
-        ensure!(header.magic == Self::MAGIC, InvalidMagicSnafu { expected: Self::MAGIC });
+        ensure!(
+            header.magic == Self::MAGIC,
+            InvalidMagicSnafu { expected: Self::MAGIC }
+        );
 
         // Store the relative position for all offsets
         let offset = data.position();
@@ -1054,9 +1057,7 @@ impl BFSAR {
                 Identifier::INFO_BLOCK => {
                     archive.info = InfoBlock::read(&mut data)?;
                 }
-                Identifier::FILE_BLOCK => {
-
-                }
+                Identifier::FILE_BLOCK => {}
                 _ => InvalidDataSnafu { reason: "Unexpected BFSAR Section!" }.fail()?,
             }
         }
@@ -1066,8 +1067,11 @@ impl BFSAR {
                 SoundDetails::Stream(ref stream) => {
                     let filename = &archive.strings.table[info.string_id as usize];
                     println!(
-                        "    [\"{}\", {}, {}, {}],", &filename[..filename.len() - 1],
-                        stream.extension.loop_start_frame, stream.extension.loop_end_frame, stream.extension.temp_position
+                        "    [\"{}\", {}, {}, {}],",
+                        &filename[..filename.len() - 1],
+                        stream.extension.loop_start_frame,
+                        stream.extension.loop_end_frame,
+                        stream.extension.temp_position
                     );
                 }
                 _ => (),

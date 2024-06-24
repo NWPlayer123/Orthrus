@@ -11,5 +11,5 @@ mod no_std {
     pub use alloc::{format, vec};
 }
 
-pub mod rarc;
 pub mod prelude;
+pub mod rarc;

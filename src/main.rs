@@ -4,12 +4,11 @@ use std::path::PathBuf;
 use anyhow::Result;
 use env_logger::Builder;
 use log::{Level, LevelFilter};
-use owo_colors::OwoColorize;
-
 use orthrus_jsystem::prelude::*;
 use orthrus_ncompress::prelude::*;
 use orthrus_nintendoware::prelude::*;
 use orthrus_panda3d::prelude::*;
+use owo_colors::OwoColorize;
 
 mod identify;
 mod menu;
