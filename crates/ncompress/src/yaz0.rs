@@ -28,31 +28,30 @@
 //! * For each flag bit, if it is a 1, copy one byte from the input to the output.
 //! * If it is a 0, copy bytes from earlier in the output buffer:
 //!     * Read two bytes from the input.
-//!     * Get the first nibble (code >> 12). If it is 0, read one more byte and add 18 (0x12).
-//!       Otherwise, add 2 to the nibble. Use that as the number of bytes to copy.
-//!     * Add 1 to the lower nibbles (code & 0xFFF) and treat that as how far back in the buffer to
-//!       read, from the current position.
-//!     * **Note that the count can overlap with the destination, and needs to be copied one byte at
-//!       a time for correct behavior.**
+//!     * Get the first nibble (code >> 12). If it is 0, read one more byte and add 18 (0x12). Otherwise, add
+//!       2 to the nibble. Use that as the number of bytes to copy.
+//!     * Add 1 to the lower nibbles (code & 0xFFF) and treat that as how far back in the buffer to read, from
+//!       the current position.
+//!     * **Note that the count can overlap with the destination, and needs to be copied one byte at a time
+//!       for correct behavior.**
 //!     * Copy that amount of bytes from the lookback position to the current position.
 //!
 //! # Usage
 //! This module offers the following functionality:
 //! ## Decompression
-//! * [`decompress_from_path`](Yaz0::decompress_from_path): Provide a path, get decompressed data
-//!   back
+//! * [`decompress_from_path`](Yaz0::decompress_from_path): Provide a path, get decompressed data back
 //! * [`decompress_from`](Yaz0::decompress_from): Provide the input data, get decompressed data back
-//! * [`decompress`](Yaz0::decompress): Provide the input data and output buffer, run the
-//!   decompression algorithm
+//! * [`decompress`](Yaz0::decompress): Provide the input data and output buffer, run the decompression
+//!   algorithm
 //! ## Compression
 //! * [`compress_from_path`](Yaz0::compress_from_path): Provide a path, get compressed data back
 //! * [`compress_from`](Yaz0::compress_from): Provide the input data, get compressed data back
-//! * [`compress_n64`](Yaz0::compress_n64): Provide the input data and output buffer, run the
-//!   compression (older matching algorithm)
+//! * [`compress_n64`](Yaz0::compress_n64): Provide the input data and output buffer, run the compression
+//!   (older matching algorithm)
 //! ## Utilities
 //! * [`read_header`](Yaz0::read_header): Returns the header information for a given Yaz0 file
-//! * [`worst_possible_size`](Yaz0::worst_possible_size): Calculates the worst possible compression
-//!   size for a given filesize
+//! * [`worst_possible_size`](Yaz0::worst_possible_size): Calculates the worst possible compression size for a
+//!   given filesize
 
 #[cfg(feature = "std")]
 use std::path::Path;
@@ -109,7 +108,8 @@ impl From<std::io::Error> for Error {
 pub enum CompressionAlgo {
     /// This algorithm should create identical files for all data from N64, GameCube, and Wii.
     MatchingOld, //eggCompress
-    //MatchingNew, //MK8
+    MatchingOld, /*eggCompress
+                  *MatchingNew, //MK8 */
 }
 
 /// See the module [header](self#header) for more information.

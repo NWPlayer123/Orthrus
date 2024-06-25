@@ -2,11 +2,7 @@ use argp::FromArgs;
 
 use super::create_submodule;
 
-create_submodule!(
-    NintendoWare,
-    "Support for Nintendo Middleware",
-    BFSAR(BFSARFlags)
-);
+create_submodule!(NintendoWare, "Support for Nintendo Middleware", BFSAR(BFSARFlags));
 
 #[derive(FromArgs, PartialEq, Debug)]
 #[argp(subcommand, name = "bfsar")]

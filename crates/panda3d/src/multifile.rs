@@ -74,8 +74,8 @@
 //! | 0x8+len | Certificate chain | char\[?]   | Certificate chain used to sign the Multifile. Unknown length, must be parsed*. |
 //!
 //! * Note: since there is no associated length with the certificate blob, it must be parsed using a
-//!   certificate library that returns the "remaining" data, which can then be parsed again, until
-//!   you extract (count) certificates. See `d2i_X509` in OpenSSL.
+//!   certificate library that returns the "remaining" data, which can then be parsed again, until you extract
+//!   (count) certificates. See `d2i_X509` in OpenSSL.
 //!
 //! # Usage
 //! This module can be used either with borrowed data or as an in-memory archive.
@@ -92,10 +92,10 @@
 //! These functions can be used without having to first create a Multifile, used for the
 //! following one-shot operations:
 //!
-//! * [`extract_from_path`](Multifile::extract_from_path): Reads a Multifile from disk, and saves
-//!   all [`Subfile`]s to a given folder
-//! * [`extract_from`](Multifile::extract_from): Reads the provided Multifile, and saves all
+//! * [`extract_from_path`](Multifile::extract_from_path): Reads a Multifile from disk, and saves all
 //!   [`Subfile`]s to a given folder
+//! * [`extract_from`](Multifile::extract_from): Reads the provided Multifile, and saves all [`Subfile`]s to a
+//!   given folder
 
 #[cfg(feature = "std")]
 use std::path::Path;
@@ -125,10 +125,7 @@ pub enum Error {
     #[snafu(display("Invalid Magic! Expected {:?}.", Multifile::MAGIC))]
     InvalidMagic,
     /// Thrown if the header version is too new to be supported.
-    #[snafu(display(
-        "Unknown Multifile Version! Expected >= v{}.",
-        Multifile::CURRENT_VERSION
-    ))]
+    #[snafu(display("Unknown Multifile Version! Expected >= v{}.", Multifile::CURRENT_VERSION))]
     UnknownVersion,
 }
 pub(crate) type Result<T> = core::result::Result<T, Error>;
@@ -228,8 +225,7 @@ impl Multifile {
 
         let version = Version { major: data.read_u16()?, minor: data.read_u16()? };
         ensure!(
-            Self::CURRENT_VERSION.major == version.major
-                && Self::CURRENT_VERSION.minor >= version.minor,
+            Self::CURRENT_VERSION.major == version.major && Self::CURRENT_VERSION.minor >= version.minor,
             UnknownVersionSnafu
         );
 
@@ -398,10 +394,8 @@ impl Multifile {
         let signature_size = file_data.read_u32()?;
         file_data.set_position(4 + signature_size as usize);
         let cert_count = file_data.read_u32()?;
-        let mut cert_blob = DataCursor::new(
-            vec![0u8; file_data.len() - file_data.position()],
-            Endian::Little,
-        );
+        let mut cert_blob =
+            DataCursor::new(vec![0u8; file_data.len() - file_data.position()], Endian::Little);
         file_data.read_length(&mut cert_blob)?;
 
         for _ in 0..cert_count {
@@ -416,12 +410,11 @@ impl Multifile {
 impl FileIdentifier for Multifile {
     fn identify(data: &[u8]) -> Option<FileInfo> {
         let multifile = Self::load(data, 0).ok()?;
-        let (num_compressed, num_encrypted) =
-            multifile.files.iter().fold((0, 0), |(comp, enc), subfile| {
-                let is_compressed = subfile.flags.contains(Flags::Compressed) as usize;
-                let is_encrypted = subfile.flags.contains(Flags::Encrypted) as usize;
-                (comp + is_compressed, enc + is_encrypted)
-            });
+        let (num_compressed, num_encrypted) = multifile.files.iter().fold((0, 0), |(comp, enc), subfile| {
+            let is_compressed = subfile.flags.contains(Flags::Compressed) as usize;
+            let is_encrypted = subfile.flags.contains(Flags::Encrypted) as usize;
+            (comp + is_compressed, enc + is_encrypted)
+        });
 
         //u32 will always be inside i64::MAX, so we can unwrap. We'll worry about it in 2106.
         let timestamp = time::format_timestamp(multifile.timestamp.into()).unwrap();

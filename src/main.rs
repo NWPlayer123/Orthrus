@@ -13,8 +13,7 @@ use owo_colors::OwoColorize;
 mod identify;
 mod menu;
 use menu::{
-    exactly_one_true, JSystemModules, Modules, NCompressModules, NintendoWareModules,
-    Panda3DModules,
+    exactly_one_true, JSystemModules, Modules, NCompressModules, NintendoWareModules, Panda3DModules,
 };
 
 fn color_level(level: Level) -> String {
@@ -67,78 +66,68 @@ fn main() -> Result<()> {
             crate::identify::identify_file(&params.input, params.deep_scan);
         }
         Modules::NintendoCompression(module) => match module.nested {
-            NCompressModules::Yay0(params) => {
-                match exactly_one_true(&[params.decompress, params.compress]) {
-                    Some(0) => {
-                        log::info!("Decompressing file {}", &params.input);
-                        let data = Yay0::decompress_from_path(&params.input)?;
-                        let output = if let Some(output) = params.output {
-                            output
-                        } else {
-                            let mut new_path = PathBuf::from(params.input);
-                            new_path.set_extension("arc");
-                            new_path.to_string_lossy().into_owned()
-                        };
-                        log::info!("Writing file {}", output);
-                        std::fs::write(output, data)?;
-                    }
-                    Some(1) => {
-                        log::info!("Compressing file {}", &params.input);
-                        let data = Yay0::compress_from_path(
-                            &params.input,
-                            yay0::CompressionAlgo::MatchingOld,
-                            0,
-                        )?;
-                        let output = if let Some(output) = params.output {
-                            output
-                        } else {
-                            let mut new_path = PathBuf::from(params.input);
-                            new_path.set_extension("szp");
-                            new_path.to_string_lossy().into_owned()
-                        };
-                        log::info!("Writing file {}", output);
-                        std::fs::write(output, data)?;
-                    }
-                    None => eprintln!("Please select exactly one operation!"),
-                    _ => unreachable!("Oops! Forgot to cover all operations."),
+            NCompressModules::Yay0(params) => match exactly_one_true(&[params.decompress, params.compress]) {
+                Some(0) => {
+                    log::info!("Decompressing file {}", &params.input);
+                    let data = Yay0::decompress_from_path(&params.input)?;
+                    let output = if let Some(output) = params.output {
+                        output
+                    } else {
+                        let mut new_path = PathBuf::from(params.input);
+                        new_path.set_extension("arc");
+                        new_path.to_string_lossy().into_owned()
+                    };
+                    log::info!("Writing file {}", output);
+                    std::fs::write(output, data)?;
                 }
-            }
-            NCompressModules::Yaz0(params) => {
-                match exactly_one_true(&[params.decompress, params.compress]) {
-                    Some(0) => {
-                        log::info!("Decompressing file {}", &params.input);
-                        let data = Yaz0::decompress_from_path(&params.input)?;
-                        let output = if let Some(output) = params.output {
-                            output
-                        } else {
-                            let mut new_path = PathBuf::from(params.input);
-                            new_path.set_extension("arc");
-                            new_path.to_string_lossy().into_owned()
-                        };
-                        log::info!("Writing file {}", output);
-                        std::fs::write(output, data)?;
-                    }
-                    Some(1) => {
-                        log::info!("Compressing file {}", &params.input);
-                        let data = Yaz0::compress_from_path(
-                            &params.input,
-                            yaz0::CompressionAlgo::MatchingOld,
-                            0,
-                        )?;
-                        let output = if let Some(output) = params.output {
-                            output
-                        } else {
-                            let mut new_path = PathBuf::from(params.input);
-                            new_path.set_extension("szs");
-                            new_path.to_string_lossy().into_owned()
-                        };
-                        log::info!("Writing file {}", output);
-                        std::fs::write(output, data)?;
-                    }
-                    None => eprintln!("Please select exactly one operation!"),
-                    _ => unreachable!("Oops! Forgot to cover all operations."),
+                Some(1) => {
+                    log::info!("Compressing file {}", &params.input);
+                    let data =
+                        Yay0::compress_from_path(&params.input, yay0::CompressionAlgo::MatchingOld, 0)?;
+                    let output = if let Some(output) = params.output {
+                        output
+                    } else {
+                        let mut new_path = PathBuf::from(params.input);
+                        new_path.set_extension("szp");
+                        new_path.to_string_lossy().into_owned()
+                    };
+                    log::info!("Writing file {}", output);
+                    std::fs::write(output, data)?;
                 }
-            }
+                None => eprintln!("Please select exactly one operation!"),
+                _ => unreachable!("Oops! Forgot to cover all operations."),
+            },
+            NCompressModules::Yaz0(params) => match exactly_one_true(&[params.decompress, params.compress]) {
+                Some(0) => {
+                    log::info!("Decompressing file {}", &params.input);
+                    let data = Yaz0::decompress_from_path(&params.input)?;
+                    let output = if let Some(output) = params.output {
+                        output
+                    } else {
+                        let mut new_path = PathBuf::from(params.input);
+                        new_path.set_extension("arc");
+                        new_path.to_string_lossy().into_owned()
+                    };
+                    log::info!("Writing file {}", output);
+                    std::fs::write(output, data)?;
+                }
+                Some(1) => {
+                    log::info!("Compressing file {}", &params.input);
+                    let data =
+                        Yaz0::compress_from_path(&params.input, yaz0::CompressionAlgo::MatchingOld, 0)?;
+                    let output = if let Some(output) = params.output {
+                        output
+                    } else {
+                        let mut new_path = PathBuf::from(params.input);
+                        new_path.set_extension("szs");
+                        new_path.to_string_lossy().into_owned()
+                    };
+                    log::info!("Writing file {}", output);
+                    std::fs::write(output, data)?;
+                }
+                None => eprintln!("Please select exactly one operation!"),
+                _ => unreachable!("Oops! Forgot to cover all operations."),
+            },
         },
         Modules::Panda3D(module) => match module.nested {
             Panda3DModules::Multifile(data) => {

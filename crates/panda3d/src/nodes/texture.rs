@@ -249,9 +249,7 @@ impl Texture {
         Ok(texture)
     }
 
-    fn fillin_body(
-        &self, loader: &mut BinaryAsset, data: &mut Datagram,
-    ) -> Result<TextureBody, bam::Error> {
+    fn fillin_body(&self, loader: &mut BinaryAsset, data: &mut Datagram) -> Result<TextureBody, bam::Error> {
         let mut body = TextureBody::default();
 
         body.default_sampler = SamplerState::create(loader, data)?;

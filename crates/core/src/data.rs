@@ -2,17 +2,16 @@
 //!
 //! This crate contains several types that are meant to wrap a byte slice and provide a convenient
 //! interface for reading and writing primitive data types from it.
-//! * [`DataCursor`] is the owned variant, where it owns the byte slice directly, for use as an
-//!   in-memory file.
-//! * [`DataCursorRef`] is the borrowed immutable variant, that wraps a reference to a byte slice
-//!   and provides reading.
-//! * [`DataCursorMut`] is the borrowed mutable variant, that wraps a reference to a byte slice and
-//!   provides reading and writing.
+//! * [`DataCursor`] is the owned variant, where it owns the byte slice directly, for use as an in-memory
+//!   file.
+//! * [`DataCursorRef`] is the borrowed immutable variant, that wraps a reference to a byte slice and provides
+//!   reading.
+//! * [`DataCursorMut`] is the borrowed mutable variant, that wraps a reference to a byte slice and provides
+//!   reading and writing.
 //!
 //! These cursors work similarly to the [`std::io`] module, wherein you have to include specific
 //! traits for functionality.
-//! * [`DataCursorTrait`] provides the basic methods for using a cursor, and allows for trait
-//!   bounds.
+//! * [`DataCursorTrait`] provides the basic methods for using a cursor, and allows for trait bounds.
 //! * [`EndianRead`] provides reading Rust primitives using the stored endianness.
 //! * [`EndianWrite`] provides writing Rust primitives using the stored endianness.
 
@@ -476,11 +475,7 @@ impl DataCursorTrait for DataCursor {
     fn read_length(&mut self, buf: &mut [u8]) -> Result<()> {
         ensure!(buf.len() <= self.data.len() - self.pos, EndOfFileSnafu);
         unsafe {
-            core::ptr::copy_nonoverlapping(
-                self.data.as_ptr().add(self.pos),
-                buf.as_mut_ptr(),
-                buf.len(),
-            );
+            core::ptr::copy_nonoverlapping(self.data.as_ptr().add(self.pos), buf.as_mut_ptr(), buf.len());
         }
         self.pos += buf.len();
         Ok(())
@@ -638,11 +633,7 @@ impl Read for DataCursor {
         let length = core::cmp::min(buf.len(), self.len() - self.pos);
 
         unsafe {
-            core::ptr::copy_nonoverlapping(
-                self.data.as_ptr().add(self.pos),
-                buf.as_mut_ptr(),
-                length,
-            );
+            core::ptr::copy_nonoverlapping(self.data.as_ptr().add(self.pos), buf.as_mut_ptr(), length);
         }
         self.pos += length;
         Ok(length)
@@ -672,11 +663,7 @@ impl Read for DataCursor {
         }
 
         unsafe {
-            core::ptr::copy_nonoverlapping(
-                self.data.as_ptr().add(self.pos),
-                buf.as_mut_ptr(),
-                buf.len(),
-            );
+            core::ptr::copy_nonoverlapping(self.data.as_ptr().add(self.pos), buf.as_mut_ptr(), buf.len());
         }
         self.pos += buf.len();
         Ok(())
@@ -694,11 +681,7 @@ impl Write for DataCursor {
         let length = core::cmp::min(buf.len(), self.len() - self.pos);
 
         unsafe {
-            core::ptr::copy_nonoverlapping(
-                buf.as_ptr(),
-                self.data.as_mut_ptr().add(self.pos),
-                length,
-            );
+            core::ptr::copy_nonoverlapping(buf.as_ptr(), self.data.as_mut_ptr().add(self.pos), length);
         }
         self.pos += length;
         Ok(length)
@@ -722,11 +705,7 @@ impl Write for DataCursor {
         }
 
         unsafe {
-            core::ptr::copy_nonoverlapping(
-                buf.as_ptr(),
-                self.data.as_mut_ptr().add(self.pos),
-                buf.len(),
-            );
+            core::ptr::copy_nonoverlapping(buf.as_ptr(), self.data.as_mut_ptr().add(self.pos), buf.len());
         }
         self.pos += buf.len();
         Ok(())
@@ -757,11 +736,7 @@ impl From<Box<[u8]>> for DataCursor {
 impl From<Vec<u8>> for DataCursor {
     #[inline]
     fn from(value: Vec<u8>) -> Self {
-        Self {
-            data: value.into_boxed_slice(),
-            pos: 0,
-            endian: Endian::default(),
-        }
+        Self { data: value.into_boxed_slice(), pos: 0, endian: Endian::default() }
     }
 }
 
@@ -899,11 +874,7 @@ impl DataCursorTrait for DataCursorRef<'_> {
     fn read_length(&mut self, buf: &mut [u8]) -> Result<()> {
         ensure!(buf.len() <= self.data.len() - self.pos, EndOfFileSnafu);
         unsafe {
-            core::ptr::copy_nonoverlapping(
-                self.data.as_ptr().add(self.pos),
-                buf.as_mut_ptr(),
-                buf.len(),
-            );
+            core::ptr::copy_nonoverlapping(self.data.as_ptr().add(self.pos), buf.as_mut_ptr(), buf.len());
         }
         self.pos += buf.len();
         Ok(())
@@ -990,11 +961,7 @@ impl Read for DataCursorRef<'_> {
         let length = core::cmp::min(buf.len(), self.len() - self.pos);
 
         unsafe {
-            core::ptr::copy_nonoverlapping(
-                self.data.as_ptr().add(self.pos),
-                buf.as_mut_ptr(),
-                length,
-            );
+            core::ptr::copy_nonoverlapping(self.data.as_ptr().add(self.pos), buf.as_mut_ptr(), length);
         }
         self.pos += length;
         Ok(length)
@@ -1024,11 +991,7 @@ impl Read for DataCursorRef<'_> {
         }
 
         unsafe {
-            core::ptr::copy_nonoverlapping(
-                self.data.as_ptr().add(self.pos),
-                buf.as_mut_ptr(),
-                buf.len(),
-            );
+            core::ptr::copy_nonoverlapping(self.data.as_ptr().add(self.pos), buf.as_mut_ptr(), buf.len());
         }
         self.pos += buf.len();
         Ok(())
@@ -1220,11 +1183,7 @@ impl DataCursorTrait for DataCursorMut<'_> {
     fn read_length(&mut self, buf: &mut [u8]) -> Result<()> {
         ensure!(buf.len() <= self.data.len() - self.pos, EndOfFileSnafu);
         unsafe {
-            core::ptr::copy_nonoverlapping(
-                self.data.as_ptr().add(self.pos),
-                buf.as_mut_ptr(),
-                buf.len(),
-            );
+            core::ptr::copy_nonoverlapping(self.data.as_ptr().add(self.pos), buf.as_mut_ptr(), buf.len());
         }
         self.pos += buf.len();
         Ok(())
@@ -1382,11 +1341,7 @@ impl Read for DataCursorMut<'_> {
         let length = core::cmp::min(buf.len(), self.len() - self.pos);
 
         unsafe {
-            core::ptr::copy_nonoverlapping(
-                self.data.as_ptr().add(self.pos),
-                buf.as_mut_ptr(),
-                length,
-            );
+            core::ptr::copy_nonoverlapping(self.data.as_ptr().add(self.pos), buf.as_mut_ptr(), length);
         }
         self.pos += length;
         Ok(length)
@@ -1416,11 +1371,7 @@ impl Read for DataCursorMut<'_> {
         }
 
         unsafe {
-            core::ptr::copy_nonoverlapping(
-                self.data.as_ptr().add(self.pos),
-                buf.as_mut_ptr(),
-                buf.len(),
-            );
+            core::ptr::copy_nonoverlapping(self.data.as_ptr().add(self.pos), buf.as_mut_ptr(), buf.len());
         }
         self.pos += buf.len();
         Ok(())
@@ -1438,11 +1389,7 @@ impl Write for DataCursorMut<'_> {
         let length = core::cmp::min(buf.len(), self.len() - self.pos);
 
         unsafe {
-            core::ptr::copy_nonoverlapping(
-                buf.as_ptr(),
-                self.data.as_mut_ptr().add(self.pos),
-                length,
-            );
+            core::ptr::copy_nonoverlapping(buf.as_ptr(), self.data.as_mut_ptr().add(self.pos), length);
         }
         self.pos += length;
         Ok(length)
@@ -1466,11 +1413,7 @@ impl Write for DataCursorMut<'_> {
         }
 
         unsafe {
-            core::ptr::copy_nonoverlapping(
-                buf.as_ptr(),
-                self.data.as_mut_ptr().add(self.pos),
-                buf.len(),
-            );
+            core::ptr::copy_nonoverlapping(buf.as_ptr(), self.data.as_mut_ptr().add(self.pos), buf.len());
         }
         self.pos += buf.len();
         Ok(())

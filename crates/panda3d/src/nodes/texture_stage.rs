@@ -197,8 +197,7 @@ impl TextureStage {
     fn update_color_flags(&mut self) {
         self.involves_color_scale = self.mode == Mode::BlendColorScale
             || (self.mode == Mode::Combine
-                && (self.combine_rgb.involves_color_scale()
-                    || self.combine_alpha.involves_color_scale()));
+                && (self.combine_rgb.involves_color_scale() || self.combine_alpha.involves_color_scale()));
 
         self.uses_color = self.mode == Mode::Blend
             || self.mode == Mode::BlendColorScale
@@ -209,8 +208,7 @@ impl TextureStage {
             && (self.combine_rgb.uses_primary_color() || self.combine_alpha.uses_primary_color());
 
         self.uses_last_saved_result = self.mode == Mode::Combine
-            && (self.combine_rgb.uses_last_saved_result()
-                || self.combine_alpha.uses_last_saved_result());
+            && (self.combine_rgb.uses_last_saved_result() || self.combine_alpha.uses_last_saved_result());
     }
 }
 

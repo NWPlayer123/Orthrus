@@ -140,8 +140,7 @@ impl Window<'_> {
             // Figure out the current match offset from `pos` (which is equal to `match_offset &
             // WINDOW_MASK`) using the fact that `1 <= input_pos - match_offset <=
             // WINDOW_SIZE`
-            let match_offset =
-                search_pos - 1 - (search_pos.wrapping_sub(pos as usize + 1) & WINDOW_MASK);
+            let match_offset = search_pos - 1 - (search_pos.wrapping_sub(pos as usize + 1) & WINDOW_MASK);
 
             if self.input[search_pos] == self.input[match_offset]
                 && self.input[search_pos + 1] == self.input[match_offset + 1]

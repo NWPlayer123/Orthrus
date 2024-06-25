@@ -29,10 +29,7 @@ impl<'a> Datagram<'a> {
         data: &'a mut T, endian: Endian, float_type: bool,
     ) -> Result<Self, data::Error> {
         let length = data.read_u32()? as usize;
-        Ok(Self {
-            data: DataCursorRef::new(data.get_slice(length)?, endian),
-            float_type,
-        })
+        Ok(Self { data: DataCursorRef::new(data.get_slice(length)?, endian), float_type })
     }
 
     pub(crate) fn read_string(&mut self) -> Result<String, data::Error> {

@@ -24,38 +24,36 @@
 //! The decompression algorithm is as follows, ran in a loop until you write enough bytes to fill
 //! the output buffer:
 //!
-//! * Set three pointers, one to header+0x10 for flag data, one to the copy data offset, and one to
-//!   the lookback offset.
+//! * Set three pointers, one to header+0x10 for flag data, one to the copy data offset, and one to the
+//!   lookback offset.
 //! * Read one byte from the flag data, which is 8 flag bits from high to low.
 //! * For each flag bit, if it is a 1, copy one byte from the data section to the output.
 //! * If it is a 0, copy bytes from earlier in the output buffer:
 //!     * Read two bytes from the lookback section.
-//!     * Get the first nibble (code >> 12). If it is 0, read one byte ***from the copy data
-//!       section*** and add 18 (0x12). Otherwise, add 2 to the nibble. Use that as the number of
-//!       bytes to copy.
-//!     * Add 1 to the lower nibbles (code & 0xFFF) and treat that as how far back in the buffer to
-//!       read, from the current position.
-//!     * **Note that the count can overlap with the destination, and needs to be copied one byte at
-//!       a time for correct behavior.**
+//!     * Get the first nibble (code >> 12). If it is 0, read one byte ***from the copy data section*** and
+//!       add 18 (0x12). Otherwise, add 2 to the nibble. Use that as the number of bytes to copy.
+//!     * Add 1 to the lower nibbles (code & 0xFFF) and treat that as how far back in the buffer to read, from
+//!       the current position.
+//!     * **Note that the count can overlap with the destination, and needs to be copied one byte at a time
+//!       for correct behavior.**
 //!     * Copy that amount of bytes from the lookback position to the current position.
 //!
 //! # Usage
 //! This module offers the following functionality:
 //! ## Decompression
-//! * [`decompress_from_path`](Yay0::decompress_from_path): Provide a path, get decompressed data
-//!   back
+//! * [`decompress_from_path`](Yay0::decompress_from_path): Provide a path, get decompressed data back
 //! * [`decompress_from`](Yay0::decompress_from): Provide the input data, get decompressed data back
-//! * [`decompress`](Yay0::decompress): Provide the input data and output buffer, run the
-//!   decompression algorithm
+//! * [`decompress`](Yay0::decompress): Provide the input data and output buffer, run the decompression
+//!   algorithm
 //! ## Compression
 //! * [`compress_from_path`](Yay0::compress_from_path): Provide a path, get compressed data back
 //! * [`compress_from`](Yay0::compress_from): Provide the input data, get compressed data back
-//! * [`compress_n64`](Yay0::compress_n64): Provide the input data and output buffer, run the
-//!   compression (matching algorithm)
+//! * [`compress_n64`](Yay0::compress_n64): Provide the input data and output buffer, run the compression
+//!   (matching algorithm)
 //! ## Utilities
 //! * [`read_header`](Yay0::read_header): Returns the header information for a given Yay0 file
-//! * [`worst_possible_size`](Yay0::worst_possible_size): Calculates the worst possible compression
-//!   size for a given filesize
+//! * [`worst_possible_size`](Yay0::worst_possible_size): Calculates the worst possible compression size for a
+//!   given filesize
 
 #[cfg(feature = "std")]
 use std::path::Path;
@@ -222,12 +220,7 @@ impl Yay0 {
         let mut output = vec![0u8; header.decompressed_size as usize].into_boxed_slice();
 
         //Perform the actual decompression
-        Self::decompress(
-            data,
-            &mut output,
-            header.lookback_offset,
-            header.copy_data_offset,
-        );
+        Self::decompress(data, &mut output, header.lookback_offset, header.copy_data_offset);
 
         //If we've gotten this far, output contains valid decompressed data
         Ok(output)
@@ -454,8 +447,7 @@ impl Yay0 {
                     copy_data[copy_pos] = (group_size - 0x12) as u8;
                     copy_pos += 1;
                 } else {
-                    lookback_data[lookback_pos] =
-                        (((group_size - 2) << 4) | (group_offset >> 8)) as u8;
+                    lookback_data[lookback_pos] = (((group_size - 2) << 4) | (group_offset >> 8)) as u8;
                     lookback_data[lookback_pos + 1] = (group_offset) as u8;
                     lookback_pos += 2;
                 }
@@ -485,8 +477,7 @@ impl Yay0 {
         output[0x10..0x10 + flag_pos].copy_from_slice(&flag_data[..flag_pos]);
         output_pos += (flag_pos + 3) & !3;
         output[8..12].copy_from_slice(&u32::to_be_bytes(output_pos as u32));
-        output[output_pos..output_pos + lookback_pos]
-            .copy_from_slice(&lookback_data[..lookback_pos]);
+        output[output_pos..output_pos + lookback_pos].copy_from_slice(&lookback_data[..lookback_pos]);
         output_pos += (lookback_pos + 3) & !3;
         output[12..16].copy_from_slice(&u32::to_be_bytes(output_pos as u32));
         output[output_pos..output_pos + copy_pos].copy_from_slice(&copy_data[..copy_pos]);

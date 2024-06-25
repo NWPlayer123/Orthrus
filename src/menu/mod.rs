@@ -18,9 +18,7 @@ use panda3d::Panda3DOption;
 #[argp(description = "A new way to modify games.")]
 pub struct Orthrus {
     #[argp(option, short = 'v', global, default = "0")]
-    #[argp(
-        description = "Logging level (0 = Off, 1 = Error, 2 = Warn, 3 = Info, 4 = Debug, 5 = Trace)"
-    )]
+    #[argp(description = "Logging level (0 = Off, 1 = Error, 2 = Warn, 3 = Info, 4 = Debug, 5 = Trace)")]
     pub verbose: usize,
 
     #[argp(subcommand)]

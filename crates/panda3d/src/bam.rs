@@ -206,11 +206,8 @@ impl BinaryAsset {
             match bamfile.objects_left {
                 ObjectsLeft::ObjectCount { mut num_extra_objects } => {
                     if num_extra_objects > 0 {
-                        datagram = Datagram::new(
-                            &mut data,
-                            bamfile.header.endian,
-                            bamfile.header.use_double,
-                        )?;
+                        datagram =
+                            Datagram::new(&mut data, bamfile.header.endian, bamfile.header.use_double)?;
                         bamfile.read_object(&mut datagram)?;
                         num_extra_objects -= 1;
                         bamfile.objects_left = ObjectsLeft::ObjectCount { num_extra_objects }
@@ -220,11 +217,8 @@ impl BinaryAsset {
                 }
                 ObjectsLeft::NestingLevel { nesting_level } => {
                     if nesting_level > 0 {
-                        datagram = Datagram::new(
-                            &mut data,
-                            bamfile.header.endian,
-                            bamfile.header.use_double,
-                        )?;
+                        datagram =
+                            Datagram::new(&mut data, bamfile.header.endian, bamfile.header.use_double)?;
                         bamfile.read_object(&mut datagram)?;
                     } else {
                         break;
@@ -254,9 +248,7 @@ impl BinaryAsset {
                     }
                     ObjectCode::Adjunct => {}
                     _ => {
-                        todo!(
-                            "Remove and FileData are unimplemented, need a test case, pls message me."
-                        )
+                        todo!("Remove and FileData are unimplemented, need a test case, pls message me.")
                     }
                 }
             }
@@ -300,8 +292,7 @@ impl BinaryAsset {
             let length = data.read_u16()?;
             let slice = data.get_slice(length as usize)?;
 
-            let type_name =
-                core::str::from_utf8(&slice).map_err(|_| Error::InvalidType)?.to_owned();
+            let type_name = core::str::from_utf8(&slice).map_err(|_| Error::InvalidType)?.to_owned();
             //println!("Registering Type {type_name} -> {type_handle}");
             self.type_registry.insert(type_handle, type_name);
 

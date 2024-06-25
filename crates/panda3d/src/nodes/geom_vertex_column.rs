@@ -86,8 +86,7 @@ impl GeomVertexColumn {
             self.column_alignment = core::cmp::max(self.component_bytes as u8, 4);
         }
 
-        self.start = ((self.start + self.column_alignment as u16 - 1)
-            / self.column_alignment as u16)
+        self.start = ((self.start + self.column_alignment as u16 - 1) / self.column_alignment as u16)
             * self.column_alignment as u16;
 
         if self.element_stride < 1 {

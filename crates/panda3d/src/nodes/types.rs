@@ -11,11 +11,7 @@ pub trait DatagramRead {
 impl DatagramRead for Vec3 {
     #[inline]
     fn read(data: &mut Datagram) -> Result<Self, bam::Error> {
-        Ok(vec3(
-            data.read_float()?,
-            data.read_float()?,
-            data.read_float()?,
-        ))
+        Ok(vec3(data.read_float()?, data.read_float()?, data.read_float()?))
     }
 }
 

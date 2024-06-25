@@ -779,14 +779,7 @@ impl Read for SoundInfo {
         let details_ref = Reference::read(data)?;
         let options = data.read_u32()?;
 
-        let mut info = Self {
-            file_id,
-            player_id,
-            volume,
-            filter,
-            options,
-            ..Default::default()
-        };
+        let mut info = Self { file_id, player_id, volume, filter, options, ..Default::default() };
 
         let position = data.position();
 
@@ -935,14 +928,11 @@ impl InfoBlock {
                     for reference in &references {
                         match reference.identifier {
                             Identifier::SOUND_INFO => {
-                                data.set_position(
-                                    offset + (section.offset + reference.offset) as usize,
-                                );
+                                data.set_position(offset + (section.offset + reference.offset) as usize);
                                 let sound_info = SoundInfo::read(data)?;
                                 info.sounds.push(sound_info);
                             }
-                            _ => InvalidDataSnafu { reason: "Unexpected Sound Info Identifier!" }
-                                .fail()?,
+                            _ => InvalidDataSnafu { reason: "Unexpected Sound Info Identifier!" }.fail()?,
                         }
                     }
                 }
