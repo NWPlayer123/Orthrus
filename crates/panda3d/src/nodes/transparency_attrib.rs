@@ -27,8 +27,8 @@ pub(crate) struct TransparencyAttrib {
 }
 
 impl TransparencyAttrib {
+    #[inline]
     pub fn create(_loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
-        let mode = Mode::from(data.read_u8()?);
-        Ok(Self { mode })
+        Ok(Self { mode: Mode::from(data.read_u8()?) })
     }
 }

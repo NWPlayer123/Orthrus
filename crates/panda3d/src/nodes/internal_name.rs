@@ -7,6 +7,7 @@ pub(crate) struct InternalName {
 }
 
 impl InternalName {
+    #[inline]
     pub fn create(_loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
         Ok(Self { string: data.read_string()? })
     }

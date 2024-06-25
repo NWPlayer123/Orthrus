@@ -1,4 +1,3 @@
-use super::geom_vertex_column::GeomVertexColumn;
 use super::prelude::*;
 
 #[derive(Debug, Default)]
@@ -13,6 +12,7 @@ pub(crate) struct GeomVertexArrayFormat {
 }
 
 impl GeomVertexArrayFormat {
+    #[inline]
     pub fn create(loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
         let stride = data.read_u16()?;
         let total_bytes = data.read_u16()?;
@@ -23,19 +23,11 @@ impl GeomVertexArrayFormat {
         };
         let num_columns = data.read_u16()?;
 
-        let mut format = Self {
-            stride,
-            total_bytes,
-            pad_to,
-            divisor,
-            num_columns,
-            ..Default::default()
-        };
-
+        let mut columns = Vec::with_capacity(num_columns as usize);
         for _ in 0..num_columns {
-            format.columns.push(GeomVertexColumn::create(loader, data)?);
+            columns.push(GeomVertexColumn::create(loader, data)?);
         }
 
-        Ok(format)
+        Ok(Self { stride, total_bytes, pad_to, divisor, num_columns, columns })
     }
 }

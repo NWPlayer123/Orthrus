@@ -71,7 +71,7 @@ enum CombineOperand {
     OneMinusSourceAlpha,
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug, Default)]
 #[allow(dead_code)]
 struct CombineConfig {
     mode: CombineMode,
@@ -82,6 +82,7 @@ struct CombineConfig {
 
 //TODO: make the flag check functions const, need const PartialEq which is only in nightly rn
 impl CombineConfig {
+    #[inline]
     pub fn create(_loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
         let mode = CombineMode::from(data.read_u8()?);
         let num_operands = data.read_u8()?;
@@ -100,18 +101,22 @@ impl CombineConfig {
         })
     }
 
+    #[inline]
     fn involves_color_scale(&self) -> bool {
         self.sources.iter().any(|&source| source == CombineSource::ConstantColorScale)
     }
 
+    #[inline]
     fn uses_color(&self) -> bool {
         self.sources.iter().any(|&source| source == CombineSource::Constant)
     }
 
+    #[inline]
     fn uses_primary_color(&self) -> bool {
         self.sources.iter().any(|&source| source == CombineSource::PrimaryColor)
     }
 
+    #[inline]
     fn uses_last_saved_result(&self) -> bool {
         self.sources.iter().any(|&source| source == CombineSource::LastSavedResult)
     }
@@ -124,12 +129,14 @@ pub(crate) struct TextureStage {
     sort: i32,
     priority: i32,
 
+    /// Reference to the InternalName for this node, used for UV calculations
     texcoord_name: Option<u32>,
 
     mode: Mode,
-    color: [f32; 4],
+    color: Vec4,
     rgb_scale: u8,
     alpha_scale: u8,
+    /// Allows for caching and being reused as the TextureStage for multiple stages
     saved_result: bool,
     tex_view_offset: i32,
 
@@ -142,6 +149,7 @@ pub(crate) struct TextureStage {
 }
 
 impl TextureStage {
+    #[inline]
     pub fn create(loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
         //Check if we're just using the default, otherwise load in all the config data
         if data.read_bool()? {
@@ -155,13 +163,8 @@ impl TextureStage {
         let texcoord_name = loader.read_pointer(data)?;
 
         let mode = Mode::from(data.read_u8()?);
-        //LColor -> LVecBase4
-        let color = [
-            data.read_float()?,
-            data.read_float()?,
-            data.read_float()?,
-            data.read_float()?,
-        ];
+        //TODO: define custom LColor type?
+        let color = Vec4::read(data)?;
         let rgb_scale = data.read_u8()?;
         let alpha_scale = data.read_u8()?;
         let saved_result = data.read_bool()?;
@@ -194,6 +197,7 @@ impl TextureStage {
         Ok(stage)
     }
 
+    #[inline]
     fn update_color_flags(&mut self) {
         self.involves_color_scale = self.mode == Mode::BlendColorScale
             || (self.mode == Mode::Combine
@@ -213,14 +217,15 @@ impl TextureStage {
 }
 
 impl Default for TextureStage {
+    #[inline]
     fn default() -> Self {
         Self {
             name: "default".to_owned(),
             sort: 0,
             priority: 0,
-            texcoord_name: None,
+            texcoord_name: None, //TODO: emit InternalName? needs a finalize()
             mode: Mode::default(),
-            color: [0.0, 0.0, 0.0, 1.0],
+            color: Vec4::W,
             rgb_scale: 1,
             alpha_scale: 1,
             saved_result: false,

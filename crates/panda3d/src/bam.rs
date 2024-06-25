@@ -356,12 +356,22 @@ impl BinaryAsset {
             "Geom" => PandaObject::Geom(Geom::create(self, data)?),
             "GeomNode" => PandaObject::GeomNode(GeomNode::create(self, data)?),
             "GeomTristrips" => PandaObject::GeomTristrips(GeomTristrips::create(self, data)?), /* TODO: cleanup GeomPrimitive */
+            "GeomVertexArrayData" => {
+                PandaObject::GeomVertexArrayData(GeomVertexArrayData::create(self, data)?)
+            }
+            "GeomVertexArrayFormat" => {
+                PandaObject::GeomVertexArrayFormat(GeomVertexArrayFormat::create(self, data)?)
+            }
             "GeomVertexData" => PandaObject::GeomVertexData(GeomVertexData::create(self, data)?),
+            "GeomVertexFormat" => PandaObject::GeomVertexFormat(GeomVertexFormat::create(self, data)?),
+            "InternalName" => PandaObject::InternalName(InternalName::create(self, data)?),
             "ModelRoot" => PandaObject::ModelNode(ModelNode::create(self, data)?),
             "PandaNode" => PandaObject::PandaNode(PandaNode::create(self, data)?),
             "RenderEffects" => PandaObject::RenderEffects(RenderEffects::create(self, data)?),
             "RenderState" => PandaObject::RenderState(RenderState::create(self, data)?),
+            "Texture" => PandaObject::Texture(Texture::create(self, data)?),
             "TextureAttrib" => PandaObject::TextureAttrib(TextureAttrib::create(self, data)?),
+            "TextureStage" => PandaObject::TextureStage(TextureStage::create(self, data)?),
             "TransformState" => PandaObject::TransformState(TransformState::create(self, data)?),
             "TransparencyAttrib" => PandaObject::TransparencyAttrib(TransparencyAttrib::create(self, data)?),
             _ => todo!("{type_name}"),

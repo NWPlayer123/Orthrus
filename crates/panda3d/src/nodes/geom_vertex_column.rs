@@ -1,27 +1,26 @@
-use super::geom_enums::{Contents, NumericType};
 use super::prelude::*;
 
 #[derive(Debug, Default)]
 #[allow(dead_code)]
 pub(crate) struct GeomVertexColumn {
-    name: Option<u32>,
+    name: u32,
     num_components: u8,
     numeric_type: NumericType,
     contents: Contents,
     start: u16,
     column_alignment: u8,
 
-    //TODO: evaluate how much storage these actually need
-    num_elements: u32,
-    element_stride: u32,
-    num_values: u32,
-    component_bytes: u32,
+    num_elements: u8,
+    element_stride: u16,
+    num_values: u16,
+    component_bytes: u8,
     total_bytes: u32,
 }
 
 impl GeomVertexColumn {
+    #[inline]
     pub fn create(loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
-        let name = loader.read_pointer(data)?;
+        let name = loader.read_pointer(data)?.unwrap();
         let num_components = data.read_u8()?;
         let numeric_type = NumericType::from(data.read_u8()?);
         let contents = Contents::from(data.read_u8()?);
@@ -46,8 +45,9 @@ impl GeomVertexColumn {
         Ok(column)
     }
 
+    #[inline]
     fn setup(&mut self, loader: &mut BinaryAsset) {
-        self.num_values = self.num_components as u32;
+        self.num_values = self.num_components as u16;
 
         if self.numeric_type == NumericType::StdFloat {
             match loader.header.use_double {
@@ -75,23 +75,23 @@ impl GeomVertexColumn {
 
         if self.num_elements == 0 {
             if self.contents == Contents::Matrix {
-                self.num_elements = self.num_components as u32;
+                self.num_elements = self.num_components;
             } else {
                 self.num_elements = 1;
             }
         }
 
         if self.column_alignment < 1 {
-            //TODO: vertex_column_alignment?
-            self.column_alignment = core::cmp::max(self.component_bytes as u8, 4);
+            //TODO: vertex_column_alignment global var?
+            self.column_alignment = core::cmp::max(self.component_bytes, 4);
         }
 
         self.start = ((self.start + self.column_alignment as u16 - 1) / self.column_alignment as u16)
             * self.column_alignment as u16;
 
         if self.element_stride < 1 {
-            self.element_stride = self.component_bytes * self.num_components as u32;
+            self.element_stride = self.component_bytes as u16 * self.num_components as u16;
         }
-        self.total_bytes = self.element_stride * self.num_elements;
+        self.total_bytes = self.element_stride as u32 * self.num_elements as u32;
     }
 }

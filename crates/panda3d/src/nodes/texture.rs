@@ -150,7 +150,7 @@ enum ComponentType {
     HalfFloat, //cursed
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug, Default)]
 #[allow(dead_code)]
 pub(crate) struct Texture {
     name: String,
@@ -162,18 +162,18 @@ pub(crate) struct Texture {
     has_rawdata: bool,
     texture_type: TextureType,
     body: TextureBody,
-    data: TextureData,
+    data: Option<TextureData>,
     has_read_mipmaps: bool,
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug, Default)]
 pub(crate) struct TextureBody {
+    default_sampler: SamplerState,
     format: Format,
     compression: CompressionMode,
     usage_hint: UsageHint,
     quality_level: QualityLevel,
     auto_texture_scale: AutoTextureScale,
-    default_sampler: SamplerState,
     num_components: u8,
     orig_file_x_size: u32,
     orig_file_y_size: u32,
@@ -182,25 +182,26 @@ pub(crate) struct TextureBody {
     /// Timestamp of when the image was last modified
     simple_image_date_generated: i32,
     image: Vec<u8>,
-    clear_color: Option<[f32; 4]>,
+    clear_color: Option<Vec4>,
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug, Default)]
 #[allow(dead_code)]
 pub(crate) struct TextureData {
-    // x, y, z
-    size: [u32; 3],
-    // x, y, z
-    pad_size: [u32; 3],
+    size: UVec3,
+    pad_size: UVec3,
     num_views: u32,
     component_type: ComponentType,
     component_width: u8,
     ram_image_compression: CompressionMode,
     ram_image_count: u8,
-    ram_images: Vec<Vec<u8>>,
+    /// Page Size + Image Data
+    ram_images: Vec<(u32, Vec<u8>)>,
 }
 
+//TODO: Textures can be cached via a TexturePool
 impl Texture {
+    #[inline]
     pub fn create(loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
         let name = data.read_string()?;
         let filename = data.read_string()?;
@@ -211,8 +212,8 @@ impl Texture {
         let has_rawdata = data.read_bool()?;
         let mut texture_type = TextureType::from(data.read_u8()?);
         if loader.get_minor_version() < 25 {
-            // In between Panda3D 1.7.2 and 1.8.0 (BAM v6.24/v6.25), Texture2DArray was added, so we
-            // need to account for the shift
+            // As of Panda3D 1.8.0/BAM v6.25, Texture2DArray was added as a TextureType, so we need to account
+            // for the shift
             if texture_type == TextureType::Texture2DArray {
                 texture_type = TextureType::CubeMap;
             }
@@ -235,20 +236,20 @@ impl Texture {
             ..Default::default()
         };
 
-        //The texture data is included in this BAM file so we need to actually load it
+        texture.body = texture.fillin_body(loader, data)?;
+
         if has_rawdata == true {
-            //do_fillin_body
-            texture.body = texture.fillin_body(loader, data)?;
-            //do_fillin_rawdata
-            texture.data = texture.fillin_rawdata(loader, data)?;
+            //The texture data is included in this BAM file so we need to actually load it
+            texture.data = Some(texture.fillin_data(loader, data)?);
         } else {
-            //do_fillin_body
-            texture.body = texture.fillin_body(loader, data)?;
+            //Otherwise, the raw image data isn't stored, so we need to load the relevant image from VFS
+            //texture.data = std::fs::read(), remove the Option<>
         }
 
         Ok(texture)
     }
 
+    #[inline]
     fn fillin_body(&self, loader: &mut BinaryAsset, data: &mut Datagram) -> Result<TextureBody, bam::Error> {
         let mut body = TextureBody::default();
 
@@ -292,29 +293,21 @@ impl Texture {
             data.read_length(&mut body.image)?;
         }
 
-        if loader.get_minor_version() >= 45 {
-            let has_clear_color = data.read_bool()?;
-            if has_clear_color {
-                body.clear_color = Some([
-                    data.read_float()?,
-                    data.read_float()?,
-                    data.read_float()?,
-                    data.read_float()?,
-                ]);
-            }
+        if loader.get_minor_version() >= 45 && data.read_bool()? {
+            body.clear_color = Some(Vec4::read(data)?);
         }
         Ok(body)
     }
 
-    fn fillin_rawdata(
-        &self, loader: &mut BinaryAsset, data: &mut Datagram,
-    ) -> Result<TextureData, bam::Error> {
-        let size = [data.read_u32()?, data.read_u32()?, data.read_u32()?];
+    #[inline]
+    fn fillin_data(&self, loader: &mut BinaryAsset, data: &mut Datagram) -> Result<TextureData, bam::Error> {
+        let size = UVec3::read(data)?;
 
         let pad_size = match loader.get_minor_version() >= 30 {
-            true => [data.read_u32()?, data.read_u32()?, data.read_u32()?],
-            false => [0, 0, 0],
+            true => UVec3::read(data)?,
+            false => UVec3::ZERO,
         };
+
         let num_views = match loader.get_minor_version() >= 26 {
             true => data.read_u32()?,
             false => 1,
@@ -331,12 +324,16 @@ impl Texture {
             false => 1,
         };
 
-        let mut ram_images = Vec::new();
+        let mut ram_images = Vec::with_capacity(ram_image_count as usize);
         for _ in 0..ram_image_count {
+            let page_size = match loader.get_minor_version() >= 1 {
+                true => data.read_u32()?,
+                false => todo!("I have no BAM files this old - contact me"),
+            };
             let size = data.read_u32()?;
-            let mut allocation = Vec::with_capacity(size as usize);
+            let mut allocation = vec![0; size as usize];
             allocation.copy_from_slice(data.get_slice(size as usize)?);
-            ram_images.push(allocation);
+            ram_images.push((page_size, allocation));
         }
 
         Ok(TextureData {

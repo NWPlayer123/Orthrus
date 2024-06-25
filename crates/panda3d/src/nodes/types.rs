@@ -1,4 +1,4 @@
-use glam::{mat4, vec3, vec4, Mat4, Vec3, Vec4};
+use glam::{mat4, uvec3, vec3, vec4};
 
 use super::prelude::*;
 
@@ -12,6 +12,13 @@ impl DatagramRead for Vec3 {
     #[inline]
     fn read(data: &mut Datagram) -> Result<Self, bam::Error> {
         Ok(vec3(data.read_float()?, data.read_float()?, data.read_float()?))
+    }
+}
+
+impl DatagramRead for UVec3 {
+    #[inline]
+    fn read(data: &mut Datagram) -> Result<Self, bam::Error> {
+        Ok(uvec3(data.read_u32()?, data.read_u32()?, data.read_u32()?))
     }
 }
 
