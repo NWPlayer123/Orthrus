@@ -23,6 +23,7 @@ use orthrus_core::prelude::*;
 use snafu::prelude::*;
 
 use crate::common::*;
+use crate::nodes::prelude::*;
 
 /// Error conditions for when working with Multifile archives.
 #[derive(Debug, Snafu)]
@@ -359,142 +360,22 @@ impl BinaryAsset {
 
     //should really be using make_from_bam as an entrypoint
     fn fillin(&mut self, data: &mut Datagram, type_name: &str) -> Result<(), self::Error> {
-        match type_name {
-            "TypedObject" => {
-                // Base class, nothing to fill in
-            }
-            "ReferenceCount" => {
-                // Base class, nothing to fill in
-            }
-            "Namable" => {
-                // Base class, nothing to fill in
-            }
-            "TypedWritable" => {
-                // Base class, everything derived from here.
-                //
-                // See typedWritable.h.template, all BAM files use register_with_read_factory,
-                // make_from_bam, fillin, complete_pointers, finalize, _num_GenericPointers, and
-                // write_datagram
-                //
-                // In this design, I'm combining:
-                // * register_with_read_factory, make_from_bam, and fillin into Object::create
-                // * complete_pointers, finalize, and _num_GenericPointers into Object::finalize
-                // * write_datagram into Object::write
-            }
-            "PandaNode" => {
-                let node = crate::nodes::panda_node::PandaNode::create(self, data)?;
-                println!("{:#?}", node);
-            }
-            "TypedWritableReferenceCount" => {
-                // Base class, nothing to fill in
-            }
-            "CachedTypedWritableReferenceCount" => {
-                // Base class, nothing to fill in
-            }
-            "CopyOnWriteObject" => {
-                // Base class, nothing to fill in
-            }
-            "RenderAttrib" => {
-                // Base class, other Attrib derive from this
-            }
-            "ColorAttrib" => {
-                let node = crate::nodes::color_attrib::ColorAttrib::create(self, data)?;
-                println!("{:#?}", node);
-            }
-            "CullBinAttrib" => {
-                let node = crate::nodes::cull_bin_attrib::CullBinAttrib::create(self, data)?;
-                println!("{:#?}", node);
-            }
-            "GeomNode" => {
-                let node = crate::nodes::geom_node::GeomNode::create(self, data)?;
-                println!("{:#?}", node);
-            }
-            "ModelNode" => {
-                let node = crate::nodes::model_node::ModelNode::create(self, data)?;
-                println!("{:#?}", node);
-            }
-            "ModelRoot" => {
-                Self::fillin(self, data, "ModelNode")?;
-            }
-            "RenderEffects" => {
-                let node = crate::nodes::render_effects::RenderEffects::create(self, data)?;
-                println!("{:#?}", node);
-            }
-            "NodeCachedReferenceCount" => {
-                // Base class, nothing to fill in
-            }
-            "RenderState" => {
-                let node = crate::nodes::render_state::RenderState::create(self, data)?;
-                println!("{:#?}", node);
-            }
-            "TextureAttrib" => {
-                let node = crate::nodes::texture_attrib::TextureAttrib::create(self, data)?;
-                println!("{:#?}", node);
-            }
-            "TransformState" => {
-                let node = crate::nodes::transform_state::TransformState::create(self, data)?;
-                println!("{:#?}", node);
-            }
-            "TransparencyAttrib" => {
-                let node =
-                    crate::nodes::transparency_attrib::TransparencyAttrib::create(self, data)?;
-                println!("{:#?}", node);
-            }
-            "Texture" => {
-                let node = crate::nodes::texture::Texture::create(self, data)?;
-                println!("{:#?}", node);
-            }
-            "CollisionSolid" => {}
-            "CollisionSphere" => {}
-            "CollisionPlane" => {}
-            "CollisionPolygon" => {}
-            "CollisionNode" => {}
-            "CollisionTube" => {}
-            "Geom" => {
-                let node = crate::nodes::geom::Geom::create(self, data)?;
-                println!("{:#?}", node);
-            }
-            "GeomPrimitive" => {}
-            "GeomTriangles" => {}
-            "GeomTristrips" => {
-                let node = crate::nodes::geom_tristrips::GeomTristrips::create(self, data)?;
-                println!("{:#?}", node);
-            }
-            "GeomVertexArrayData" => {
-                let node =
-                    crate::nodes::geom_vertex_array_data::GeomVertexArrayData::create(self, data)?;
-                println!("{:#?}", node);
-            }
-            "GeomVertexArrayFormat" => {
-                let node = crate::nodes::geom_vertex_array_format::GeomVertexArrayFormat::create(
-                    self, data,
-                )?;
-                println!("{:#?}", node);
-            }
-            "GeomVertexData" => {
-                let node = crate::nodes::geom_vertex_data::GeomVertexData::create(self, data)?;
-                println!("{:#?}", node);
-            }
-            "GeomVertexFormat" => {
-                let node = crate::nodes::geom_vertex_format::GeomVertexFormat::create(self, data)?;
-                println!("{:#?}", node);
-            }
-            "InternalName" => {
-                let node = crate::nodes::internal_name::InternalName::create(self, data)?;
-                println!("{:#?}", node);
-            }
-            "TextureStage" => {
-                let node = crate::nodes::texture_stage::TextureStage::create(self, data)?;
-                println!("{:#?}", node);
-            }
-            "BillboardEffect" => {
-                let node = crate::nodes::billboard_effect::BillboardEffect::create(self, data)?;
-                println!("{:#?}", node);
-            }
-            "DepthWriteAttrib" => {}
-            "CullFaceAttrib" => {}
+        let node = match type_name {
+            "BillboardEffect" => PandaObject::BillboardEffect(BillboardEffect::create(self, data)?),
+            "Geom" => PandaObject::Geom(Geom::create(self, data)?),
+            "GeomNode" => PandaObject::GeomNode(GeomNode::create(self, data)?),
+            "GeomTristrips" => PandaObject::GeomTristrips(GeomTristrips::create(self, data)?), /* TODO: cleanup GeomPrimitive */
+            "GeomVertexData" => PandaObject::GeomVertexData(GeomVertexData::create(self, data)?),
+            "ModelRoot" => PandaObject::ModelNode(ModelNode::create(self, data)?),
+            "PandaNode" => PandaObject::PandaNode(PandaNode::create(self, data)?),
+            "RenderEffects" => PandaObject::RenderEffects(RenderEffects::create(self, data)?),
+            "RenderState" => PandaObject::RenderState(RenderState::create(self, data)?),
+            "TextureAttrib" => PandaObject::TextureAttrib(TextureAttrib::create(self, data)?),
+            "TransformState" => PandaObject::TransformState(TransformState::create(self, data)?),
+            "TransparencyAttrib" => PandaObject::TransparencyAttrib(TransparencyAttrib::create(self, data)?),
             _ => todo!("{type_name}"),
-        }
+        };
+        println!("{:#?}", node);
         Ok(())
     }
 }

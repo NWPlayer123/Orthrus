@@ -1,20 +1,18 @@
-/*use crate::common::Datagram;
-//use crate::nodes::prelude::*;
+use super::prelude::*;
 
-//#[enum_dispatch]
-pub(crate) trait DatagramRead {
-    fn finalize(&self) -> Result<(), crate::bam::Error>;
+#[derive(Debug)]
+#[allow(dead_code)]
+pub(crate) enum PandaObject {
+    BillboardEffect(BillboardEffect),
+    Geom(Geom),
+    GeomNode(GeomNode),
+    GeomTristrips(GeomTristrips),
+    GeomVertexData(GeomVertexData),
+    ModelNode(ModelNode),
+    PandaNode(PandaNode),
+    RenderEffects(RenderEffects),
+    RenderState(RenderState),
+    TextureAttrib(TextureAttrib),
+    TransformState(TransformState),
+    TransparencyAttrib(TransparencyAttrib),
 }
-
-//#[enum_dispatch]
-pub(crate) trait DatagramWrite {
-    fn write(&self) -> Result<Datagram, crate::bam::Error>;
-}
-
-enum Node {
-    TextureStage(TextureStage),
-    GeomVertexAnimationSpec(GeomVertexAnimationSpec),
-}
-*/
-
-enum PandaObject {}

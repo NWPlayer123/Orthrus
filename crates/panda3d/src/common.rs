@@ -42,11 +42,11 @@ impl<'a> Datagram<'a> {
         Ok(string.to_owned())
     }
 
-    pub(crate) fn read_float(&mut self) -> Result<f64, data::Error> {
+    pub(crate) fn read_float(&mut self) -> Result<f32, data::Error> {
         if self.float_type == true {
-            self.data.read_f64()
+            Ok(self.data.read_f64()? as f32)
         } else {
-            Ok(self.data.read_f32()? as f64)
+            self.data.read_f32()
         }
     }
 

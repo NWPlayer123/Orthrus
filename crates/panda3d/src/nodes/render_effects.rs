@@ -1,21 +1,22 @@
 use super::prelude::*;
 
-#[derive(Default, Debug)]
+#[derive(Debug, Default)]
 #[allow(dead_code)]
 pub(crate) struct RenderEffects {
-    effects: Vec<Option<u32>>,
+    /// References to all Effects
+    effects: Vec<u32>,
 }
 
 impl RenderEffects {
+    #[inline]
     pub fn create(loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
-        //Cycler data
         let num_effects = data.read_u16()?;
-        //Effect*
         let mut effects = Vec::with_capacity(num_effects as usize);
         for _ in 0..num_effects {
-            let effect = loader.read_pointer(data)?;
+            let effect = loader.read_pointer(data)?.unwrap();
             effects.push(effect);
         }
+
         Ok(Self { effects })
     }
 }

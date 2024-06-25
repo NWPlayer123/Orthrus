@@ -1,31 +1,30 @@
 use super::prelude::*;
-use super::sampler_state::SamplerState;
 
 #[derive(Debug, Default)]
 #[allow(dead_code)]
 pub(crate) struct StageNode {
     sampler: Option<SamplerState>,
-    texture_stage: Option<u32>,
-    texture: Option<u32>,
-    r#override: i32,
-    pub(crate) implicit_sort: u16,
+    /// Reference to the associated TextureStage data
+    texture_stage: u32,
+    /// Reference to the associated Texture data
+    texture: u32,
+    priority: i32,
+    implicit_sort: u16,
     texcoord_index: i32,
 }
 
 impl StageNode {
-    pub fn create(
-        loader: &mut BinaryAsset, data: &mut Datagram, mut implicit_sort: u16,
-    ) -> Result<Self, bam::Error> {
-        //StageNode*
-        let texture_stage = loader.read_pointer(data)?;
-        //Texture*
-        let texture = loader.read_pointer(data)?;
+    #[inline]
+    pub fn create(loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
+        let texture_stage = loader.read_pointer(data)?.unwrap();
+        let texture = loader.read_pointer(data)?.unwrap();
 
-        if loader.get_minor_version() >= 15 {
-            implicit_sort = data.read_u16()?;
-        }
+        let implicit_sort = match loader.get_minor_version() >= 15 {
+            true => data.read_u16()?,
+            false => 0,
+        };
 
-        let r#override = match loader.get_minor_version() >= 23 {
+        let priority = match loader.get_minor_version() >= 23 {
             true => data.read_i32()?,
             false => 0,
         };
@@ -44,30 +43,31 @@ impl StageNode {
             sampler,
             texture_stage,
             texture,
-            r#override,
+            priority,
             implicit_sort,
             texcoord_index: 0,
         })
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug, Default)]
 #[allow(dead_code)]
 pub(crate) struct TextureAttrib {
     off_all_stages: bool,
-    off_stages: Vec<Option<u32>>,
+    /// References to associated TextureStage data
+    off_stages: Vec<u32>,
     on_stages: Vec<StageNode>,
 }
 
 impl TextureAttrib {
+    #[inline]
     pub fn create(loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
         let off_all_stages = data.read_bool()?;
 
         let num_off_stages = data.read_u16()?;
         let mut off_stages = Vec::with_capacity(num_off_stages as usize);
         for _ in 0..num_off_stages {
-            //StageNode*
-            let texture_stage = loader.read_pointer(data)?;
+            let texture_stage = loader.read_pointer(data)?.unwrap();
             off_stages.push(texture_stage);
         }
 
@@ -75,8 +75,13 @@ impl TextureAttrib {
         let mut on_stages = Vec::with_capacity(num_on_stages as usize);
         let mut next_implicit_sort = 0;
         for n in 0..num_on_stages {
-            let mut stage_node = StageNode::create(loader, data, n)?;
+            let mut stage_node = StageNode::create(loader, data)?;
+            // Before 6.15, we didn't store the implicit order, so use the stored order
+            if loader.get_minor_version() < 15 {
+                stage_node.implicit_sort = n;
+            }
 
+            // Now we need to calculate the actual order, since it can be different than above
             next_implicit_sort = core::cmp::max(next_implicit_sort, stage_node.implicit_sort + 1);
             stage_node.implicit_sort = next_implicit_sort;
             next_implicit_sort += 1;

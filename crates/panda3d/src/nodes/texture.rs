@@ -182,7 +182,7 @@ pub(crate) struct TextureBody {
     /// Timestamp of when the image was last modified
     simple_image_date_generated: i32,
     image: Vec<u8>,
-    clear_color: Option<[f64; 4]>,
+    clear_color: Option<[f32; 4]>,
 }
 
 #[derive(Default, Debug)]

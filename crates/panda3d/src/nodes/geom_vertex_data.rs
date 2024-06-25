@@ -1,29 +1,31 @@
-use super::geom_enums::UsageHint;
 use super::prelude::*;
 
 #[derive(Debug, Default)]
 #[allow(dead_code)]
 pub(crate) struct GeomVertexData {
     name: String,
-    format: Option<u32>,
+    /// Reference to the associated GeomVertexFormat that defines the current data
+    format: u32,
     usage_hint: UsageHint,
-    arrays: Vec<Option<u32>>,
+    /// References to all GeomVertexArrayData
+    arrays: Vec<u32>,
     transform_table: Option<u32>,
     transform_blend_table: Option<u32>,
     slider_table: Option<u32>,
 }
 
 impl GeomVertexData {
+    #[inline]
     pub fn create(loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
         let name = data.read_string()?;
 
         // Cycler data
-        let format = loader.read_pointer(data)?;
+        let format = loader.read_pointer(data)?.unwrap();
         let usage_hint = UsageHint::from(data.read_u8()?);
         let num_arrays = data.read_u16()?;
         let mut arrays = Vec::new();
         for _ in 0..num_arrays {
-            arrays.push(loader.read_pointer(data)?);
+            arrays.push(loader.read_pointer(data)?.unwrap());
         }
 
         let transform_table = loader.read_pointer(data)?;

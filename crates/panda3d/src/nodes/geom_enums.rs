@@ -90,3 +90,37 @@ pub(crate) enum PrimitiveType {
     Points,
     Patches,
 }
+
+bitflags! {
+    #[repr(transparent)]
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+    pub struct GeomRendering: u32 {
+        const IndexedPoint         = 1 << 0;
+        const IndexedOther         = 1 << 16;
+        const IndexedBits          = Self::IndexedPoint.bits() | Self::IndexedOther.bits();
+        const Point                = 1 << 1;
+        const PointUniformSize     = 1 << 2;
+        const PerPointSize         = 1 << 3;
+        const PointPerspective     = 1 << 4;
+        const PointAspectRatio     = 1 << 5;
+        const PointScale           = 1 << 6;
+        const PointRotate          = 1 << 7;
+        const PointSprite          = 1 << 8;
+        const PointSpriteTexMatrix = 1 << 9;
+        const PointBits            = Self::Point.bits() | Self::PointUniformSize.bits() | Self::PerPointSize.bits()
+                                    | Self::PointPerspective.bits() | Self::PointAspectRatio.bits()
+                                    | Self::PointScale.bits() | Self::PointRotate.bits() | Self::PointSprite.bits()
+                                    | Self::PointSpriteTexMatrix.bits();
+        const TriangleStrip        = 1 << 10;
+        const TriangleFan          = 1 << 11;
+        const LineStrip            = 1 << 12;
+        const CompositeBits        = Self::TriangleStrip.bits() | Self::TriangleFan.bits() | Self::LineStrip.bits();
+        const StripCutIndex        = 1 << 17;
+        const FlatFirstVertex      = 1 << 13;
+        const FlatLastVertex       = 1 << 14;
+        const ShadeModelBits       = Self::FlatFirstVertex.bits() | Self::FlatLastVertex.bits();
+        const RenderModeWireframe  = 1 << 18;
+        const RenderModePoint      = 1 << 19;
+        const Adjacency            = 1 << 20;
+    }
+}

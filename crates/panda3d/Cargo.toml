@@ -14,7 +14,7 @@ orthrus-core = { version = "0.2.0", path = "../core", features = [
 
 snafu = { version = "0.8", default-features = false }
 num_enum = { version = "0.7", default-features = false }
-glam = { version = "0.28", default-features = false }
+glam = { version = "0.28", default-features = false, features = ["approx"] }
 der = { version = "0.7", optional = true }
 
 hashbrown = "0.14"

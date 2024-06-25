@@ -45,7 +45,6 @@ pub(crate) enum FilterType {
 #[derive(Debug)]
 #[allow(dead_code)]
 pub(crate) struct SamplerState {
-    //TODO: lots of good candidates for sub-types
     wrap_u: WrapMode,
     wrap_v: WrapMode,
     wrap_w: WrapMode,
@@ -54,14 +53,16 @@ pub(crate) struct SamplerState {
     mag_filter: FilterType,
 
     aniso_degree: i16,
-    border_color: [f64; 4],
+    //TODO: custom LColor variable?
+    border_color: Vec4,
 
-    min_lod: f64,
-    max_lod: f64,
-    lod_bias: f64,
+    min_lod: f32,
+    max_lod: f32,
+    lod_bias: f32,
 }
 
 impl SamplerState {
+    #[inline]
     pub fn create(loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
         let mut state = Self::default();
         state.wrap_u = WrapMode::from(data.read_u8()?);
@@ -73,13 +74,7 @@ impl SamplerState {
 
         state.aniso_degree = data.read_i16()?;
 
-        //LColor -> [f64; 4]
-        state.border_color = [
-            data.read_float()?,
-            data.read_float()?,
-            data.read_float()?,
-            data.read_float()?,
-        ];
+        state.border_color = Vec4::read(data)?;
 
         if loader.get_minor_version() >= 36 {
             state.min_lod = data.read_float()?;
@@ -92,6 +87,7 @@ impl SamplerState {
 }
 
 impl Default for SamplerState {
+    #[inline]
     fn default() -> Self {
         Self {
             wrap_u: WrapMode::default(),
@@ -102,7 +98,7 @@ impl Default for SamplerState {
             mag_filter: FilterType::default(),
 
             aniso_degree: 0,
-            border_color: [0.0, 0.0, 0.0, 1.0],
+            border_color: Vec4::W,
 
             min_lod: -1000.0,
             max_lod: 1000.0,

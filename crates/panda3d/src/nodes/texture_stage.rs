@@ -127,7 +127,7 @@ pub(crate) struct TextureStage {
     texcoord_name: Option<u32>,
 
     mode: Mode,
-    color: [f64; 4],
+    color: [f32; 4],
     rgb_scale: u8,
     alpha_scale: u8,
     saved_result: bool,

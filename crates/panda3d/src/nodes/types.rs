@@ -1,4 +1,4 @@
-use glam::{dmat4, dvec3, dvec4, DMat4, DVec3, DVec4};
+use glam::{mat4, vec3, vec4, Mat4, Vec3, Vec4};
 
 use super::prelude::*;
 
@@ -8,10 +8,10 @@ pub trait DatagramRead {
         Self: Sized;
 }
 
-impl DatagramRead for DVec3 {
+impl DatagramRead for Vec3 {
     #[inline]
     fn read(data: &mut Datagram) -> Result<Self, bam::Error> {
-        Ok(dvec3(
+        Ok(vec3(
             data.read_float()?,
             data.read_float()?,
             data.read_float()?,
@@ -19,10 +19,10 @@ impl DatagramRead for DVec3 {
     }
 }
 
-impl DatagramRead for DVec4 {
+impl DatagramRead for Vec4 {
     #[inline]
     fn read(data: &mut Datagram) -> Result<Self, bam::Error> {
-        Ok(dvec4(
+        Ok(vec4(
             data.read_float()?,
             data.read_float()?,
             data.read_float()?,
@@ -31,14 +31,14 @@ impl DatagramRead for DVec4 {
     }
 }
 
-impl DatagramRead for DMat4 {
+impl DatagramRead for Mat4 {
     #[inline]
     fn read(data: &mut Datagram) -> Result<Self, bam::Error> {
-        Ok(dmat4(
-            DVec4::read(data)?,
-            DVec4::read(data)?,
-            DVec4::read(data)?,
-            DVec4::read(data)?,
+        Ok(mat4(
+            Vec4::read(data)?,
+            Vec4::read(data)?,
+            Vec4::read(data)?,
+            Vec4::read(data)?,
         ))
     }
 }

@@ -6,6 +6,7 @@ pub(crate) struct NodePath {
 }
 
 impl NodePath {
+    #[inline]
     pub fn create(loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
         let mut path = Self::default();
 
