@@ -117,7 +117,6 @@ pub struct Header {
 pub enum CompressionAlgo {
     /// This algorithm should create identical files for all data from N64 and GameCube.
     MatchingOld, //eggCompress
-    //MatchingNew, //MK8
 }
 
 /// Utility struct for handling Yay0 compression.

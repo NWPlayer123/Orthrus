@@ -108,8 +108,6 @@ impl From<std::io::Error> for Error {
 pub enum CompressionAlgo {
     /// This algorithm should create identical files for all data from N64, GameCube, and Wii.
     MatchingOld, //eggCompress
-    MatchingOld, /*eggCompress
-                  *MatchingNew, //MK8 */
 }
 
 /// See the module [header](self#header) for more information.
