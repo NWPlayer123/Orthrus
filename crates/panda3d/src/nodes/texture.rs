@@ -5,7 +5,7 @@ use super::sampler_state::SamplerState;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Default, FromPrimitive)]
 #[repr(u8)]
-enum TextureType {
+pub enum TextureType {
     Texture1D,
     #[default]
     Texture2D,
@@ -153,17 +153,17 @@ enum ComponentType {
 #[derive(Debug, Default)]
 #[allow(dead_code)]
 pub(crate) struct Texture {
-    name: String,
-    filename: String,
-    alpha_filename: String,
+    pub name: String,
+    pub filename: String,
+    pub alpha_filename: String,
 
-    color_num_channels: u8,
-    alpha_num_channels: u8,
-    has_rawdata: bool,
-    texture_type: TextureType,
-    body: TextureBody,
-    data: Option<TextureData>,
-    has_read_mipmaps: bool,
+    pub color_num_channels: u8,
+    pub alpha_num_channels: u8,
+    pub has_rawdata: bool,
+    pub texture_type: TextureType,
+    pub body: TextureBody,
+    pub data: Option<TextureData>,
+    pub has_read_mipmaps: bool,
 }
 
 #[derive(Debug, Default)]

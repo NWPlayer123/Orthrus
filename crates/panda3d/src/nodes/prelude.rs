@@ -15,6 +15,9 @@ pub(super) mod bam {
 
 pub(crate) use super::billboard_effect::BillboardEffect;
 pub(crate) use super::bounding_volume::BoundsType;
+pub(crate) use super::collision_capsule::CollisionCapsule;
+pub(crate) use super::collision_node::CollisionNode;
+pub(crate) use super::collision_solid::CollisionSolid;
 pub(crate) use super::dispatch::PandaObject;
 pub(crate) use super::geom::Geom;
 pub(crate) use super::geom_enums::*;
@@ -38,4 +41,8 @@ pub(crate) use super::texture::Texture;
 pub(crate) use super::texture_attrib::TextureAttrib;
 pub(crate) use super::texture_stage::TextureStage;
 pub(crate) use super::transform_state::TransformState;
-pub(crate) use super::transparency_attrib::TransparencyAttrib;
+pub(crate) use super::transparency_attrib::{TransparencyAttrib, TransparencyMode};
+pub(crate) use super::color_attrib::ColorAttrib;
+pub(crate) use super::cull_bin_attrib::CullBinAttrib;
+pub(crate) use super::depth_write_attrib::DepthWriteAttrib;
+pub(crate) use super::cull_face_attrib::{CullFaceAttrib, CullMode};

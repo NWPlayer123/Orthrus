@@ -2,7 +2,7 @@ use super::prelude::*;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Default, FromPrimitive)]
 #[repr(u8)]
-enum Mode {
+pub(crate) enum TransparencyMode {
     /// No transparency.
     #[default]
     None,
@@ -23,12 +23,12 @@ enum Mode {
 #[derive(Debug, Default)]
 #[allow(dead_code)]
 pub(crate) struct TransparencyAttrib {
-    mode: Mode,
+    pub mode: TransparencyMode,
 }
 
 impl TransparencyAttrib {
     #[inline]
     pub fn create(_loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
-        Ok(Self { mode: Mode::from(data.read_u8()?) })
+        Ok(Self { mode: TransparencyMode::from(data.read_u8()?) })
     }
 }

@@ -4,6 +4,12 @@ use super::prelude::*;
 #[allow(dead_code)]
 pub(crate) enum PandaObject {
     BillboardEffect(BillboardEffect),
+    CollisionCapsule(CollisionCapsule), //Called CollisionTube previously
+    CollisionNode(CollisionNode),
+    ColorAttrib(ColorAttrib),
+    CullBinAttrib(CullBinAttrib),
+    CullFaceAttrib(CullFaceAttrib),
+    DepthWriteAttrib(DepthWriteAttrib),
     Geom(Geom),
     GeomNode(GeomNode),
     GeomTristrips(GeomTristrips),
@@ -21,4 +27,5 @@ pub(crate) enum PandaObject {
     TextureStage(TextureStage),
     TransformState(TransformState),
     TransparencyAttrib(TransparencyAttrib),
+    Null,
 }

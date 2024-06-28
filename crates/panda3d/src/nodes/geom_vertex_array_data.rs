@@ -4,11 +4,11 @@ use super::prelude::*;
 #[allow(dead_code)]
 pub(crate) struct GeomVertexArrayData {
     /// Reference to the associated GeomVertexArrayFormat used to interpret the data
-    array_format: u32,
+    pub array_format: u32,
     /// Usage hint on how often the data in question will be modified/rendered
-    usage_hint: UsageHint,
+    pub usage_hint: UsageHint,
     /// Raw vertex data, stored as a u8 array and interpreted according to the array format
-    buffer: Vec<u8>,
+    pub buffer: Vec<u8>,
 }
 
 impl GeomVertexArrayData {

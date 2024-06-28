@@ -9,23 +9,18 @@ pub(crate) enum ColorType {
     Off,
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug, Default)]
 #[allow(dead_code)]
 pub(crate) struct ColorAttrib {
-    color_type: ColorType,
-    color: [f32; 4],
+    pub color_type: ColorType,
+    pub color: Vec4,
 }
 
 impl ColorAttrib {
     pub fn create(_loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
         let color_type = ColorType::from(data.read_u8()?);
-        //LColor -> [f64; 4]
-        let color = [
-            data.read_float()?,
-            data.read_float()?,
-            data.read_float()?,
-            data.read_float()?,
-        ];
+        //TODO: create custom color type?
+        let color = Vec4::read(data)?;
 
         let mut attrib = Self { color_type, color };
         attrib.quantize_color();
@@ -36,17 +31,14 @@ impl ColorAttrib {
     fn quantize_color(&mut self) {
         match self.color_type {
             ColorType::Vertex => {
-                self.color = [0.0, 0.0, 0.0, 0.0];
+                self.color = Vec4::ZERO;
             }
             ColorType::Flat => {
-                //TODO: SIMD? once it's stabilized
-                self.color[0] = f32::floor(self.color[0] * 1024.0 + 0.5) / 1024.0;
-                self.color[1] = f32::floor(self.color[1] * 1024.0 + 0.5) / 1024.0;
-                self.color[2] = f32::floor(self.color[2] * 1024.0 + 0.5) / 1024.0;
-                self.color[3] = f32::floor(self.color[3] * 1024.0 + 0.5) / 1024.0;
+                const SCALE: f32 = 1024.0;
+                self.color = (self.color * SCALE + Vec4::splat(0.5)).floor() / SCALE;
             }
             ColorType::Off => {
-                self.color = [1.0, 1.0, 1.0, 1.0];
+                self.color = Vec4::ONE;
             }
         }
     }

@@ -4,7 +4,7 @@ use super::prelude::*;
 #[allow(dead_code)]
 pub(crate) struct RenderEffects {
     /// References to all Effects
-    effects: Vec<u32>,
+    pub effects: Vec<u32>,
 }
 
 impl RenderEffects {

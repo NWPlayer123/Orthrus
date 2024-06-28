@@ -4,13 +4,13 @@ use super::prelude::*;
 #[allow(dead_code)]
 pub(crate) struct Geom {
     /// Reference to the associated GeomVertexData
-    data_ptr: u32,
+    pub data_ptr: u32,
     /// References to all GeomPrimitive data
-    primitives: Vec<u32>,
-    primitive_type: PrimitiveType,
-    shade_model: ShadeModel,
-    geom_rendering: GeomRendering,
-    bounds_type: BoundsType,
+    pub primitives: Vec<u32>,
+    pub primitive_type: PrimitiveType,
+    pub shade_model: ShadeModel,
+    pub geom_rendering: GeomRendering,
+    pub bounds_type: BoundsType,
 }
 
 impl Geom {

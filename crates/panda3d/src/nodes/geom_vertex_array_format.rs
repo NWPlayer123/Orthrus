@@ -3,12 +3,12 @@ use super::prelude::*;
 #[derive(Debug, Default)]
 #[allow(dead_code)]
 pub(crate) struct GeomVertexArrayFormat {
-    stride: u16,
-    total_bytes: u16,
-    pad_to: u8,
-    divisor: u16,
-    num_columns: u16,
-    columns: Vec<GeomVertexColumn>,
+    pub stride: u16,
+    pub total_bytes: u16,
+    pub pad_to: u8,
+    pub divisor: u16,
+    pub num_columns: u16,
+    pub columns: Vec<GeomVertexColumn>,
 }
 
 impl GeomVertexArrayFormat {

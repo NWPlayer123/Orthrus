@@ -3,7 +3,7 @@ use super::prelude::*;
 #[derive(Debug, Default)]
 #[allow(dead_code)]
 pub(crate) struct GeomTristrips {
-    primitive: GeomPrimitive,
+    pub primitive: GeomPrimitive,
 }
 
 impl GeomTristrips {

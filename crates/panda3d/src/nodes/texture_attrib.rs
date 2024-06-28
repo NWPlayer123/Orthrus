@@ -3,14 +3,14 @@ use super::prelude::*;
 #[derive(Debug, Default)]
 #[allow(dead_code)]
 pub(crate) struct StageNode {
-    sampler: Option<SamplerState>,
+    pub sampler: Option<SamplerState>,
     /// Reference to the associated TextureStage data
-    texture_stage: u32,
+    pub texture_stage: u32,
     /// Reference to the associated Texture data
-    texture: u32,
-    priority: i32,
-    implicit_sort: u16,
-    texcoord_index: i32,
+    pub texture: u32,
+    pub priority: i32,
+    pub implicit_sort: u16,
+    pub texcoord_index: i32,
 }
 
 impl StageNode {
@@ -53,10 +53,10 @@ impl StageNode {
 #[derive(Debug, Default)]
 #[allow(dead_code)]
 pub(crate) struct TextureAttrib {
-    off_all_stages: bool,
+    pub off_all_stages: bool,
     /// References to associated TextureStage data
-    off_stages: Vec<u32>,
-    on_stages: Vec<StageNode>,
+    pub off_stages: Vec<u32>,
+    pub on_stages: Vec<StageNode>,
 }
 
 impl TextureAttrib {

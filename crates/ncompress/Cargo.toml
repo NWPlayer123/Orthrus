@@ -7,7 +7,7 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-orthrus-core = { version = "0.2.0", path = "../core" }
+orthrus-core = { version = "0.2", path = "../core" }
 
 snafu = { version = "0.8", default-features = false }
 

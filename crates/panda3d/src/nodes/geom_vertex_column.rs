@@ -3,18 +3,18 @@ use super::prelude::*;
 #[derive(Debug, Default)]
 #[allow(dead_code)]
 pub(crate) struct GeomVertexColumn {
-    name: u32,
-    num_components: u8,
-    numeric_type: NumericType,
-    contents: Contents,
-    start: u16,
-    column_alignment: u8,
+    pub name: u32,
+    pub num_components: u8,
+    pub numeric_type: NumericType,
+    pub contents: Contents,
+    pub start: u16,
+    pub column_alignment: u8,
 
-    num_elements: u8,
-    element_stride: u16,
-    num_values: u16,
-    component_bytes: u8,
-    total_bytes: u32,
+    pub num_elements: u8,
+    pub element_stride: u16,
+    pub num_values: u16,
+    pub component_bytes: u8,
+    pub total_bytes: u32,
 }
 
 impl GeomVertexColumn {

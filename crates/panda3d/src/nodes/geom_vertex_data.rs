@@ -3,15 +3,15 @@ use super::prelude::*;
 #[derive(Debug, Default)]
 #[allow(dead_code)]
 pub(crate) struct GeomVertexData {
-    name: String,
+    pub name: String,
     /// Reference to the associated GeomVertexFormat that defines the current data
-    format: u32,
-    usage_hint: UsageHint,
+    pub format: u32,
+    pub usage_hint: UsageHint,
     /// References to all GeomVertexArrayData
-    arrays: Vec<u32>,
-    transform_table: Option<u32>,
-    transform_blend_table: Option<u32>,
-    slider_table: Option<u32>,
+    pub arrays: Vec<u32>,
+    pub transform_table: Option<u32>,
+    pub transform_blend_table: Option<u32>,
+    pub slider_table: Option<u32>,
 }
 
 impl GeomVertexData {

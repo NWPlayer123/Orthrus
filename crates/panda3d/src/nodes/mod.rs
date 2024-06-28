@@ -1,6 +1,8 @@
 pub(crate) mod auto_texture_scale;
 pub(crate) mod billboard_effect;
 pub(crate) mod bounding_volume;
+pub(crate) mod collision_node;
+pub(crate) mod collision_capsule;
 pub(crate) mod color_attrib;
 pub(crate) mod cull_bin_attrib;
 pub(crate) mod dispatch;
@@ -29,3 +31,6 @@ pub(crate) mod texture_stage;
 pub(crate) mod transform_state;
 pub(crate) mod transparency_attrib;
 pub(crate) mod types;
+pub(crate) mod collision_solid;
+pub(crate) mod depth_write_attrib;
+pub(crate) mod cull_face_attrib;

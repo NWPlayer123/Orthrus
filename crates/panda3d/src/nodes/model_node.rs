@@ -22,7 +22,7 @@ enum PreserveTransform {
 #[allow(dead_code)]
 pub(crate) struct ModelNode {
     /// ModelNode is a superclass of a PandaNode, so we include its data here
-    node: PandaNode,
+    pub node: PandaNode,
     /// Whether to preserve the PandaNode transform data.
     transform: PreserveTransform,
     // TODO: bitflag union from SceneGraphReducer::AttribTypes of which attributes to protect

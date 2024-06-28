@@ -1,6 +1,6 @@
 use super::prelude::*;
 
-#[derive(Default, Debug)]
+#[derive(Debug, Default)]
 #[allow(dead_code)]
 pub(crate) struct CullBinAttrib {
     bin_name: String,

@@ -7,23 +7,18 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-orthrus-core = { version = "0.2.0", path = "../core", features = [
-    "certificate",
-    "time",
-] }
+orthrus-core = { version = "0.2", path = "../core" }
 
 snafu = { version = "0.8", default-features = false }
 num_enum = { version = "0.7", default-features = false }
+approx = { version = "0.5", default-features = false }
 glam = { version = "0.28", default-features = false, features = ["approx"] }
 der = { version = "0.7", optional = true }
 
 hashbrown = "0.14"
-bitflags = "2.5"
-approx = "0.5"
-#enum_delegate = "0.2"
-#enum_dispatch = "0.3"
+bitflags = "2.6"
 
 [features]
 default = ["std"]
 std = ["snafu/std", "glam/std"]
-signature = ["der"]
+signature = ["der", "orthrus-core/certificate"]

@@ -4,7 +4,7 @@ use super::prelude::*;
 #[allow(dead_code)]
 pub(crate) struct RenderState {
     /// This stores a pointer to each RenderAttrib and its associated override value
-    attribs: Vec<(u32, i32)>,
+    pub attribs: Vec<(u32, i32)>,
 }
 
 impl RenderState {

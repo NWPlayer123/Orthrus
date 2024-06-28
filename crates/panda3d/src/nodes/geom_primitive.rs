@@ -3,14 +3,14 @@ use super::prelude::*;
 #[derive(Debug, Default)]
 #[allow(dead_code)]
 pub(crate) struct GeomPrimitive {
-    shade_model: ShadeModel,
-    first_vertex: i32,
-    num_vertices: i32,
-    index_type: NumericType,
-    usage_hint: UsageHint,
-    vertices: u32,
-    ptr_to_array: u32,
-    array: Vec<u32>,
+    pub shade_model: ShadeModel,
+    pub first_vertex: i32,
+    pub num_vertices: i32,
+    pub index_type: NumericType,
+    pub usage_hint: UsageHint,
+    pub vertices: u32,
+    pub ptr_to_array: u32,
+    pub array: Vec<u32>,
 }
 
 impl GeomPrimitive {

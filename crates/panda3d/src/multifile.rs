@@ -387,7 +387,7 @@ impl Multifile {
     ///
     /// # Errors
     /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds.
-    //#[cfg(feature = "signature")]
+    #[cfg(feature = "signature")]
     #[inline]
     pub fn check_signatures(input: &[u8]) -> Result<()> {
         let mut file_data = DataCursor::new(input, Endian::Little);

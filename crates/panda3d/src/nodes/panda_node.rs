@@ -3,28 +3,28 @@ use super::prelude::*;
 #[derive(Debug, Default)]
 #[allow(dead_code)]
 pub(crate) struct PandaNode {
-    name: String,
+    pub name: String,
 
     /// Reference to the associated RenderState
-    state: u32,
+    pub state: u32,
     /// Reference to the associated TransformState
-    transform: u32,
+    pub transform: u32,
     /// Reference to the associated RenderEffects
-    effects: u32,
+    pub effects: u32,
 
-    draw_control_mask: u32,
-    draw_show_mask: u32,
-    into_collide_mask: u32,
+    pub draw_control_mask: u32,
+    pub draw_show_mask: u32,
+    pub into_collide_mask: u32,
 
-    bounds_type: BoundsType,
+    pub bounds_type: BoundsType,
 
-    tag_data: HashMap<String, String>,
+    pub tag_data: HashMap<String, String>,
 
     /// Reference to all parent nodes (may be derived from PandaNode)
-    parents: Vec<u32>,
+    pub parents: Vec<u32>,
     /// Reference to all children nodes (may be derived from PandaNode)
-    children: Vec<(u32, i32)>,
-    stashed: Vec<(u32, i32)>,
+    pub children: Vec<(u32, i32)>,
+    pub stashed: Vec<(u32, i32)>,
 }
 
 impl PandaNode {

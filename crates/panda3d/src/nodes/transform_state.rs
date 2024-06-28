@@ -1,7 +1,8 @@
 use super::prelude::*;
 
 bitflags! {
-    #[derive(Debug, Default)]
+    #[repr(transparent)]
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
     pub(crate) struct Flags: u32 {
         const Identity = 0x00001;
         const Singular = 0x00002;

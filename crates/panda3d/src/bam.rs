@@ -146,6 +146,7 @@ pub struct BinaryAsset {
     /// Used if there are more than 65535 Pointer to Array IDs
     long_pta_id: bool,
     type_registry: HashMap<u16, String>,
+    nodes: Vec<PandaObject>,
 }
 
 impl BinaryAsset {
@@ -195,6 +196,7 @@ impl BinaryAsset {
             header,
             type_registry: HashMap::new(),
             objects_left,
+            nodes: vec![PandaObject::Null],
             ..Default::default()
         };
 
@@ -227,9 +229,197 @@ impl BinaryAsset {
             }
         }
 
+        // Now we can try to actually parse the data, first node = root node (should always be a ModelNode!)
+        bamfile.walk_tree(1);
+
         println!("{:?}", bamfile.type_registry);
 
         Ok(bamfile)
+    }
+
+    fn walk_tree(&self, node_index: usize) {
+        //println!("{:?}", &self.nodes[node_index]);
+        match &self.nodes[node_index] {
+            PandaObject::ModelNode(model) => {
+                // We're currently at the root node, so just iterate all children
+                assert!(model.node.children.len() == 1);
+                self.walk_tree(model.node.children[0].0 as usize);
+            }
+            PandaObject::PandaNode(node) => {
+                // Just a generic grouping node, keep iterating children
+                for child_index in &node.children {
+                    self.walk_tree(child_index.0 as usize);
+                }
+            }
+            PandaObject::GeomNode(node) => {
+                // We've hit a GeomNode, so handle its geometry
+                println!("// {}", node.node.name);
+                for geom_index in &node.geoms {
+                    // First, grab the actual geometry data
+                    self.walk_tree(geom_index.0 as usize);
+                    // Then, process RenderEffects so we can have a proper texture
+                    self.walk_tree(geom_index.1 as usize);
+                    println!("commands.spawn((PbrBundle {{mesh: meshes.add(mesh), material: materials.add(material), ..default()}}, CustomUV));");
+                    println!("");
+                }
+                println!("");
+            }
+            PandaObject::Geom(node) => {
+                assert!(node.primitives.len() == 1);
+                // First, figure out what type of primitive we're interpreting
+                self.walk_tree(node.primitives[0] as usize);
+                // Then, let's get the actual vertex data
+                self.walk_tree(node.data_ptr as usize);
+            }
+            PandaObject::GeomTristrips(node) => {
+                // We got called from a Geom primitive, so print the first part of the built mesh
+                println!("let mut mesh = Mesh::new(PrimitiveTopology::TriangleStrip, RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD);");
+                let index_node = &self.nodes[node.primitive.vertices as usize];
+                match index_node {
+                    PandaObject::GeomVertexArrayData(data) => {
+                        //TODO: more error handling? For now, we can just use the Tristrip
+                        match node.primitive.index_type {
+                            NumericType::U16 => {
+                                let buffer = &data.buffer;
+                                let mut indices = Vec::with_capacity(buffer.len() / 2 as usize);
+                                let mut cursor = DataCursorRef::new(buffer, Endian::Little);
+                                for _ in 0..(buffer.len() / 2) {
+                                    indices.push(cursor.read_u16().unwrap());
+                                }
+                                println!("mesh.insert_indices(Indices::U16(vec!{:?}));", indices);
+                            }
+                            _ => todo!("Unsupported GeomTristrips index type!"),
+                        }
+                    }
+                    _ => panic!("Unexpected GeomTristrip data!"),
+                }
+            }
+            PandaObject::GeomVertexData(node) => {
+                // We got called from a Geom primitive, we can use this node to get the rest of the data we need
+                assert!(node.arrays.len() == 1);
+                let array_data = &self.nodes[node.arrays[0] as usize];
+                match array_data {
+                    PandaObject::GeomVertexArrayData(data) => {
+                        // Grab the buffer data so we can interpret it
+                        let mut buffer = DataCursorRef::new(&data.buffer, Endian::Little);
+                        let array_format = &self.nodes[data.array_format as usize];
+                        let format = match array_format {
+                            PandaObject::GeomVertexArrayFormat(format) => format,
+                            _ => panic!("Unexpected GeomVertexArrayFormat!"),
+                        };
+
+                        // Handle each column individually, run its stride, and print the relevant data
+                        for column in &format.columns {
+                            match column.contents {
+                                Contents::Point => {
+                                    println!("mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, VertexAttributeValues::Float32x3(vec![");
+                                }
+                                Contents::TexCoord => {
+                                    println!("mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, VertexAttributeValues::Float32x2(vec![");
+                                }
+                                Contents::Color => {
+                                    println!("mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, VertexAttributeValues::Float32x4(vec![");
+                                }
+                                _ => todo!("Haven't implemented other vertex contents yet"),
+                            }
+                            let start = 0;
+                            for stride in start..start+(buffer.len() / format.stride as usize) {
+                                buffer.set_position(stride * format.stride as usize + column.start as usize);
+                                let mut entry = match column.numeric_type {
+                                    NumericType::F32 => {
+                                        let mut vec = Vec::with_capacity(column.num_values as usize);
+                                        for _ in 0..column.num_values {
+                                            vec.push(buffer.read_f32().unwrap());
+                                        }
+                                        vec
+                                    }
+                                    NumericType::PackedDABC => {
+                                        let data = buffer.read_u32().unwrap();
+                                        let a = ((data >> 24) & 0xFF) as f32 / 255.0;
+                                        let r = ((data >> 16) & 0xFF) as f32 / 255.0;
+                                        let g = ((data >>  8) & 0xFF) as f32 / 255.0;
+                                        let b = ((data >> 0) & 0xFF) as f32 / 255.0;
+                                        vec![r, g, b, a]
+                                    }
+                                    _ => todo!("Non-F32/PackedDABC data not implemented yet!"),
+                                };
+                                match column.contents {
+                                    Contents::Point => {
+                                        println!("{:?},", entry);
+                                    }
+                                    Contents::TexCoord => {
+                                        // Have to flip Y for OpenGL nonsense
+                                        entry[1] = 1.0 - entry[1];
+                                        println!("{:?},", entry);
+                                    }
+                                    Contents::Color => {
+                                        // Needs to be Linear RGB(A)!!!
+                                        println!("Color::rgba({:?}, {:?}, {:?}, {:?}).as_linear_rgba_f32(),", entry[0], entry[1], entry[2], entry[3]);
+                                    }
+                                    _ => todo!("Haven't implemented other vertex contents yet"),
+                                }
+                            }
+                            println!("]));");
+                        }
+                    }
+                    _ => panic!("Unexpected GeomVertexArrayData!"),
+                }
+            }
+            PandaObject::RenderState(node) => {
+                println!("let material = StandardMaterial {{");
+                for attrib in &node.attribs {
+                    let attrib = &self.nodes[attrib.0 as usize];
+                    //println!("{:?}", attrib);
+                    match attrib {
+                        PandaObject::ColorAttrib(attrib) => {
+                            //TODO: handle color_type?
+                            println!("base_color: Color::rgba_from_array([{:?}, {:?}, {:?}, {:?}]),", attrib.color.x, attrib.color.y, attrib.color.z, attrib.color.w);
+                        }
+                        PandaObject::TextureAttrib(attrib) => {
+                            assert!(attrib.on_stages.len() == 1);
+                            match &self.nodes[attrib.on_stages[0].texture as usize] {
+                                PandaObject::Texture(texture) => {
+                                    println!("base_color_texture: Some(asset_server.load(\"{}\")),", texture.filename);
+                                }
+                                _ => panic!("Unexpected Texture node!"),
+                            }
+                        }
+                        PandaObject::TransparencyAttrib(attrib) => {
+                            match attrib.mode {
+                                TransparencyMode::Dual => {
+                                    println!("alpha_mode: AlphaMode::Blend,");
+                                }
+                                TransparencyMode::Alpha => {
+                                    println!("alpha_mode: AlphaMode::Blend,");
+                                }
+                                _ => panic!("Haven't implemented other transparency modes yet!"),
+                            }
+                        }
+                        PandaObject::CullFaceAttrib(attrib) => {
+                            match attrib.mode {
+                                CullMode::None => {
+                                    println!("cull_mode: None,");
+                                }
+                                CullMode::Clockwise => {
+                                    println!("cull_mode: Some(Face::Front),");
+                                }
+                                CullMode::CounterClockwise => {
+                                    println!("cull_mode: Some(Face::Back),");
+                                }
+                                _ => todo!("Haven't implemented that cull face mode!"),
+                            }
+                        }
+                        PandaObject::CullBinAttrib(_) => {} //TODO: figure out how to implement this in a bevy material?
+                        PandaObject::DepthWriteAttrib(_) => {} //TODO: custom material for turning off depth writes! need custom pipeline
+                        _ => todo!("Haven't added support for this attrib yet!"),
+                    }
+                }
+                println!("unlit: true,");
+                println!("..default()");
+                println!("}};");
+            }
+            _ => (),
+        }
     }
 
     fn read_object(&mut self, data: &mut Datagram) -> Result<(), self::Error> {
@@ -353,6 +543,13 @@ impl BinaryAsset {
     fn fillin(&mut self, data: &mut Datagram, type_name: &str) -> Result<(), self::Error> {
         let node = match type_name {
             "BillboardEffect" => PandaObject::BillboardEffect(BillboardEffect::create(self, data)?),
+            "CollisionCapsule" => PandaObject::CollisionCapsule(CollisionCapsule::create(self, data)?),
+            "CollisionNode" => PandaObject::CollisionNode(CollisionNode::create(self, data)?),
+            "CollisionTube" => PandaObject::CollisionCapsule(CollisionCapsule::create(self, data)?),
+            "ColorAttrib" => PandaObject::ColorAttrib(ColorAttrib::create(self, data)?),
+            "CullBinAttrib" => PandaObject::CullBinAttrib(CullBinAttrib::create(self, data)?),
+            "CullFaceAttrib" => PandaObject::CullFaceAttrib(CullFaceAttrib::create(self, data)?),
+            "DepthWriteAttrib" => PandaObject::DepthWriteAttrib(DepthWriteAttrib::create(self, data)?),
             "Geom" => PandaObject::Geom(Geom::create(self, data)?),
             "GeomNode" => PandaObject::GeomNode(GeomNode::create(self, data)?),
             "GeomTristrips" => PandaObject::GeomTristrips(GeomTristrips::create(self, data)?), /* TODO: cleanup GeomPrimitive */
@@ -377,6 +574,7 @@ impl BinaryAsset {
             _ => todo!("{type_name}"),
         };
         println!("{:#?}", node);
+        self.nodes.push(node);
         Ok(())
     }
 }

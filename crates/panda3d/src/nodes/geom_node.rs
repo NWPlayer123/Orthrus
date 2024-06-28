@@ -4,9 +4,9 @@ use super::prelude::*;
 #[allow(dead_code)]
 pub(crate) struct GeomNode {
     /// ModelNode is a superclass of a PandaNode, so we include its data here
-    node: PandaNode,
+    pub node: PandaNode,
     /// Each piece of Geom data and its associated RenderState
-    geoms: Vec<(u32, u32)>,
+    pub geoms: Vec<(u32, u32)>,
 }
 
 impl GeomNode {

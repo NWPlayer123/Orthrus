@@ -18,7 +18,8 @@ use crate::multifile::Result;
 use crate::no_std::*;
 
 bitflags! {
-    #[derive(Debug, PartialEq, Default)]
+    #[repr(transparent)]
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
     pub(crate) struct Flags: u16 {
         const Deleted = 1 << 0;
         const IndexInvalid = 1 << 1;
