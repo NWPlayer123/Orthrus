@@ -295,7 +295,8 @@ impl BinaryAsset {
                 }
             }
             PandaObject::GeomVertexData(node) => {
-                // We got called from a Geom primitive, we can use this node to get the rest of the data we need
+                // We got called from a Geom primitive, we can use this node to get the rest of the data we
+                // need
                 assert!(node.arrays.len() == 1);
                 let array_data = &self.nodes[node.arrays[0] as usize];
                 match array_data {
@@ -323,7 +324,7 @@ impl BinaryAsset {
                                 _ => todo!("Haven't implemented other vertex contents yet"),
                             }
                             let start = 0;
-                            for stride in start..start+(buffer.len() / format.stride as usize) {
+                            for stride in start..start + (buffer.len() / format.stride as usize) {
                                 buffer.set_position(stride * format.stride as usize + column.start as usize);
                                 let mut entry = match column.numeric_type {
                                     NumericType::F32 => {
@@ -337,7 +338,7 @@ impl BinaryAsset {
                                         let data = buffer.read_u32().unwrap();
                                         let a = ((data >> 24) & 0xFF) as f32 / 255.0;
                                         let r = ((data >> 16) & 0xFF) as f32 / 255.0;
-                                        let g = ((data >>  8) & 0xFF) as f32 / 255.0;
+                                        let g = ((data >> 8) & 0xFF) as f32 / 255.0;
                                         let b = ((data >> 0) & 0xFF) as f32 / 255.0;
                                         vec![r, g, b, a]
                                     }
@@ -354,7 +355,10 @@ impl BinaryAsset {
                                     }
                                     Contents::Color => {
                                         // Needs to be Linear RGB(A)!!!
-                                        println!("Color::rgba({:?}, {:?}, {:?}, {:?}).as_linear_rgba_f32(),", entry[0], entry[1], entry[2], entry[3]);
+                                        println!(
+                                            "Color::rgba({:?}, {:?}, {:?}, {:?}).as_linear_rgba_f32(),",
+                                            entry[0], entry[1], entry[2], entry[3]
+                                        );
                                     }
                                     _ => todo!("Haven't implemented other vertex contents yet"),
                                 }
@@ -373,44 +377,48 @@ impl BinaryAsset {
                     match attrib {
                         PandaObject::ColorAttrib(attrib) => {
                             //TODO: handle color_type?
-                            println!("base_color: Color::rgba_from_array([{:?}, {:?}, {:?}, {:?}]),", attrib.color.x, attrib.color.y, attrib.color.z, attrib.color.w);
+                            println!(
+                                "base_color: Color::rgba_from_array([{:?}, {:?}, {:?}, {:?}]),",
+                                attrib.color.x, attrib.color.y, attrib.color.z, attrib.color.w
+                            );
                         }
                         PandaObject::TextureAttrib(attrib) => {
                             assert!(attrib.on_stages.len() == 1);
                             match &self.nodes[attrib.on_stages[0].texture as usize] {
                                 PandaObject::Texture(texture) => {
-                                    println!("base_color_texture: Some(asset_server.load(\"{}\")),", texture.filename);
+                                    println!(
+                                        "base_color_texture: Some(asset_server.load(\"{}\")),",
+                                        texture.filename
+                                    );
                                 }
                                 _ => panic!("Unexpected Texture node!"),
                             }
                         }
-                        PandaObject::TransparencyAttrib(attrib) => {
-                            match attrib.mode {
-                                TransparencyMode::Dual => {
-                                    println!("alpha_mode: AlphaMode::Blend,");
-                                }
-                                TransparencyMode::Alpha => {
-                                    println!("alpha_mode: AlphaMode::Blend,");
-                                }
-                                _ => panic!("Haven't implemented other transparency modes yet!"),
+                        PandaObject::TransparencyAttrib(attrib) => match attrib.mode {
+                            TransparencyMode::Dual => {
+                                println!("alpha_mode: AlphaMode::Blend,");
                             }
-                        }
-                        PandaObject::CullFaceAttrib(attrib) => {
-                            match attrib.mode {
-                                CullMode::None => {
-                                    println!("cull_mode: None,");
-                                }
-                                CullMode::Clockwise => {
-                                    println!("cull_mode: Some(Face::Front),");
-                                }
-                                CullMode::CounterClockwise => {
-                                    println!("cull_mode: Some(Face::Back),");
-                                }
-                                _ => todo!("Haven't implemented that cull face mode!"),
+                            TransparencyMode::Alpha => {
+                                println!("alpha_mode: AlphaMode::Blend,");
                             }
-                        }
-                        PandaObject::CullBinAttrib(_) => {} //TODO: figure out how to implement this in a bevy material?
-                        PandaObject::DepthWriteAttrib(_) => {} //TODO: custom material for turning off depth writes! need custom pipeline
+                            _ => panic!("Haven't implemented other transparency modes yet!"),
+                        },
+                        PandaObject::CullFaceAttrib(attrib) => match attrib.mode {
+                            CullMode::None => {
+                                println!("cull_mode: None,");
+                            }
+                            CullMode::Clockwise => {
+                                println!("cull_mode: Some(Face::Front),");
+                            }
+                            CullMode::CounterClockwise => {
+                                println!("cull_mode: Some(Face::Back),");
+                            }
+                            _ => todo!("Haven't implemented that cull face mode!"),
+                        },
+                        PandaObject::CullBinAttrib(_) => {} /* TODO: figure out how to implement this in a
+                                                              * bevy material? */
+                        PandaObject::DepthWriteAttrib(_) => {} /* TODO: custom material for turning off
+                                                                 * depth writes! need custom pipeline */
                         _ => todo!("Haven't added support for this attrib yet!"),
                     }
                 }

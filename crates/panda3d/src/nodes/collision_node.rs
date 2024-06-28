@@ -25,7 +25,7 @@ impl CollisionNode {
         }
 
         let collide_mask = data.read_u32()?;
-        
+
         Ok(Self { node, solids, collide_mask })
     }
 }
