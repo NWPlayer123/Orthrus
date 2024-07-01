@@ -3,7 +3,7 @@ use super::prelude::*;
 #[derive(Debug, Default)]
 #[allow(dead_code)]
 pub(crate) struct GeomVertexColumn {
-    pub name: u32,
+    pub name_ref: u32,
     pub num_components: u8,
     pub numeric_type: NumericType,
     pub contents: Contents,
@@ -20,7 +20,7 @@ pub(crate) struct GeomVertexColumn {
 impl GeomVertexColumn {
     #[inline]
     pub fn create(loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
-        let name = loader.read_pointer(data)?.unwrap();
+        let name_ref = loader.read_pointer(data)?.unwrap();
         let num_components = data.read_u8()?;
         let numeric_type = NumericType::from(data.read_u8()?);
         let contents = Contents::from(data.read_u8()?);
@@ -31,7 +31,7 @@ impl GeomVertexColumn {
         };
 
         let mut column = Self {
-            name,
+            name_ref,
             num_components,
             numeric_type,
             contents,

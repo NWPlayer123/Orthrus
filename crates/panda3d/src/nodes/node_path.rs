@@ -2,7 +2,7 @@ use super::prelude::*;
 
 #[derive(Debug, Default)]
 pub(crate) struct NodePath {
-    path: Vec<u32>,
+    path_refs: Vec<u32>,
 }
 
 impl NodePath {
@@ -12,7 +12,7 @@ impl NodePath {
 
         loop {
             match loader.read_pointer(data)? {
-                Some(value) => path.path.push(value),
+                Some(value) => path.path_refs.push(value),
                 None => break,
             }
         }

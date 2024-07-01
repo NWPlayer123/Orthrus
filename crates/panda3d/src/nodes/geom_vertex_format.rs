@@ -5,7 +5,7 @@ use super::prelude::*;
 pub(crate) struct GeomVertexFormat {
     animation: GeomVertexAnimationSpec,
     /// References to all GeomVertexArrayFormat data
-    arrays: Vec<u32>,
+    array_refs: Vec<u32>,
 }
 
 impl GeomVertexFormat {
@@ -14,11 +14,11 @@ impl GeomVertexFormat {
         let animation = GeomVertexAnimationSpec::create(loader, data)?;
 
         let num_arrays = data.read_u16()?;
-        let mut arrays = Vec::with_capacity(num_arrays as usize);
+        let mut array_refs = Vec::with_capacity(num_arrays as usize);
         for _ in 0..num_arrays {
-            arrays.push(loader.read_pointer(data)?.unwrap());
+            array_refs.push(loader.read_pointer(data)?.unwrap());
         }
 
-        Ok(Self { animation, arrays })
+        Ok(Self { animation, array_refs })
     }
 }

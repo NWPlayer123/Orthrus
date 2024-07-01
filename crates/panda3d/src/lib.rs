@@ -17,6 +17,7 @@ pub mod multifile;
 pub mod subfile;
 
 pub mod bam;
+pub mod bevy;
 
 pub mod common;
 pub mod prelude;

@@ -2,13 +2,13 @@ use super::prelude::*;
 
 #[derive(Debug, Default)]
 #[allow(dead_code)]
-pub(crate) struct GeomTristrips {
-    pub primitive: GeomPrimitive,
+pub(crate) struct CharacterJointEffect {
+    character_ref: u32,
 }
 
-impl GeomTristrips {
+impl CharacterJointEffect {
     #[inline]
     pub fn create(loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
-        Ok(Self { primitive: GeomPrimitive::create(loader, data)? })
+        Ok(Self { character_ref: loader.read_pointer(data)?.unwrap() })
     }
 }

@@ -130,7 +130,7 @@ pub(crate) struct TextureStage {
     priority: i32,
 
     /// Reference to the InternalName for this node, used for UV calculations
-    texcoord_name: Option<u32>,
+    texcoord_name_ref: Option<u32>,
 
     mode: Mode,
     color: Vec4,
@@ -160,7 +160,7 @@ impl TextureStage {
         let sort = data.read_i32()?;
         let priority = data.read_i32()?;
 
-        let texcoord_name = loader.read_pointer(data)?;
+        let texcoord_name_ref = loader.read_pointer(data)?;
 
         let mode = Mode::from(data.read_u8()?);
         //TODO: define custom LColor type?
@@ -180,7 +180,7 @@ impl TextureStage {
             name,
             sort,
             priority,
-            texcoord_name,
+            texcoord_name_ref,
             mode,
             color,
             rgb_scale,
@@ -223,7 +223,7 @@ impl Default for TextureStage {
             name: "default".to_owned(),
             sort: 0,
             priority: 0,
-            texcoord_name: None, //TODO: emit InternalName? needs a finalize()
+            texcoord_name_ref: None, //TODO: emit InternalName? needs a finalize()
             mode: Mode::default(),
             color: Vec4::W,
             rgb_scale: 1,

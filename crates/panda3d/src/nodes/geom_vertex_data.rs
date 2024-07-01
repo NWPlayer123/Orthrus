@@ -5,13 +5,13 @@ use super::prelude::*;
 pub(crate) struct GeomVertexData {
     pub name: String,
     /// Reference to the associated GeomVertexFormat that defines the current data
-    pub format: u32,
+    pub format_ref: u32,
     pub usage_hint: UsageHint,
     /// References to all GeomVertexArrayData
-    pub arrays: Vec<u32>,
-    pub transform_table: Option<u32>,
-    pub transform_blend_table: Option<u32>,
-    pub slider_table: Option<u32>,
+    pub array_refs: Vec<u32>,
+    pub transform_table_ref: Option<u32>,
+    pub transform_blend_table_ref: Option<u32>,
+    pub slider_table_ref: Option<u32>,
 }
 
 impl GeomVertexData {
@@ -20,26 +20,26 @@ impl GeomVertexData {
         let name = data.read_string()?;
 
         // Cycler data
-        let format = loader.read_pointer(data)?.unwrap();
+        let format_ref = loader.read_pointer(data)?.unwrap();
         let usage_hint = UsageHint::from(data.read_u8()?);
         let num_arrays = data.read_u16()?;
-        let mut arrays = Vec::new();
+        let mut array_refs = Vec::new();
         for _ in 0..num_arrays {
-            arrays.push(loader.read_pointer(data)?.unwrap());
+            array_refs.push(loader.read_pointer(data)?.unwrap());
         }
 
-        let transform_table = loader.read_pointer(data)?;
-        let transform_blend_table = loader.read_pointer(data)?;
-        let slider_table = loader.read_pointer(data)?;
+        let transform_table_ref = loader.read_pointer(data)?;
+        let transform_blend_table_ref = loader.read_pointer(data)?;
+        let slider_table_ref = loader.read_pointer(data)?;
 
         Ok(Self {
             name,
-            format,
+            format_ref,
             usage_hint,
-            arrays,
-            transform_table,
-            transform_blend_table,
-            slider_table,
+            array_refs,
+            transform_table_ref,
+            transform_blend_table_ref,
+            slider_table_ref,
         })
     }
 }

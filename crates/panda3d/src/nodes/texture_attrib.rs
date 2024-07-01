@@ -5,9 +5,9 @@ use super::prelude::*;
 pub(crate) struct StageNode {
     pub sampler: Option<SamplerState>,
     /// Reference to the associated TextureStage data
-    pub texture_stage: u32,
+    pub texture_stage_ref: u32,
     /// Reference to the associated Texture data
-    pub texture: u32,
+    pub texture_ref: u32,
     pub priority: i32,
     pub implicit_sort: u16,
     pub texcoord_index: i32,
@@ -16,8 +16,8 @@ pub(crate) struct StageNode {
 impl StageNode {
     #[inline]
     pub fn create(loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
-        let texture_stage = loader.read_pointer(data)?.unwrap();
-        let texture = loader.read_pointer(data)?.unwrap();
+        let texture_stage_ref = loader.read_pointer(data)?.unwrap();
+        let texture_ref = loader.read_pointer(data)?.unwrap();
 
         let implicit_sort = match loader.get_minor_version() >= 15 {
             true => data.read_u16()?,
@@ -41,8 +41,8 @@ impl StageNode {
 
         Ok(Self {
             sampler,
-            texture_stage,
-            texture,
+            texture_stage_ref,
+            texture_ref,
             priority,
             implicit_sort,
             texcoord_index: 0,
@@ -55,7 +55,7 @@ impl StageNode {
 pub(crate) struct TextureAttrib {
     pub off_all_stages: bool,
     /// References to associated TextureStage data
-    pub off_stages: Vec<u32>,
+    pub off_stage_refs: Vec<u32>,
     pub on_stages: Vec<StageNode>,
 }
 
@@ -65,10 +65,10 @@ impl TextureAttrib {
         let off_all_stages = data.read_bool()?;
 
         let num_off_stages = data.read_u16()?;
-        let mut off_stages = Vec::with_capacity(num_off_stages as usize);
+        let mut off_stage_refs = Vec::with_capacity(num_off_stages as usize);
         for _ in 0..num_off_stages {
-            let texture_stage = loader.read_pointer(data)?.unwrap();
-            off_stages.push(texture_stage);
+            let texture_stage_ref = loader.read_pointer(data)?.unwrap();
+            off_stage_refs.push(texture_stage_ref);
         }
 
         let num_on_stages = data.read_u16()?;
@@ -89,6 +89,6 @@ impl TextureAttrib {
             on_stages.push(stage_node);
         }
 
-        Ok(Self { off_all_stages, off_stages, on_stages })
+        Ok(Self { off_all_stages, off_stage_refs, on_stages })
     }
 }

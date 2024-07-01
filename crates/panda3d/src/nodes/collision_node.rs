@@ -6,7 +6,7 @@ pub(crate) struct CollisionNode {
     /// CollisionNode is a superclass of a PandaNode, so we include its data here
     node: PandaNode,
     /// References to all associated CollisionSolid data
-    solids: Vec<u32>,
+    solid_refs: Vec<u32>,
     collide_mask: u32,
 }
 
@@ -19,13 +19,13 @@ impl CollisionNode {
         if num_solids == 0xFFFF {
             num_solids = data.read_u32()?;
         }
-        let mut solids = Vec::with_capacity(num_solids as usize);
+        let mut solid_refs = Vec::with_capacity(num_solids as usize);
         for _ in 0..num_solids {
-            solids.push(loader.read_pointer(data)?.unwrap());
+            solid_refs.push(loader.read_pointer(data)?.unwrap());
         }
 
         let collide_mask = data.read_u32()?;
 
-        Ok(Self { node, solids, collide_mask })
+        Ok(Self { node, solid_refs, collide_mask })
     }
 }

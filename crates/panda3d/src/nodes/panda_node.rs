@@ -6,11 +6,11 @@ pub(crate) struct PandaNode {
     pub name: String,
 
     /// Reference to the associated RenderState
-    pub state: u32,
+    pub state_ref: u32,
     /// Reference to the associated TransformState
-    pub transform: u32,
+    pub transform_ref: u32,
     /// Reference to the associated RenderEffects
-    pub effects: u32,
+    pub effects_ref: u32,
 
     pub draw_control_mask: u32,
     pub draw_show_mask: u32,
@@ -21,10 +21,10 @@ pub(crate) struct PandaNode {
     pub tag_data: HashMap<String, String>,
 
     /// Reference to all parent nodes (may be derived from PandaNode)
-    pub parents: Vec<u32>,
+    pub parent_refs: Vec<u32>,
     /// Reference to all children nodes (may be derived from PandaNode)
-    pub children: Vec<(u32, i32)>,
-    pub stashed: Vec<(u32, i32)>,
+    pub child_refs: Vec<(u32, i32)>,
+    pub stashed_refs: Vec<(u32, i32)>,
 }
 
 impl PandaNode {
@@ -34,9 +34,9 @@ impl PandaNode {
         let name = data.read_string()?;
 
         // Cycler Data
-        let state = loader.read_pointer(data)?.unwrap();
-        let transform = loader.read_pointer(data)?.unwrap();
-        let effects = loader.read_pointer(data)?.unwrap();
+        let state_ref = loader.read_pointer(data)?.unwrap();
+        let transform_ref = loader.read_pointer(data)?.unwrap();
+        let effects_ref = loader.read_pointer(data)?.unwrap();
 
         let draw_control_mask: u32;
         let draw_show_mask: u32;
@@ -77,41 +77,41 @@ impl PandaNode {
 
         // These are processed as fillin_up_list/fillin_down_list
         let num_parents = data.read_u16()?;
-        let mut parents = Vec::with_capacity(num_parents as usize);
+        let mut parent_refs = Vec::with_capacity(num_parents as usize);
         for _ in 0..num_parents {
-            parents.push(loader.read_pointer(data)?.unwrap());
+            parent_refs.push(loader.read_pointer(data)?.unwrap());
         }
         //TODO: sort parent nodes? They're based on pointer order so they're different per session
 
         let num_children = data.read_u16()?;
-        let mut children = Vec::with_capacity(num_children as usize);
+        let mut child_refs = Vec::with_capacity(num_children as usize);
         for _ in 0..num_children {
             let pointer = loader.read_pointer(data)?.unwrap();
             let sort = data.read_i32()?;
-            children.push((pointer, sort));
+            child_refs.push((pointer, sort));
         }
 
         let num_stashed = data.read_u16()?;
-        let mut stashed = Vec::with_capacity(num_stashed as usize);
+        let mut stashed_refs = Vec::with_capacity(num_stashed as usize);
         for _ in 0..num_stashed {
             let pointer = loader.read_pointer(data)?.unwrap();
             let sort = data.read_i32()?;
-            stashed.push((pointer, sort));
+            stashed_refs.push((pointer, sort));
         }
 
         Ok(PandaNode {
             name,
-            state,
-            transform,
-            effects,
+            state_ref,
+            transform_ref,
+            effects_ref,
             draw_control_mask,
             draw_show_mask,
             into_collide_mask,
             bounds_type,
             tag_data,
-            parents,
-            children,
-            stashed,
+            parent_refs,
+            child_refs,
+            stashed_refs,
         })
     }
 }
