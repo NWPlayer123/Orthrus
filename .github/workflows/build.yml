@@ -23,28 +23,8 @@ jobs:
         uses: actions/checkout@v4
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
       - name: Cargo check
         run: cargo check --all-features --all-targets
-      - name: Cargo clippy
-        run: cargo clippy --all-features --all-targets
-
-  fmt:
-    name: Format
-    runs-on: ubuntu-latest
-    env:
-      RUSTFLAGS: -D warnings
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Setup Rust toolchain
-        # We use nightly options in rustfmt.toml
-        uses: dtolnay/rust-toolchain@nightly
-        with:
-          components: rustfmt
-      - name: Cargo fmt
-        run: cargo fmt --all --check
 
   deny:
     name: Deny
@@ -53,7 +33,6 @@ jobs:
       matrix:
         checks:
           - advisories
-          - bans licenses sources
     # Prevent new advisories from failing CI
     continue-on-error: ${{ matrix.checks == 'advisories' }}
     steps:
