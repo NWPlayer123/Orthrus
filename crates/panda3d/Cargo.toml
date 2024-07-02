@@ -15,6 +15,11 @@ approx = { version = "0.5", default-features = false }
 glam = { version = "0.28", default-features = false, features = ["approx"] }
 der = { version = "0.7", optional = true }
 
+bevy_asset = { version = "0.14.0-dev", optional = true, git = "https://github.com/bevyengine/bevy.git" }
+bevy_reflect = { version = "0.14.0-dev", optional = true, git = "https://github.com/bevyengine/bevy.git" }
+bevy_render = { version = "0.14.0-dev", optional = true, git = "https://github.com/bevyengine/bevy.git" }
+bevy_scene = { version = "0.14.0-dev", optional = true, git = "https://github.com/bevyengine/bevy.git" }
+
 hashbrown = "0.14"
 bitflags = "2.6"
 
@@ -22,3 +27,4 @@ bitflags = "2.6"
 default = ["std"]
 std = ["snafu/std", "glam/std"]
 signature = ["der", "orthrus-core/certificate"]
+bevy = ["bevy_asset", "bevy_reflect", "bevy_render", "bevy_scene"]

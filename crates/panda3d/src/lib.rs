@@ -17,6 +17,7 @@ pub mod multifile;
 pub mod subfile;
 
 pub mod bam;
+#[cfg(feature = "bevy")]
 pub mod bevy;
 
 pub mod common;
