@@ -1,13 +1,17 @@
 use std::path::PathBuf;
 
+use crate::bam;
 use crate::nodes::prelude::*;
 use crate::prelude::*;
 
 use bevy_asset::io::Reader;
-use bevy_asset::{Asset, AssetLoader, AsyncReadExt, Handle, LoadContext};
+use bevy_asset::{AssetLoader, AsyncReadExt, LoadContext};
+use bevy_core::Name;
+use bevy_ecs::entity::Entity;
+use bevy_ecs::world::World;
+use bevy_hierarchy::BuildWorldChildren;
 use bevy_log::prelude::*;
 use bevy_pbr::StandardMaterial;
-use bevy_reflect::TypePath;
 use bevy_render::alpha::AlphaMode;
 use bevy_render::mesh::{Indices, Mesh, PrimitiveTopology};
 use bevy_render::render_asset::RenderAssetUsages;
@@ -15,140 +19,148 @@ use bevy_scene::Scene;
 use orthrus_core::prelude::*;
 use serde::{Deserialize, Serialize};
 
-//TODO: create struct for passing around all the data in these signatures? Also refactor to actually return errors
-
-#[derive(Asset, Debug, Default, TypePath)]
-pub struct BinaryAsset {
-    pub scenes: Vec<Handle<Scene>>,
-    pub meshes: Vec<Handle<Mesh>>,
-    pub materials: Vec<Handle<StandardMaterial>>,
-}
-
 impl BinaryAsset {
     /// This function is used to recursively convert all child nodes
     pub(crate) fn recurse_nodes(
-        &mut self, settings: &BamLoaderSettings, context: &mut LoadContext, asset: &crate::bam::BinaryAsset,
-        node_index: usize,
-    ) {
-        //TODO: has_decal, joint_map
-        match &asset.nodes[node_index] {
+        &self, world: &mut World, parent: Entity, settings: &LoadSettings, context: &mut LoadContext,
+        node_index: usize, joint_data: Option<&Vec<u32>>,
+    ) -> Result<(), bam::Error> {
+        match &self.nodes[node_index] {
             PandaObject::ModelRoot(node) => {
-                println!("{} {:?}", node_index, &asset.nodes[node_index]);
-                for child in &node.node.child_refs {
-                    self.convert_node(settings, context, asset, child.0 as usize);
+                // If we've called this, we're at the scene root, create a named node and setup all children
+                let child = world.spawn(Name::new(node.node.name.clone())).id();
+                world.entity_mut(parent).add_child(child);
+
+                for child_ref in &node.node.child_refs {
+                    self.recurse_nodes(world, child, settings, context, child_ref.0 as usize, joint_data)?;
                 }
             }
             PandaObject::ModelNode(node) => {
-                println!("{} {:?}", node_index, &asset.nodes[node_index]);
-                for child in &node.node.child_refs {
-                    self.convert_node(settings, context, asset, child.0 as usize);
+                // If we've called this, we're either at the scene root or an arbitrary child node, so just
+                // create a named node and setup children
+                let child = world.spawn(Name::new(node.node.name.clone())).id();
+                world.entity_mut(parent).add_child(child);
+
+                for child_ref in &node.node.child_refs {
+                    self.recurse_nodes(world, child, settings, context, child_ref.0 as usize, joint_data)?;
                 }
             }
             PandaObject::PandaNode(node) => {
-                println!("{} {:?}", node_index, &asset.nodes[node_index]);
-                for child in &node.child_refs {
-                    self.convert_node(settings, context, asset, child.0 as usize);
+                // This is just used as a generic node, so spawn a new child and keep traversing
+                let child = world.spawn(Name::new(node.name.clone())).id();
+                world.entity_mut(parent).add_child(child);
+
+                for child_ref in &node.child_refs {
+                    self.recurse_nodes(world, child, settings, context, child_ref.0 as usize, joint_data)?;
                 }
             }
             PandaObject::GeomNode(node) => {
-                for child in &node.node.child_refs {
-                    self.convert_node(settings, context, asset, child.0 as usize);
+                // This is considered a leaf node, so create a single entity and spawn all data off of this
+                let entity = world.spawn(Name::new(node.node.name.clone())).id();
+                world.entity_mut(parent).add_child(entity);
+
+                // First, let's create all the actual data
+                self.convert_geom_node(world, entity, settings, context, node_index, joint_data)?;
+
+                // This may still have children, so handle those
+                for child_ref in &node.node.child_refs {
+                    self.recurse_nodes(world, entity, settings, context, child_ref.0 as usize, joint_data)?;
                 }
             }
             PandaObject::Character(node) => {
-                for child in &node.node.node.child_refs {
-                    self.convert_node(settings, context, asset, child.0 as usize);
+                // This is considered a leaf node, so create a single entity and spawn all data off of this
+                let entity = world.spawn(Name::new(node.node.node.name.clone())).id();
+                world.entity_mut(parent).add_child(entity);
+
+                // First, let's handle all related CharacterBundles, and store the joint data for all child geometry
+                let joint_data =
+                    Some(self.convert_character_node(world, entity, settings, context, node_index)?);
+
+                // Then, let's actually process those children
+                for child_ref in &node.node.node.child_refs {
+                    self.recurse_nodes(
+                        world,
+                        entity,
+                        settings,
+                        context,
+                        child_ref.0 as usize,
+                        joint_data.as_ref(),
+                    )?;
                 }
             }
             _ => (),
         }
-    }
-
-    /// This function is used to process node data and convert it to a useful format
-    // TODO: merge with recurse_nodes?
-    fn convert_node(
-        &mut self, settings: &BamLoaderSettings, context: &mut LoadContext, asset: &crate::bam::BinaryAsset,
-        node_index: usize,
-    ) {
-        match &asset.nodes[node_index] {
-            PandaObject::GeomNode(_) => {
-                self.convert_geom_node(settings, context, asset, node_index);
-            }
-            PandaObject::Character(_) => {
-                self.convert_character_node(settings, context, asset, node_index);
-            }
-            _ => {
-                // Otherwise, it's just a generic node and we need to keep recursing
-                // TODO: register parent/child hierarchy?
-                self.recurse_nodes(settings, context, asset, node_index)
-            }
-        }
+        Ok(())
     }
 
     fn convert_geom_node(
-        &mut self, settings: &BamLoaderSettings, context: &mut LoadContext, asset: &crate::bam::BinaryAsset,
-        node_index: usize,
-    ) {
-        let node = match &asset.nodes[node_index] {
+        &self, world: &mut World, entity: Entity, settings: &LoadSettings, context: &mut LoadContext,
+        node_index: usize, joint_data: Option<&Vec<u32>>,
+    ) -> Result<(), bam::Error> {
+        // First, let's actually grab the node so we can access all its properties
+        let node = match &self.nodes[node_index] {
             PandaObject::GeomNode(node) => node,
             _ => panic!("Something has gone horribly wrong!"),
         };
-        // TODO: handle node properties like billboard, transformstate, renderstate whenever they come up
-        // TODO: whenever something actually has a decal, all this needs refactoring
 
-        // (Geom, RenderState)
+        // TODO: Then, handle any node properties like billboard, transformstate, renderstate whenever they come up
+
+        // Finally, let's process all the actual geometry
         for geom_ref in &node.geom_refs {
-            let geom = match &asset.nodes[geom_ref.0 as usize] {
+            // Get the relevant nodes
+            let geom = match &self.nodes[geom_ref.0 as usize] {
                 PandaObject::Geom(node) => node,
                 _ => panic!("Something has gone horribly wrong!"),
             };
-            let render_state = match &asset.nodes[geom_ref.1 as usize] {
+            let render_state = match &self.nodes[geom_ref.1 as usize] {
                 PandaObject::RenderState(node) => node,
                 _ => panic!("Something has gone horribly wrong!"),
             };
-            println!("{} {:?}", geom_ref.0, geom);
-            println!("{} {:?}", geom_ref.1, render_state);
+
+            // Then, process all primitives
             for primitive_ref in &geom.primitive_refs {
-                //TODO: get node and decompose it? We also should pass vertex_data
+                // TODO: get node and decompose it? We also should pass vertex_data
+                // Also TODO: reorder variables? Not sure they make much sense this way
                 self.convert_primitive(
+                    world,
+                    entity,
                     settings,
                     context,
-                    asset,
                     render_state,
                     geom.data_ref as usize,
                     *primitive_ref as usize,
-                );
+                    joint_data,
+                )?;
             }
         }
 
-        // After we've done our processing, check any child nodes
-        self.recurse_nodes(settings, context, asset, node_index);
+        Ok(())
     }
 
     fn convert_primitive(
-        &mut self, settings: &BamLoaderSettings, context: &mut LoadContext, asset: &crate::bam::BinaryAsset,
-        render_state: &RenderState, data_index: usize, node_index: usize,
-    ) {
+        &self, world: &mut World, entity: Entity, settings: &LoadSettings, context: &mut LoadContext,
+        render_state: &RenderState, data_index: usize, node_index: usize, joint_data: Option<&Vec<u32>>,
+    ) -> Result<(), bam::Error> {
         // First, load the GeomPrimitive and all the associated GeomVertex indices data
-        let primitive_node = &asset.nodes[node_index];
+        let primitive_node = &self.nodes[node_index];
         let primitive = match primitive_node {
             PandaObject::GeomTristrips(node) => node,
             PandaObject::GeomTriangles(node) => node,
             _ => panic!("Something has gone horribly wrong!"),
         };
-        let vertex_data = match &asset.nodes[data_index] {
+        let vertex_data = match &self.nodes[data_index] {
             PandaObject::GeomVertexData(node) => node,
             _ => panic!("Something has gone horribly wrong!"),
         };
-        let vertex_format = match &asset.nodes[vertex_data.format_ref as usize] {
+        let vertex_format = match &self.nodes[vertex_data.format_ref as usize] {
             PandaObject::GeomVertexFormat(node) => node,
             _ => panic!("Something has gone horribly wrong!"),
         };
-        let array_data = match &asset.nodes[primitive.vertices_ref.unwrap() as usize] {
+        let array_data = match &self.nodes[primitive.vertices_ref.unwrap() as usize] {
             PandaObject::GeomVertexArrayData(node) => node,
             _ => panic!("Something has gone horribly wrong!"),
         };
-        let array_format = match &asset.nodes[array_data.array_format_ref as usize] {
+        let array_format = match &self.nodes[array_data.array_format_ref as usize] {
             PandaObject::GeomVertexArrayFormat(node) => node,
             _ => panic!("Something has gone horribly wrong!"),
         };
@@ -160,17 +172,17 @@ impl BinaryAsset {
 
         // If we have a RenderState with attributes, we need to create a material
         if !render_state.attrib_refs.is_empty() {
-            let label = format!("Material{}", self.materials.len());
-            self.materials.push(context.labeled_asset_scope(label, |context| {
+            let label = format!("Material0"); //TODO: use world/child.id()
+            let _material_handle = context.labeled_asset_scope(label, |context| {
                 let mut material = StandardMaterial::default();
                 material.unlit = true; //TODO: disable this? Toontown specific
 
                 for attrib_ref in &render_state.attrib_refs {
                     println!(
                         "Render State {} {:?}",
-                        attrib_ref.0, &asset.nodes[attrib_ref.0 as usize]
+                        attrib_ref.0, &self.nodes[attrib_ref.0 as usize]
                     );
-                    match &asset.nodes[attrib_ref.0 as usize] {
+                    match &self.nodes[attrib_ref.0 as usize] {
                         PandaObject::TransparencyAttrib(attrib) => {
                             material.alpha_mode = match attrib.mode {
                                 TransparencyMode::None => AlphaMode::Opaque,
@@ -191,11 +203,11 @@ impl BinaryAsset {
                                 warn!("Multiple TextureAttrib Stages! Something may be broken!");
                             }
                             for stage in &attrib.on_stages {
-                                let texture_stage = match &asset.nodes[stage.texture_stage_ref as usize] {
+                                let texture_stage = match &self.nodes[stage.texture_stage_ref as usize] {
                                     PandaObject::TextureStage(node) => node,
                                     _ => panic!("Something has gone horribly wrong!"),
                                 };
-                                let texture = match &asset.nodes[stage.texture_ref as usize] {
+                                let texture = match &self.nodes[stage.texture_ref as usize] {
                                     PandaObject::Texture(node) => node,
                                     _ => panic!("Something has gone horribly wrong!"),
                                 };
@@ -226,17 +238,15 @@ impl BinaryAsset {
                     }
                 }
 
-                
-
-                println!("Material{}: {:?}", self.materials.len(), material);
+                println!("Material: {:?}", material);
                 material
-            }));
+            });
         }
 
         let _num_primitives = match primitive_node {
             PandaObject::GeomTristrips(node) => {
                 // This is a complex primitive, so we need to load ends_ref and get the length of the array
-                asset.arrays[node.ends_ref.unwrap() as usize].len()
+                self.arrays[node.ends_ref.unwrap() as usize].len()
             }
             PandaObject::GeomTriangles(node) => {
                 // This is a simple primitive, need to check if num_vertices is defined, otherwise use stride
@@ -248,8 +258,8 @@ impl BinaryAsset {
             _ => panic!("Something has gone horribly wrong!"),
         };
 
-        let label = format!("Mesh{}", self.meshes.len());
-        self.meshes.push(context.labeled_asset_scope(label, |_context| {
+        let label = format!("Mesh0");
+        let _mesh_handle = context.labeled_asset_scope(label, |_context| {
             let topology = match primitive_node {
                 PandaObject::GeomTristrips(_) => PrimitiveTopology::TriangleStrip,
                 PandaObject::GeomTriangles(_) => PrimitiveTopology::TriangleList,
@@ -260,7 +270,7 @@ impl BinaryAsset {
 
             //First, let's process the GeomVertex data we got above, which should always just be a list of indices
             assert!(array_format.num_columns == 1);
-            let internal_name = match &asset.nodes[array_format.columns[0].name_ref as usize] {
+            let internal_name = match &self.nodes[array_format.columns[0].name_ref as usize] {
                 PandaObject::InternalName(node) => node,
                 _ => panic!("Something has gone horribly wrong!"),
             };
@@ -275,11 +285,11 @@ impl BinaryAsset {
 
             // Now process all sub-array data. If there's more than one array, we're using a blend table of some sort
             for n in 0..vertex_data.array_refs.len() {
-                let array_data = match &asset.nodes[vertex_data.array_refs[n] as usize] {
+                let array_data = match &self.nodes[vertex_data.array_refs[n] as usize] {
                     PandaObject::GeomVertexArrayData(node) => node,
                     _ => panic!("Something has gone horribly wrong!"),
                 };
-                let array_format = match &asset.nodes[vertex_format.array_refs[n] as usize] {
+                let array_format = match &self.nodes[vertex_format.array_refs[n] as usize] {
                     PandaObject::GeomVertexArrayFormat(node) => node,
                     _ => panic!("Something has gone horribly wrong!"),
                 };
@@ -290,7 +300,7 @@ impl BinaryAsset {
                 let mut data = DataCursorRef::new(&array_data.buffer, Endian::Little);
                 for column in &array_format.columns {
                     // For each sub-array, process all columns individually
-                    let internal_name = match &asset.nodes[column.name_ref as usize] {
+                    let internal_name = match &self.nodes[column.name_ref as usize] {
                         PandaObject::InternalName(node) => node,
                         _ => panic!("Something has gone horribly wrong!"),
                     };
@@ -321,10 +331,8 @@ impl BinaryAsset {
                             let mut texcoord_data = Vec::with_capacity(num_primitives);
                             for n in 0..num_primitives {
                                 data.set_position(column.start as usize + (array_format.stride as usize * n));
-                                texcoord_data.push([
-                                    data.read_f32().unwrap(),
-                                    1.0 - data.read_f32().unwrap(),
-                                ]);
+                                texcoord_data
+                                    .push([data.read_f32().unwrap(), 1.0 - data.read_f32().unwrap()]);
                             }
                             mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, texcoord_data);
                         }
@@ -336,37 +344,38 @@ impl BinaryAsset {
                 }
             }
 
-            println!("Mesh{}: {:?}", self.meshes.len(), mesh);
+            println!("Mesh: {:?}", mesh);
             mesh
-        }));
+        });
+        Ok(())
     }
 
     fn convert_character_node(
-        &mut self, settings: &BamLoaderSettings, context: &mut LoadContext, asset: &crate::bam::BinaryAsset,
+        &self, world: &mut World, entity: Entity, settings: &LoadSettings, context: &mut LoadContext,
         node_index: usize,
-    ) {
-        let character = match &asset.nodes[node_index] {
+    ) -> Result<Vec<u32>, bam::Error> {
+        let character = match &self.nodes[node_index] {
             PandaObject::Character(node) => node,
             _ => panic!("Something has gone horribly wrong!"),
         };
         //TODO: make group node
         //TODO: apply node properties
-        self.recurse_nodes(settings, context, asset, node_index);
 
         for bundle_ref in &character.node.bundle_refs {
-            self.convert_character_bundle(settings, context, asset, *bundle_ref as usize, None);
+            self.convert_character_bundle(settings, context, *bundle_ref as usize, None)?;
         }
+        Ok(Vec::new())
     }
 
     fn convert_character_bundle(
-        &self, settings: &BamLoaderSettings, context: &mut LoadContext, asset: &crate::bam::BinaryAsset,
-        node_index: usize, parent_joint: Option<&CharacterJoint>,
-    ) {
-        println!("{} {:?}", node_index, &asset.nodes[node_index]);
-        match &asset.nodes[node_index] {
+        &self, settings: &LoadSettings, context: &mut LoadContext, node_index: usize,
+        parent_joint: Option<&CharacterJoint>,
+    ) -> Result<(), bam::Error> {
+        println!("{} {:?}", node_index, &self.nodes[node_index]);
+        match &self.nodes[node_index] {
             PandaObject::CharacterJointBundle(node) => {
                 for child_ref in &node.group.child_refs {
-                    self.convert_character_bundle(settings, context, asset, *child_ref as usize, None);
+                    self.convert_character_bundle(settings, context, *child_ref as usize, None)?;
                 }
             }
             PandaObject::CharacterJoint(joint) => {
@@ -379,21 +388,22 @@ impl BinaryAsset {
                 }
                 //inverse_bindposes.push(default_value), doesn't matter if it's not identity
                 for child_ref in &joint.matrix.base.group.child_refs {
-                    self.convert_character_bundle(settings, context, asset, *child_ref as usize, Some(joint));
+                    self.convert_character_bundle(settings, context, *child_ref as usize, Some(joint))?;
                 }
             }
             PandaObject::PartGroup(node) => {
                 for child_ref in &node.child_refs {
-                    self.convert_character_bundle(settings, context, asset, *child_ref as usize, None);
+                    self.convert_character_bundle(settings, context, *child_ref as usize, None)?;
                 }
             }
             _ => panic!("Something has gone horribly wrong!"),
         }
+        Ok(())
     }
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
-pub struct BamLoaderSettings {
+pub struct LoadSettings {
     /// If not empty, this will override material paths in the current
     pub material_path: String,
 }
@@ -402,25 +412,26 @@ pub struct BamLoaderSettings {
 pub struct BamLoader;
 
 impl AssetLoader for BamLoader {
-    type Asset = BinaryAsset;
+    type Asset = Scene;
     type Error = bam::Error;
-    type Settings = BamLoaderSettings;
+    type Settings = LoadSettings;
 
     async fn load<'a>(
         &'a self, reader: &'a mut Reader<'_>, settings: &'a Self::Settings, context: &'a mut LoadContext<'_>,
     ) -> Result<Self::Asset, Self::Error> {
-        println!("ahhh {:?}", settings);
         // First, load the actual data into something we can pass around
         let mut bytes = Vec::new();
         reader.read_to_end(&mut bytes).await?;
 
         // Then, parse the actual BAM file
-        let bam = crate::bam::BinaryAsset::load(bytes)?;
+        let asset = crate::bam::BinaryAsset::load(bytes)?;
 
         // Finally, we can actually generate the data
-        let mut asset = BinaryAsset::default();
-        asset.recurse_nodes(settings, context, &bam, 1);
-        Ok(asset)
+        let mut world = World::default();
+        let root_entity = world.spawn(()).id();
+        asset.recurse_nodes(&mut world, root_entity, settings, context, 1, None)?;
+
+        Ok(Scene::new(world))
     }
 
     fn extensions(&self) -> &[&str] {

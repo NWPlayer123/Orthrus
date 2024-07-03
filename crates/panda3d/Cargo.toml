@@ -17,6 +17,9 @@ der = { version = "0.7", optional = true }
 
 # Bevy-Specific Assets
 bevy_asset = { optional = true, git = "https://github.com/bevyengine/bevy.git", rev = "1db0214f245ebb65c35505fd05af4a6ebbf6b013" }
+bevy_core = { optional = true, git = "https://github.com/bevyengine/bevy.git", rev = "1db0214f245ebb65c35505fd05af4a6ebbf6b013" }
+bevy_ecs = { optional = true, git = "https://github.com/bevyengine/bevy.git", rev = "1db0214f245ebb65c35505fd05af4a6ebbf6b013" }
+bevy_hierarchy = { optional = true, git = "https://github.com/bevyengine/bevy.git", rev = "1db0214f245ebb65c35505fd05af4a6ebbf6b013" }
 bevy_log = { optional = true, git = "https://github.com/bevyengine/bevy.git", rev = "1db0214f245ebb65c35505fd05af4a6ebbf6b013" }
 bevy_pbr = { optional = true, git = "https://github.com/bevyengine/bevy.git", rev = "1db0214f245ebb65c35505fd05af4a6ebbf6b013" }
 bevy_reflect = { optional = true, git = "https://github.com/bevyengine/bevy.git", rev = "1db0214f245ebb65c35505fd05af4a6ebbf6b013" }
@@ -31,5 +34,16 @@ bitflags = "2.6"
 default = ["std"]
 std = ["snafu/std", "glam/std"]
 signature = ["der", "orthrus-core/certificate"]
-bevy = ["bevy_asset", "bevy_log", "bevy_pbr", "bevy_reflect", "bevy_render", "bevy_scene", "serde"]
+bevy = [
+    "bevy_asset",
+    "bevy_core",
+    "bevy_ecs",
+    "bevy_hierarchy",
+    "bevy_log",
+    "bevy_pbr",
+    "bevy_reflect",
+    "bevy_render",
+    "bevy_scene",
+    "serde",
+]
 identify = []

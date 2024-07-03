@@ -26,7 +26,7 @@ pub(crate) use super::collision_node::CollisionNode;
 pub(crate) use super::collision_solid::CollisionSolid;
 pub(crate) use super::color_attrib::ColorAttrib;
 pub(crate) use super::cull_bin_attrib::CullBinAttrib;
-pub(crate) use super::cull_face_attrib::{CullFaceAttrib, CullMode};
+pub(crate) use super::cull_face_attrib::CullFaceAttrib;
 pub(crate) use super::depth_write_attrib::DepthWriteAttrib;
 pub(crate) use super::dispatch::PandaObject;
 pub(crate) use super::geom::Geom;

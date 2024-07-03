@@ -2194,6 +2194,9 @@ version = "0.1.0"
 dependencies = [
  "approx",
  "bevy_asset",
+ "bevy_core",
+ "bevy_ecs",
+ "bevy_hierarchy",
  "bevy_log",
  "bevy_pbr",
  "bevy_reflect",
