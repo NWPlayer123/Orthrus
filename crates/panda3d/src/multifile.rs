@@ -407,6 +407,7 @@ impl Multifile {
     }
 }
 
+#[cfg(feature = "identify")]
 impl FileIdentifier for Multifile {
     fn identify(data: &[u8]) -> Option<FileInfo> {
         let multifile = Self::load(data, 0).ok()?;

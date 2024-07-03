@@ -3,9 +3,9 @@ use super::prelude::*;
 #[derive(Debug, Default)]
 #[allow(dead_code)]
 pub(crate) struct GeomVertexFormat {
-    animation: GeomVertexAnimationSpec,
+    pub animation: GeomVertexAnimationSpec,
     /// References to all GeomVertexArrayFormat data
-    array_refs: Vec<u32>,
+    pub array_refs: Vec<u32>,
 }
 
 impl GeomVertexFormat {

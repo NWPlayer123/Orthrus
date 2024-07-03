@@ -197,7 +197,8 @@ impl BinaryAsset {
             header,
             type_registry: HashMap::new(),
             objects_left,
-            nodes: vec![PandaObject::Null],
+            nodes: vec![PandaObject::Null], //1-indexed
+            arrays: vec![Vec::new()], //1-indexed
             ..Default::default()
         };
 

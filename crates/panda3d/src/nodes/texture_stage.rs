@@ -125,7 +125,7 @@ impl CombineConfig {
 #[derive(Debug)]
 #[allow(dead_code)]
 pub(crate) struct TextureStage {
-    name: String,
+    pub name: String,
     sort: i32,
     priority: i32,
 

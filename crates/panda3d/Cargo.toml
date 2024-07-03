@@ -15,10 +15,14 @@ approx = { version = "0.5", default-features = false }
 glam = { version = "0.28", default-features = false, features = ["approx"] }
 der = { version = "0.7", optional = true }
 
-bevy_asset = { version = "0.14.0-dev", optional = true, git = "https://github.com/bevyengine/bevy.git" }
-bevy_reflect = { version = "0.14.0-dev", optional = true, git = "https://github.com/bevyengine/bevy.git" }
-bevy_render = { version = "0.14.0-dev", optional = true, git = "https://github.com/bevyengine/bevy.git" }
-bevy_scene = { version = "0.14.0-dev", optional = true, git = "https://github.com/bevyengine/bevy.git" }
+# Bevy-Specific Assets
+bevy_asset = { optional = true, git = "https://github.com/bevyengine/bevy.git", rev = "1db0214f245ebb65c35505fd05af4a6ebbf6b013" }
+bevy_log = { optional = true, git = "https://github.com/bevyengine/bevy.git", rev = "1db0214f245ebb65c35505fd05af4a6ebbf6b013" }
+bevy_pbr = { optional = true, git = "https://github.com/bevyengine/bevy.git", rev = "1db0214f245ebb65c35505fd05af4a6ebbf6b013" }
+bevy_reflect = { optional = true, git = "https://github.com/bevyengine/bevy.git", rev = "1db0214f245ebb65c35505fd05af4a6ebbf6b013" }
+bevy_render = { optional = true, git = "https://github.com/bevyengine/bevy.git", rev = "1db0214f245ebb65c35505fd05af4a6ebbf6b013" }
+bevy_scene = { optional = true, git = "https://github.com/bevyengine/bevy.git", rev = "1db0214f245ebb65c35505fd05af4a6ebbf6b013" }
+serde = { version = "1.0", optional = true, features = ["derive"] }
 
 hashbrown = "0.14"
 bitflags = "2.6"
@@ -27,4 +31,5 @@ bitflags = "2.6"
 default = ["std"]
 std = ["snafu/std", "glam/std"]
 signature = ["der", "orthrus-core/certificate"]
-bevy = ["bevy_asset", "bevy_reflect", "bevy_render", "bevy_scene"]
+bevy = ["bevy_asset", "bevy_log", "bevy_pbr", "bevy_reflect", "bevy_render", "bevy_scene", "serde"]
+identify = []
