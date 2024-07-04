@@ -5,17 +5,20 @@ use crate::nodes::prelude::*;
 use crate::prelude::*;
 
 use bevy_asset::io::Reader;
-use bevy_asset::{AssetLoader, AsyncReadExt, LoadContext};
+use bevy_asset::{AssetLoader, Assets, AsyncReadExt, Handle, LoadContext};
 use bevy_core::Name;
 use bevy_ecs::entity::Entity;
 use bevy_ecs::world::World;
 use bevy_hierarchy::BuildWorldChildren;
 use bevy_log::prelude::*;
-use bevy_pbr::StandardMaterial;
+use bevy_pbr::{PbrBundle, StandardMaterial};
 use bevy_render::alpha::AlphaMode;
+use bevy_render::mesh::skinning::{SkinnedMesh, SkinnedMeshInverseBindposes};
 use bevy_render::mesh::{Indices, Mesh, PrimitiveTopology};
 use bevy_render::render_asset::RenderAssetUsages;
 use bevy_scene::Scene;
+use bevy_transform::bundles::TransformBundle;
+use bevy_transform::components::Transform;
 use orthrus_core::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -23,7 +26,7 @@ impl BinaryAsset {
     /// This function is used to recursively convert all child nodes
     pub(crate) fn recurse_nodes(
         &self, world: &mut World, parent: Entity, settings: &LoadSettings, context: &mut LoadContext,
-        node_index: usize, joint_data: Option<&Vec<u32>>,
+        assets: &mut BamAssets, joint_data: Option<&Vec<Entity>>, node_index: usize,
     ) -> Result<(), bam::Error> {
         match &self.nodes[node_index] {
             PandaObject::ModelRoot(node) => {
@@ -32,7 +35,15 @@ impl BinaryAsset {
                 world.entity_mut(parent).add_child(child);
 
                 for child_ref in &node.node.child_refs {
-                    self.recurse_nodes(world, child, settings, context, child_ref.0 as usize, joint_data)?;
+                    self.recurse_nodes(
+                        world,
+                        child,
+                        settings,
+                        context,
+                        assets,
+                        joint_data,
+                        child_ref.0 as usize,
+                    )?;
                 }
             }
             PandaObject::ModelNode(node) => {
@@ -42,7 +53,15 @@ impl BinaryAsset {
                 world.entity_mut(parent).add_child(child);
 
                 for child_ref in &node.node.child_refs {
-                    self.recurse_nodes(world, child, settings, context, child_ref.0 as usize, joint_data)?;
+                    self.recurse_nodes(
+                        world,
+                        child,
+                        settings,
+                        context,
+                        assets,
+                        joint_data,
+                        child_ref.0 as usize,
+                    )?;
                 }
             }
             PandaObject::PandaNode(node) => {
@@ -51,7 +70,15 @@ impl BinaryAsset {
                 world.entity_mut(parent).add_child(child);
 
                 for child_ref in &node.child_refs {
-                    self.recurse_nodes(world, child, settings, context, child_ref.0 as usize, joint_data)?;
+                    self.recurse_nodes(
+                        world,
+                        child,
+                        settings,
+                        context,
+                        assets,
+                        joint_data,
+                        child_ref.0 as usize,
+                    )?;
                 }
             }
             PandaObject::GeomNode(node) => {
@@ -60,11 +87,19 @@ impl BinaryAsset {
                 world.entity_mut(parent).add_child(entity);
 
                 // First, let's create all the actual data
-                self.convert_geom_node(world, entity, settings, context, node_index, joint_data)?;
+                self.convert_geom_node(world, entity, settings, context, assets, joint_data, node_index)?;
 
                 // This may still have children, so handle those
                 for child_ref in &node.node.child_refs {
-                    self.recurse_nodes(world, entity, settings, context, child_ref.0 as usize, joint_data)?;
+                    self.recurse_nodes(
+                        world,
+                        entity,
+                        settings,
+                        context,
+                        assets,
+                        joint_data,
+                        child_ref.0 as usize,
+                    )?;
                 }
             }
             PandaObject::Character(node) => {
@@ -74,7 +109,7 @@ impl BinaryAsset {
 
                 // First, let's handle all related CharacterBundles, and store the joint data for all child geometry
                 let joint_data =
-                    Some(self.convert_character_node(world, entity, settings, context, node_index)?);
+                    Some(self.convert_character_node(world, entity, settings, context, assets, node_index)?);
 
                 // Then, let's actually process those children
                 for child_ref in &node.node.node.child_refs {
@@ -83,8 +118,9 @@ impl BinaryAsset {
                         entity,
                         settings,
                         context,
-                        child_ref.0 as usize,
+                        assets,
                         joint_data.as_ref(),
+                        child_ref.0 as usize,
                     )?;
                 }
             }
@@ -95,7 +131,7 @@ impl BinaryAsset {
 
     fn convert_geom_node(
         &self, world: &mut World, entity: Entity, settings: &LoadSettings, context: &mut LoadContext,
-        node_index: usize, joint_data: Option<&Vec<u32>>,
+        assets: &mut BamAssets, joint_data: Option<&Vec<Entity>>, node_index: usize,
     ) -> Result<(), bam::Error> {
         // First, let's actually grab the node so we can access all its properties
         let node = match &self.nodes[node_index] {
@@ -126,10 +162,11 @@ impl BinaryAsset {
                     entity,
                     settings,
                     context,
+                    assets,
                     render_state,
-                    geom.data_ref as usize,
-                    *primitive_ref as usize,
                     joint_data,
+                    *primitive_ref as usize,
+                    geom.data_ref as usize,
                 )?;
             }
         }
@@ -139,7 +176,8 @@ impl BinaryAsset {
 
     fn convert_primitive(
         &self, world: &mut World, entity: Entity, settings: &LoadSettings, context: &mut LoadContext,
-        render_state: &RenderState, data_index: usize, node_index: usize, joint_data: Option<&Vec<u32>>,
+        assets: &mut BamAssets, render_state: &RenderState, joint_data: Option<&Vec<Entity>>,
+        node_index: usize, data_index: usize,
     ) -> Result<(), bam::Error> {
         // First, load the GeomPrimitive and all the associated GeomVertex indices data
         let primitive_node = &self.nodes[node_index];
@@ -347,13 +385,16 @@ impl BinaryAsset {
             println!("Mesh: {:?}", mesh);
             mesh
         });
+        world.entity_mut(entity).insert(PbrBundle { mesh: _mesh_handle, ..Default::default() });
+        let meshes = world.get_resource::<Assets<Mesh>>();
+        println!("{:?}", meshes.map(|assets| assets.len()).unwrap_or(0));
         Ok(())
     }
 
     fn convert_character_node(
         &self, world: &mut World, entity: Entity, settings: &LoadSettings, context: &mut LoadContext,
-        node_index: usize,
-    ) -> Result<Vec<u32>, bam::Error> {
+        assets: &mut BamAssets, node_index: usize,
+    ) -> Result<Vec<Entity>, bam::Error> {
         let character = match &self.nodes[node_index] {
             PandaObject::Character(node) => node,
             _ => panic!("Something has gone horribly wrong!"),
@@ -361,44 +402,125 @@ impl BinaryAsset {
         //TODO: make group node
         //TODO: apply node properties
 
+        // Collect all Bindpose and Joint data so we can create a SkinnedMesh
+        let mut inverse_bindposes = Vec::new();
+        let mut joints = Vec::new();
+
+        // Iterate all children in the bundle to actually create the hierarchy
         for bundle_ref in &character.node.bundle_refs {
-            self.convert_character_bundle(settings, context, *bundle_ref as usize, None)?;
+            let (child_inverse_bindposes, child_joints) = self.convert_character_bundle(
+                world,
+                entity,
+                settings,
+                context,
+                assets,
+                *bundle_ref as usize,
+                None,
+                None,
+            )?;
+            inverse_bindposes.extend(child_inverse_bindposes);
+            joints.extend(child_joints);
         }
-        Ok(Vec::new())
+
+        println!("Bindposes: {:?}", inverse_bindposes);
+        println!("Joints: {:?}", joints);
+
+        // Add the Bindpose to our list of assets and get its handle
+        let label = format!("Bindpose{}", assets.bindposes.len());
+        let inverse_bindpose_handle =
+            context.labeled_asset_scope(label, |_| SkinnedMeshInverseBindposes::from(inverse_bindposes));
+        assets.bindposes.push(inverse_bindpose_handle.clone()); //Cloning a handle is cheap, thankfully
+
+        // Create the actual SkinnedMesh for this entity
+        world
+            .entity_mut(entity)
+            .insert(SkinnedMesh { inverse_bindposes: inverse_bindpose_handle, joints: joints.clone() });
+
+        Ok(joints)
     }
 
     fn convert_character_bundle(
-        &self, settings: &LoadSettings, context: &mut LoadContext, node_index: usize,
-        parent_joint: Option<&CharacterJoint>,
-    ) -> Result<(), bam::Error> {
+        &self, world: &mut World, parent: Entity, settings: &LoadSettings, context: &mut LoadContext,
+        assets: &mut BamAssets, node_index: usize, parent_joint: Option<&CharacterJoint>,
+        root_transform: Option<Mat4>,
+    ) -> Result<(Vec<Mat4>, Vec<Entity>), bam::Error> {
         println!("{} {:?}", node_index, &self.nodes[node_index]);
+
+        let mut inverse_bindposes = Vec::new();
+        let mut joints = Vec::new();
         match &self.nodes[node_index] {
             PandaObject::CharacterJointBundle(node) => {
                 for child_ref in &node.group.child_refs {
-                    self.convert_character_bundle(settings, context, *child_ref as usize, None)?;
+                    let (child_inverse_bindposes, child_joints) = self.convert_character_bundle(
+                        world,
+                        parent,
+                        settings,
+                        context,
+                        assets,
+                        *child_ref as usize,
+                        None,
+                        Some(node.root_transform),
+                    )?;
+                    inverse_bindposes.extend(child_inverse_bindposes);
+                    joints.extend(child_joints);
                 }
             }
             PandaObject::CharacterJoint(joint) => {
-                // If this is a CharacterJoint, we actually need to process it, and process all children
-                let mut default_value = joint.initial_net_transform_inverse.inverse();
-                if let Some(parent_joint) = parent_joint {
-                    if joint.initial_net_transform_inverse != parent_joint.initial_net_transform_inverse {
-                        default_value *= parent_joint.initial_net_transform_inverse;
+                // We have an actual joint, so we need to compute the inverse bindpose and create a new node with a Transform
+                let net_transform = match parent_joint {
+                    Some(parent_joint) => {
+                        joint.matrix.value * parent_joint.initial_net_transform_inverse.inverse()
                     }
-                }
-                //inverse_bindposes.push(default_value), doesn't matter if it's not identity
+                    None => joint.matrix.value * root_transform.unwrap(),
+                };
+                let skinning_matrix = joint.initial_net_transform_inverse * net_transform;
+
+                // Create a new entity, attach a TransformBundle and Name
+                let joint_entity = world
+                    .spawn((
+                        TransformBundle::from(Transform::from_matrix(joint.matrix.default_value)),
+                        Name::new(joint.matrix.base.group.name.clone()),
+                    ))
+                    .id();
+                world.entity_mut(parent).add_child(joint_entity);
+
+                inverse_bindposes.push(skinning_matrix);
+                joints.push(joint_entity);
+
                 for child_ref in &joint.matrix.base.group.child_refs {
-                    self.convert_character_bundle(settings, context, *child_ref as usize, Some(joint))?;
+                    let (child_inverse_bindposes, child_joints) = self.convert_character_bundle(
+                        world,
+                        joint_entity,
+                        settings,
+                        context,
+                        assets,
+                        *child_ref as usize,
+                        Some(joint),
+                        root_transform,
+                    )?;
+                    inverse_bindposes.extend(child_inverse_bindposes);
+                    joints.extend(child_joints);
                 }
             }
             PandaObject::PartGroup(node) => {
                 for child_ref in &node.child_refs {
-                    self.convert_character_bundle(settings, context, *child_ref as usize, None)?;
+                    let (child_inverse_bindposes, child_joints) = self.convert_character_bundle(
+                        world,
+                        parent,
+                        settings,
+                        context,
+                        assets,
+                        *child_ref as usize,
+                        None,
+                        root_transform,
+                    )?;
+                    inverse_bindposes.extend(child_inverse_bindposes);
+                    joints.extend(child_joints);
                 }
             }
             _ => panic!("Something has gone horribly wrong!"),
         }
-        Ok(())
+        Ok((inverse_bindposes, joints))
     }
 }
 
@@ -410,6 +532,13 @@ pub struct LoadSettings {
 
 #[derive(Debug, Default)]
 pub struct BamLoader;
+
+#[derive(Debug, Default)]
+pub struct BamAssets {
+    pub meshes: Vec<Handle<Mesh>>,
+    pub materials: Vec<Handle<StandardMaterial>>,
+    pub bindposes: Vec<Handle<SkinnedMeshInverseBindposes>>,
+}
 
 impl AssetLoader for BamLoader {
     type Asset = Scene;
@@ -424,13 +553,13 @@ impl AssetLoader for BamLoader {
         reader.read_to_end(&mut bytes).await?;
 
         // Then, parse the actual BAM file
-        let asset = crate::bam::BinaryAsset::load(bytes)?;
+        let bam = crate::bam::BinaryAsset::load(bytes)?;
 
         // Finally, we can actually generate the data
         let mut world = World::default();
         let root_entity = world.spawn(()).id();
-        asset.recurse_nodes(&mut world, root_entity, settings, context, 1, None)?;
-
+        let mut assets = BamAssets::default();
+        bam.recurse_nodes(&mut world, root_entity, settings, context, &mut assets, None, 1)?;
         Ok(Scene::new(world))
     }
 

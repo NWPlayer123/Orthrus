@@ -1,6 +1,6 @@
-use glam::{mat4, uvec3, vec3, vec4};
-
 use super::prelude::*;
+
+use bevy_math::{mat4, uvec3, vec3, vec4};
 
 pub trait DatagramRead {
     fn read(data: &mut Datagram) -> Result<Self, bam::Error>

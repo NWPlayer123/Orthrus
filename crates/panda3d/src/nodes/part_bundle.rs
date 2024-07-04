@@ -18,7 +18,7 @@ pub(crate) struct PartBundle {
     blend_type: BlendType,
     anim_blend_flag: bool,
     frame_blend_flag: bool,
-    root_transform: Mat4,
+    pub root_transform: Mat4,
 }
 
 impl PartBundle {

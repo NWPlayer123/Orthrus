@@ -1,6 +1,5 @@
 pub(super) use approx::relative_eq;
 pub(super) use bitflags::bitflags;
-pub(super) use glam::{Mat4, UVec3, Vec3, Vec4};
 pub(super) use hashbrown::HashMap;
 pub(super) use num_enum::FromPrimitive;
 pub(super) use orthrus_core::prelude::*;
@@ -12,6 +11,8 @@ pub(super) use crate::common::Datagram;
 pub(super) mod bam {
     pub(crate) use crate::bam::Error;
 }
+
+pub(crate) use bevy_math::{Mat4, UVec3, Vec3, Vec4};
 
 pub(crate) use super::anim_bundle::AnimBundle;
 pub(crate) use super::anim_bundle_node::AnimBundleNode;
