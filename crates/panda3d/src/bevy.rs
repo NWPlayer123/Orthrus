@@ -1,30 +1,35 @@
 use std::path::PathBuf;
 
-use crate::{nodes::prelude::*, prelude::*};
 use bevy_app::Plugin;
-use bevy_asset::{io::Reader, prelude::*, AssetLoader, AsyncReadExt, LoadContext};
+use bevy_asset::io::Reader;
+use bevy_asset::prelude::*;
+use bevy_asset::{AssetLoader, AsyncReadExt, LoadContext};
 use bevy_color::prelude::*;
 use bevy_core::prelude::*;
 use bevy_ecs::prelude::*;
 use bevy_hierarchy::prelude::*;
 use bevy_log::prelude::*;
-use bevy_pbr::{prelude::*, ExtendedMaterial, MaterialExtension};
+use bevy_pbr::prelude::*;
+use bevy_pbr::{ExtendedMaterial, MaterialExtension};
 use bevy_reflect::prelude::*;
-use bevy_render::{
-    mesh::{
-        skinning::{SkinnedMesh, SkinnedMeshInverseBindposes},
-        Indices, MeshVertexBufferLayoutRef, PrimitiveTopology,
-    },
-    prelude::*,
-    render_asset::RenderAssetUsages,
-    render_resource::{AsBindGroup, Face, RenderPipelineDescriptor, SpecializedMeshPipelineError},
-    texture::{ImageAddressMode, ImageFilterMode, ImageLoaderSettings, ImageSampler, ImageSamplerDescriptor},
+use bevy_render::mesh::skinning::{SkinnedMesh, SkinnedMeshInverseBindposes};
+use bevy_render::mesh::{Indices, MeshVertexBufferLayoutRef, PrimitiveTopology};
+use bevy_render::prelude::*;
+use bevy_render::render_asset::RenderAssetUsages;
+use bevy_render::render_resource::{
+    AsBindGroup, Face, RenderPipelineDescriptor, SpecializedMeshPipelineError,
+};
+use bevy_render::texture::{
+    ImageAddressMode, ImageFilterMode, ImageLoaderSettings, ImageSampler, ImageSamplerDescriptor,
 };
 use bevy_scene::prelude::*;
 use bevy_transform::prelude::*;
 use bitflags::bitflags;
 use orthrus_core::prelude::*;
 use serde::{Deserialize, Serialize};
+
+use crate::nodes::prelude::*;
+use crate::prelude::*;
 
 //TODO: add node support, prepare collision, finish writing joint stuff, test animations
 
@@ -114,7 +119,8 @@ impl BinaryAsset {
                     world.spawn((SpatialBundle::default(), Name::new(node.node.node.name.clone()))).id();
                 world.entity_mut(parent).add_child(entity);
 
-                // First, let's handle all related CharacterBundles, and store the joint data for all child geometry
+                // First, let's handle all related CharacterBundles, and store the joint data for all child
+                // geometry
                 let joint_data =
                     Some(self.convert_character_node(world, entity, settings, context, assets, node_index)?);
 
@@ -148,7 +154,8 @@ impl BinaryAsset {
 
         //println!("{}", node.node.name);
 
-        // TODO: Then, handle any node properties like billboard, transformstate, renderstate whenever they come up
+        // TODO: Then, handle any node properties like billboard, transformstate, renderstate whenever they
+        // come up
 
         // Finally, let's process all the actual geometry
         for geom_ref in &node.geom_refs {
@@ -397,7 +404,8 @@ impl BinaryAsset {
 
             if let Some(array_data) = array_data {
                 let array_format = array_format.unwrap();
-                //First, let's process the GeomVertex data we got above, which should always just be a list of indices
+                //First, let's process the GeomVertex data we got above, which should always just be a list
+                // of indices
                 assert!(array_format.num_columns == 1);
                 let internal_name = match &self.nodes[array_format.columns[0].name_ref as usize] {
                     PandaObject::InternalName(node) => node,
@@ -413,7 +421,8 @@ impl BinaryAsset {
                 mesh.insert_indices(Indices::U16(mesh_indices));
             }
 
-            // Now process all sub-array data. If there's more than one array, we're using a blend table of some sort
+            // Now process all sub-array data. If there's more than one array, we're using a blend table of
+            // some sort
             for n in 0..vertex_data.array_refs.len() {
                 let array_data = match &self.nodes[vertex_data.array_refs[n] as usize] {
                     PandaObject::GeomVertexArrayData(node) => node,
@@ -628,7 +637,8 @@ impl BinaryAsset {
                 }
             }
             PandaObject::CharacterJoint(joint) => {
-                // We have an actual joint, so we need to compute the inverse bindpose and create a new node with a Transform
+                // We have an actual joint, so we need to compute the inverse bindpose and create a new node
+                // with a Transform
                 let net_transform = match parent_joint {
                     Some(parent_joint) => {
                         joint.matrix.value * parent_joint.initial_net_transform_inverse.inverse()
