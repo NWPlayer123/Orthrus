@@ -3,14 +3,14 @@ use super::prelude::*;
 #[derive(Debug, Default)]
 #[allow(dead_code)]
 pub(crate) struct TransformEntry {
-    transform_ref: u32,
-    weight: f32,
+    pub transform_ref: u32,
+    pub weight: f32,
 }
 
 #[derive(Debug, Default)]
 #[allow(dead_code)]
 pub(crate) struct TransformBlend {
-    entries: Vec<TransformEntry>,
+    pub entries: Vec<TransformEntry>,
 }
 
 impl TransformBlend {

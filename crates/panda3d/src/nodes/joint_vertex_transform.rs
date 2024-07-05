@@ -3,7 +3,7 @@ use super::prelude::*;
 #[derive(Debug, Default)]
 #[allow(dead_code)]
 pub(crate) struct JointVertexTransform {
-    joint_ref: u32,
+    pub joint_ref: u32,
 }
 
 impl JointVertexTransform {

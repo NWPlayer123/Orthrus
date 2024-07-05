@@ -3,8 +3,8 @@ use super::prelude::*;
 #[derive(Debug, Default)]
 #[allow(dead_code)]
 pub(crate) struct TransformBlendTable {
-    blends: Vec<TransformBlend>,
-    rows: SparseArray,
+    pub blends: Vec<TransformBlend>,
+    pub rows: SparseArray,
 }
 
 impl TransformBlendTable {

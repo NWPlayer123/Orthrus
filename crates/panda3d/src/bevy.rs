@@ -13,7 +13,7 @@ use bevy_pbr::prelude::*;
 use bevy_pbr::{ExtendedMaterial, MaterialExtension};
 use bevy_reflect::prelude::*;
 use bevy_render::mesh::skinning::{SkinnedMesh, SkinnedMeshInverseBindposes};
-use bevy_render::mesh::{Indices, MeshVertexBufferLayoutRef, PrimitiveTopology};
+use bevy_render::mesh::{Indices, MeshVertexBufferLayoutRef, PrimitiveTopology, VertexAttributeValues};
 use bevy_render::prelude::*;
 use bevy_render::render_asset::RenderAssetUsages;
 use bevy_render::render_resource::{
@@ -25,6 +25,7 @@ use bevy_render::texture::{
 use bevy_scene::prelude::*;
 use bevy_transform::prelude::*;
 use bitflags::bitflags;
+use hashbrown::HashMap;
 use orthrus_core::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -37,7 +38,7 @@ impl BinaryAsset {
     /// This function is used to recursively convert all child nodes
     pub(crate) fn recurse_nodes(
         &self, world: &mut World, parent: Entity, settings: &LoadSettings, context: &mut LoadContext,
-        assets: &mut BamAssets, joint_data: Option<&Vec<Entity>>, node_index: usize,
+        assets: &mut BamAssets, joint_data: Option<&SkinnedMesh>, node_index: usize,
     ) -> Result<(), bam::Error> {
         match &self.nodes[node_index] {
             PandaObject::ModelRoot(node) => {
@@ -144,7 +145,7 @@ impl BinaryAsset {
 
     fn convert_geom_node(
         &self, world: &mut World, entity: Entity, settings: &LoadSettings, context: &mut LoadContext,
-        assets: &mut BamAssets, joint_data: Option<&Vec<Entity>>, node_index: usize,
+        assets: &mut BamAssets, joint_data: Option<&SkinnedMesh>, node_index: usize,
     ) -> Result<(), bam::Error> {
         // First, let's actually grab the node so we can access all its properties
         let node = match &self.nodes[node_index] {
@@ -196,7 +197,7 @@ impl BinaryAsset {
 
     fn convert_primitive(
         &self, world: &mut World, entity: Entity, settings: &LoadSettings, context: &mut LoadContext,
-        assets: &mut BamAssets, render_state: &RenderState, _joint_data: Option<&Vec<Entity>>,
+        assets: &mut BamAssets, render_state: &RenderState, joint_data: Option<&SkinnedMesh>,
         node_index: usize, data_index: usize,
     ) -> Result<(), bam::Error> {
         // First, load the GeomPrimitive and all the associated GeomVertex indices data
@@ -462,7 +463,9 @@ impl BinaryAsset {
                         }
                         "normal" => {
                             assert!(column.num_components == 3);
-                            assert!(column.contents == Contents::Vector);
+                            assert!(
+                                column.contents == Contents::Vector || column.contents == Contents::Normal
+                            );
                             assert!(column.numeric_type == NumericType::F32);
                             let mut normal_data = Vec::with_capacity(num_primitives);
                             for n in 0..num_primitives {
@@ -536,7 +539,80 @@ impl BinaryAsset {
                             _ => panic!("Unimplemented Color Column type!"),
                         },
                         "transform_blend" => {
-                            //TODO: refactoring
+                            println!("Blend: {:?}", column);
+                            let orig_blend_table =
+                                match &self.nodes[vertex_data.transform_blend_table_ref.unwrap() as usize] {
+                                    PandaObject::TransformBlendTable(table) => table,
+                                    _ => panic!("Something has gone horribly wrong!"),
+                                };
+                            println!("Blend table: {:?}", orig_blend_table);
+                            // First, let's actually process the joint data and generate a simple lookup.
+                            // We're going to be checking all entries regardless, so let's walk the table,
+                            // each new transform_ref we hit, log in a HashMap so we can just pull its data.
+                            let mut lookup = HashMap::new();
+                            // Walk each blend, check if its reference is in the lookup table, otherwise write
+                            // it. O(2N) is better than O(n^2)!
+                            for n in 0..orig_blend_table.blends.len() {
+                                let transform = &orig_blend_table.blends[n];
+                                for entry in &transform.entries {
+                                    // We've found a new joint, check what it's pointing to
+                                    if !lookup.contains_key(&entry.transform_ref) {
+                                        let vertex_transform = match &self.nodes[entry.transform_ref as usize]
+                                        {
+                                            PandaObject::JointVertexTransform(node) => node,
+                                            _ => panic!("Oops! Unimplemented VertexTransform node."),
+                                        };
+                                        let joint = match &self.nodes[vertex_transform.joint_ref as usize] {
+                                            PandaObject::CharacterJoint(node) => node,
+                                            _ => panic!("Oops! Unimplemented Joint type!"),
+                                        };
+                                        // Now that we have the joint, walk all entities til we find the same one
+                                        let joint_data = &joint_data.unwrap().joints;
+                                        for joint_id in 0..joint_data.len() {
+                                            let entity = joint_data[joint_id];
+                                            if **world.entity(entity).get::<Name>().unwrap()
+                                                == *joint.matrix.base.group.name
+                                            {
+                                                // Now, this specific transform_ref can be translated directly
+                                                // to a joint index for Mesh::ATTRIBUTE_JOINT_INDEX
+                                                lookup.insert(entry.transform_ref, joint_id as u16);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Now, let's actually build ATTRIBUTE_JOINT_WEIGHT and ATTRIBUTE_JOINT_INDEX
+                            let mut blend_lookup = vec![[0u16, 0u16, 0u16, 0u16]; num_primitives];
+                            let mut blend_table = vec![Vec4::ZERO; num_primitives];
+                            for n in 0..num_primitives {
+                                // First, verify we're good to read the lookup table
+                                assert!(column.numeric_type == NumericType::U16);
+                                assert!(column.contents == Contents::Index);
+                                data.set_position(column.start as usize + (array_format.stride as usize * n));
+
+                                // Grab the lookup ID and the transform this polygon is using
+                                let lookup_id = data.read_u16().unwrap();
+                                let transform = &orig_blend_table.blends[lookup_id as usize];
+                                // We can only store four weights, TODO: implement blend normalizing
+                                assert!(transform.entries.len() <= 4);
+
+                                // Now, let's actually write out our data
+                                for index in 0..core::cmp::min(transform.entries.len(), 4) {
+                                    let entry = &transform.entries[index];
+                                    blend_lookup[n][index] = lookup[&entry.transform_ref];
+                                    blend_table[n][index] = entry.weight;
+                                }
+                            }
+                            println!("{:?}", blend_lookup);
+                            println!("{:?}", blend_table);
+                            println!("{:?}", joint_data.unwrap());
+                            mesh.insert_attribute(
+                                Mesh::ATTRIBUTE_JOINT_INDEX,
+                                VertexAttributeValues::Uint16x4(blend_lookup),
+                            );
+                            mesh.insert_attribute(Mesh::ATTRIBUTE_JOINT_WEIGHT, blend_table);
+                            world.entity_mut(entity).insert(joint_data.unwrap().clone());
                         }
                         _ => panic!("Unimplemented Vertex Type! {} {:?}", internal_name.name, column),
                     }
@@ -552,7 +628,7 @@ impl BinaryAsset {
                 mesh.insert_indices(Indices::U32(indices));
             }
 
-            //println!("Mesh: {:?}", mesh);
+            println!("Mesh: {:?}", mesh);
             mesh
         });
         assets.meshes.push(mesh.clone());
@@ -567,7 +643,7 @@ impl BinaryAsset {
     fn convert_character_node(
         &self, world: &mut World, entity: Entity, settings: &LoadSettings, context: &mut LoadContext,
         assets: &mut BamAssets, node_index: usize,
-    ) -> Result<Vec<Entity>, bam::Error> {
+    ) -> Result<SkinnedMesh, bam::Error> {
         let character = match &self.nodes[node_index] {
             PandaObject::Character(node) => node,
             _ => panic!("Something has gone horribly wrong!"),
@@ -604,12 +680,9 @@ impl BinaryAsset {
             context.labeled_asset_scope(label, |_| SkinnedMeshInverseBindposes::from(inverse_bindposes));
         assets.bindposes.push(inverse_bindpose_handle.clone()); //Cloning a handle is cheap, thankfully
 
-        // Create the actual SkinnedMesh for this entity
-        world
-            .entity_mut(entity)
-            .insert(SkinnedMesh { inverse_bindposes: inverse_bindpose_handle, joints: joints.clone() });
+        // The SkinnedMesh needs to be attached to specific primitives so we can't handle it here, just send it back
 
-        Ok(joints)
+        Ok(SkinnedMesh { inverse_bindposes: inverse_bindpose_handle, joints: joints.clone() })
     }
 
     fn convert_character_bundle(
@@ -656,7 +729,7 @@ impl BinaryAsset {
                     .id();
                 world.entity_mut(parent).add_child(joint_entity);
 
-                inverse_bindposes.push(skinning_matrix);
+                inverse_bindposes.push(joint.initial_net_transform_inverse);
                 joints.push(joint_entity);
 
                 for child_ref in &joint.matrix.base.group.child_refs {
