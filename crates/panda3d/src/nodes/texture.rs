@@ -168,7 +168,7 @@ pub(crate) struct Texture {
 
 #[derive(Debug, Default)]
 pub(crate) struct TextureBody {
-    default_sampler: SamplerState,
+    pub default_sampler: SamplerState,
     format: Format,
     compression: CompressionMode,
     usage_hint: UsageHint,

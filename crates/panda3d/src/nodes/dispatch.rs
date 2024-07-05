@@ -13,6 +13,7 @@ pub(crate) enum PandaObject {
     CharacterJointEffect(CharacterJointEffect),
     CollisionCapsule(CollisionCapsule), //Called CollisionTube previously
     CollisionNode(CollisionNode),
+    CollisionPolygon(CollisionPolygon),
     ColorAttrib(ColorAttrib),
     CullBinAttrib(CullBinAttrib),
     CullFaceAttrib(CullFaceAttrib),

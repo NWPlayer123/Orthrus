@@ -1,11 +1,18 @@
 use super::prelude::*;
 
-use bevy_math::{mat4, uvec3, vec3, vec4};
+use bevy_math::{mat4, uvec3, vec2, vec3, vec4};
 
 pub trait DatagramRead {
     fn read(data: &mut Datagram) -> Result<Self, bam::Error>
     where
         Self: Sized;
+}
+
+impl DatagramRead for Vec2 {
+    #[inline]
+    fn read(data: &mut Datagram) -> Result<Self, bam::Error> {
+        Ok(vec2(data.read_float()?, data.read_float()?))
+    }
 }
 
 impl DatagramRead for Vec3 {

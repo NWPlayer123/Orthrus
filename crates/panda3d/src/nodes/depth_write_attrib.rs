@@ -11,7 +11,7 @@ pub(crate) enum DepthMode {
 #[derive(Debug, Default)]
 #[allow(dead_code)]
 pub(crate) struct DepthWriteAttrib {
-    mode: DepthMode,
+    pub mode: DepthMode,
 }
 
 impl DepthWriteAttrib {

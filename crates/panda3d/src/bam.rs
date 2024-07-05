@@ -198,7 +198,7 @@ impl BinaryAsset {
             type_registry: HashMap::new(),
             objects_left,
             nodes: vec![PandaObject::Null], //1-indexed
-            arrays: vec![Vec::new()], //1-indexed
+            arrays: vec![Vec::new()],       //1-indexed
             ..Default::default()
         };
 
@@ -261,7 +261,7 @@ impl BinaryAsset {
         let type_handle = self.read_handle(data)?;
         // Read the Object ID and process it
         let _object_id = self.read_object_id(data)?;
-        //println!("Object ID {}", object_id);
+        //println!("Object ID {}", _object_id);
         /*println!(
             "Initial type data {:#X}, Data size {:#X}\n",
             data.position(),
@@ -366,6 +366,7 @@ impl BinaryAsset {
             }
             "CollisionCapsule" => PandaObject::CollisionCapsule(CollisionCapsule::create(self, data)?),
             "CollisionNode" => PandaObject::CollisionNode(CollisionNode::create(self, data)?),
+            "CollisionPolygon" => PandaObject::CollisionPolygon(CollisionPolygon::create(self, data)?),
             "CollisionTube" => PandaObject::CollisionCapsule(CollisionCapsule::create(self, data)?),
             "ColorAttrib" => PandaObject::ColorAttrib(ColorAttrib::create(self, data)?),
             "CullBinAttrib" => PandaObject::CullBinAttrib(CullBinAttrib::create(self, data)?),

@@ -12,7 +12,7 @@ pub(super) mod bam {
     pub(crate) use crate::bam::Error;
 }
 
-pub(crate) use bevy_math::{Mat4, UVec3, Vec3, Vec4};
+pub(crate) use bevy_math::{Mat4, UVec3, Vec2, Vec3, Vec4};
 
 pub(crate) use super::anim_bundle::AnimBundle;
 pub(crate) use super::anim_bundle_node::AnimBundleNode;
@@ -24,11 +24,13 @@ pub(crate) use super::character_joint::CharacterJoint;
 pub(crate) use super::character_joint_effect::CharacterJointEffect;
 pub(crate) use super::collision_capsule::CollisionCapsule;
 pub(crate) use super::collision_node::CollisionNode;
+pub(crate) use super::collision_plane::CollisionPlane;
+pub(crate) use super::collision_polygon::CollisionPolygon;
 pub(crate) use super::collision_solid::CollisionSolid;
-pub(crate) use super::color_attrib::ColorAttrib;
+pub(crate) use super::color_attrib::{ColorAttrib, ColorType};
 pub(crate) use super::cull_bin_attrib::CullBinAttrib;
-pub(crate) use super::cull_face_attrib::CullFaceAttrib;
-pub(crate) use super::depth_write_attrib::DepthWriteAttrib;
+pub(crate) use super::cull_face_attrib::{CullFaceAttrib, CullMode};
+pub(crate) use super::depth_write_attrib::{DepthMode, DepthWriteAttrib};
 pub(crate) use super::dispatch::PandaObject;
 pub(crate) use super::geom::Geom;
 pub(crate) use super::geom_enums::*;
@@ -52,7 +54,7 @@ pub(crate) use super::part_bundle_node::PartBundleNode;
 pub(crate) use super::part_group::PartGroup;
 pub(crate) use super::render_effects::RenderEffects;
 pub(crate) use super::render_state::RenderState;
-pub(crate) use super::sampler_state::SamplerState;
+pub(crate) use super::sampler_state::{FilterType, SamplerState, WrapMode};
 pub(crate) use super::sparse_array::SparseArray;
 pub(crate) use super::texture::Texture;
 pub(crate) use super::texture_attrib::TextureAttrib;

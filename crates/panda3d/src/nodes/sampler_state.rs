@@ -45,20 +45,20 @@ pub(crate) enum FilterType {
 #[derive(Debug)]
 #[allow(dead_code)]
 pub(crate) struct SamplerState {
-    wrap_u: WrapMode,
-    wrap_v: WrapMode,
-    wrap_w: WrapMode,
+    pub wrap_u: WrapMode,
+    pub wrap_v: WrapMode,
+    pub wrap_w: WrapMode,
 
-    min_filter: FilterType,
-    mag_filter: FilterType,
+    pub min_filter: FilterType,
+    pub mag_filter: FilterType,
 
-    aniso_degree: i16,
+    pub aniso_degree: i16,
     //TODO: custom LColor variable?
-    border_color: Vec4,
+    pub border_color: Vec4,
 
-    min_lod: f32,
-    max_lod: f32,
-    lod_bias: f32,
+    pub min_lod: f32,
+    pub max_lod: f32,
+    pub lod_bias: f32,
 }
 
 impl SamplerState {
