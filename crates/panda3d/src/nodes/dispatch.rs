@@ -5,6 +5,7 @@ use super::prelude::*;
 pub(crate) enum PandaObject {
     AnimBundle(AnimBundle),
     AnimBundleNode(AnimBundleNode),
+    AnimChannelMatrixXfmTable(AnimChannelMatrixXfmTable),
     AnimGroup(AnimGroup),
     BillboardEffect(BillboardEffect),
     Character(Character),

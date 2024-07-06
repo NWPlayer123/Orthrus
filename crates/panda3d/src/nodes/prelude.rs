@@ -16,6 +16,8 @@ pub(crate) use bevy_math::{Mat4, UVec3, Vec2, Vec3, Vec4};
 
 pub(crate) use super::anim_bundle::AnimBundle;
 pub(crate) use super::anim_bundle_node::AnimBundleNode;
+pub(crate) use super::anim_channel_matrix::AnimChannelMatrix;
+pub(crate) use super::anim_channel_matrix_transform_table::AnimChannelMatrixXfmTable;
 pub(crate) use super::anim_group::AnimGroup;
 pub(crate) use super::billboard_effect::BillboardEffect;
 pub(crate) use super::bounding_volume::BoundsType;

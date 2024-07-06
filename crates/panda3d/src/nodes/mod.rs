@@ -1,5 +1,13 @@
+#[allow(unused_imports)]
+pub(crate) mod prelude;
+
+pub(crate) mod dispatch;
+pub(crate) mod types;
+
 pub(crate) mod anim_bundle;
 pub(crate) mod anim_bundle_node;
+pub(crate) mod anim_channel_matrix;
+pub(crate) mod anim_channel_matrix_transform_table;
 pub(crate) mod anim_group;
 pub(crate) mod auto_texture_scale;
 pub(crate) mod billboard_effect;
@@ -16,7 +24,6 @@ pub(crate) mod color_attrib;
 pub(crate) mod cull_bin_attrib;
 pub(crate) mod cull_face_attrib;
 pub(crate) mod depth_write_attrib;
-pub(crate) mod dispatch;
 pub(crate) mod geom;
 pub(crate) mod geom_enums;
 pub(crate) mod geom_node;
@@ -37,7 +44,6 @@ pub(crate) mod panda_node;
 pub(crate) mod part_bundle;
 pub(crate) mod part_bundle_node;
 pub(crate) mod part_group;
-pub(crate) mod prelude;
 pub(crate) mod render_effects;
 pub(crate) mod render_state;
 pub(crate) mod sampler_state;
@@ -49,4 +55,3 @@ pub(crate) mod transform_blend;
 pub(crate) mod transform_blend_table;
 pub(crate) mod transform_state;
 pub(crate) mod transparency_attrib;
-pub(crate) mod types;

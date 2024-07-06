@@ -294,6 +294,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "bevy_animation"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "23aa4141df149b743e69c90244261c6372bafb70d9f115885de48a75fc28fd9b"
+dependencies = [
+ "bevy_app",
+ "bevy_asset",
+ "bevy_color",
+ "bevy_core",
+ "bevy_derive",
+ "bevy_ecs",
+ "bevy_hierarchy",
+ "bevy_log",
+ "bevy_math",
+ "bevy_reflect",
+ "bevy_render",
+ "bevy_time",
+ "bevy_transform",
+ "bevy_utils",
+ "blake3",
+ "fixedbitset 0.5.7",
+ "petgraph",
+ "ron",
+ "serde",
+ "thiserror",
+ "thread_local",
+ "uuid",
+]
+
+[[package]]
 name = "bevy_app"
 version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -601,6 +631,7 @@ dependencies = [
  "downcast-rs",
  "erased-serde",
  "glam",
+ "petgraph",
  "serde",
  "smallvec",
  "smol_str",
@@ -2218,6 +2249,7 @@ name = "orthrus-panda3d"
 version = "0.1.0"
 dependencies = [
  "approx",
+ "bevy_animation",
  "bevy_app",
  "bevy_asset",
  "bevy_color",
@@ -2230,6 +2262,7 @@ dependencies = [
  "bevy_reflect",
  "bevy_render",
  "bevy_scene",
+ "bevy_tasks",
  "bevy_transform",
  "bitflags 2.6.0",
  "der",
@@ -2304,6 +2337,8 @@ checksum = "b4c5cc86750666a3ed20bdaf5ca2a0344f9c67674cae0515bec2da16fbaa47db"
 dependencies = [
  "fixedbitset 0.4.2",
  "indexmap",
+ "serde",
+ "serde_derive",
 ]
 
 [[package]]

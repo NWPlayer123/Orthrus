@@ -207,6 +207,7 @@ impl BinaryAsset {
         bamfile.read_object(&mut datagram)?;
 
         loop {
+            //println!("Reading datagram at {:X}", data.position());
             match bamfile.objects_left {
                 ObjectsLeft::ObjectCount { mut num_extra_objects } => {
                     if num_extra_objects > 0 {
@@ -356,6 +357,9 @@ impl BinaryAsset {
         let node = match type_name {
             "AnimBundle" => PandaObject::AnimBundle(AnimBundle::create(self, data)?),
             "AnimBundleNode" => PandaObject::AnimBundleNode(AnimBundleNode::create(self, data)?),
+            "AnimChannelMatrixXfmTable" => {
+                PandaObject::AnimChannelMatrixXfmTable(AnimChannelMatrixXfmTable::create(self, data)?)
+            }
             "AnimGroup" => PandaObject::AnimGroup(AnimGroup::create(self, data)?),
             "BillboardEffect" => PandaObject::BillboardEffect(BillboardEffect::create(self, data)?),
             "Character" => PandaObject::Character(Character::create(self, data)?),
