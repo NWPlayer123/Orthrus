@@ -3,7 +3,7 @@ use super::prelude::*;
 bitflags! {
     #[repr(transparent)]
     #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-    pub(crate) struct Flags: u32 {
+    pub(crate) struct TransformFlags: u32 {
         const Identity = 0x00001;
         const Singular = 0x00002;
         const SingularKnown = 0x00004;
@@ -28,15 +28,15 @@ bitflags! {
 #[derive(Debug)]
 #[allow(dead_code)]
 pub(crate) struct TransformState {
-    flags: Flags,
-    position: Vec3,
+    pub flags: TransformFlags,
+    pub position: Vec3,
     /// Newer rotation that doesn't encounter a gimbal lock
-    quaternion: Vec4,
+    pub quaternion: Quat,
     /// Classic rotation using Heading/Pitch/Roll
-    rotation: Vec3,
-    scale: Vec3,
-    shear: Vec3,
-    matrix: Mat4,
+    pub rotation: Vec3,
+    pub scale: Vec3,
+    pub shear: Vec3,
+    pub matrix: Mat4,
 }
 
 impl TransformState {
@@ -44,12 +44,12 @@ impl TransformState {
     pub fn create(_loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
         let mut state = Self::default();
 
-        state.flags = Flags::from_bits_truncate(data.read_u32()?);
-        if state.flags.contains(Flags::ComponentsGiven) {
+        state.flags = TransformFlags::from_bits_truncate(data.read_u32()?);
+        if state.flags.contains(TransformFlags::ComponentsGiven) {
             state.position = Vec3::read(data)?;
 
-            if state.flags.contains(Flags::QuaternionGiven) {
-                state.quaternion = Vec4::read(data)?;
+            if state.flags.contains(TransformFlags::QuaternionGiven) {
+                state.quaternion = Quat::read(data)?;
             } else {
                 state.rotation = Vec3::read(data)?;
             }
@@ -61,7 +61,7 @@ impl TransformState {
             state.check_uniform_scale();
         }
 
-        if state.flags.contains(Flags::MatrixKnown) {
+        if state.flags.contains(TransformFlags::MatrixKnown) {
             state.matrix = Mat4::read(data)?;
         }
 
@@ -74,14 +74,14 @@ impl TransformState {
         if relative_eq!(self.scale.x, self.scale.y, epsilon = EPSILON)
             && relative_eq!(self.scale.x, self.scale.z, epsilon = EPSILON)
         {
-            self.flags |= Flags::UniformScale;
+            self.flags |= TransformFlags::UniformScale;
             if relative_eq!(self.scale.x, 1.0, epsilon = EPSILON) {
-                self.flags |= Flags::IdentityScale;
+                self.flags |= TransformFlags::IdentityScale;
             }
         }
 
         if relative_eq!(self.shear, Vec3::ZERO, epsilon = EPSILON) == false {
-            self.flags |= Flags::NonZeroShear;
+            self.flags |= TransformFlags::NonZeroShear;
         }
     }
 }
@@ -89,21 +89,21 @@ impl TransformState {
 impl Default for TransformState {
     fn default() -> Self {
         Self {
-            flags: Flags::Identity
-                | Flags::SingularKnown
-                | Flags::ComponentsKnown
-                | Flags::HasComponents
-                | Flags::MatrixKnown
-                | Flags::QuaternionKnown
-                | Flags::RotationKnown
-                | Flags::UniformScale
-                | Flags::IdentityScale
-                | Flags::TwoDimensional
-                | Flags::NormalizedQuatKnown,
+            flags: TransformFlags::Identity
+                | TransformFlags::SingularKnown
+                | TransformFlags::ComponentsKnown
+                | TransformFlags::HasComponents
+                | TransformFlags::MatrixKnown
+                | TransformFlags::QuaternionKnown
+                | TransformFlags::RotationKnown
+                | TransformFlags::UniformScale
+                | TransformFlags::IdentityScale
+                | TransformFlags::TwoDimensional
+                | TransformFlags::NormalizedQuatKnown,
             position: Vec3::ZERO,
             scale: Vec3::ONE,
             shear: Vec3::ZERO,
-            quaternion: Vec4::X,
+            quaternion: Quat::IDENTITY,
             rotation: Vec3::ZERO,
             matrix: Mat4::IDENTITY,
         }

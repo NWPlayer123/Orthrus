@@ -1,4 +1,4 @@
-use bevy_math::{mat4, uvec3, vec2, vec3, vec4};
+use bevy_math::{mat4, quat, uvec3, vec2, vec3, vec4};
 
 use super::prelude::*;
 
@@ -49,6 +49,18 @@ impl DatagramRead for Mat4 {
             Vec4::read(data)?,
             Vec4::read(data)?,
             Vec4::read(data)?,
+        ))
+    }
+}
+
+impl DatagramRead for Quat {
+    #[inline]
+    fn read(data: &mut Datagram) -> Result<Self, bam::Error> {
+        Ok(quat(
+            data.read_float()?,
+            data.read_float()?,
+            data.read_float()?,
+            data.read_float()?,
         ))
     }
 }

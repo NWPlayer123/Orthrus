@@ -12,7 +12,7 @@ pub(super) mod bam {
     pub(crate) use crate::bam::Error;
 }
 
-pub(crate) use bevy_math::{Mat4, UVec3, Vec2, Vec3, Vec4};
+pub(crate) use bevy_math::{Mat4, UVec3, Vec2, Vec3, Vec4, Quat};
 
 pub(crate) use super::anim_bundle::AnimBundle;
 pub(crate) use super::anim_bundle_node::AnimBundleNode;
@@ -65,3 +65,6 @@ pub(crate) use super::transform_blend::TransformBlend;
 pub(crate) use super::transform_blend_table::TransformBlendTable;
 pub(crate) use super::transform_state::TransformState;
 pub(crate) use super::transparency_attrib::{TransparencyAttrib, TransparencyMode};
+pub(crate) use super::collision_sphere::CollisionSphere;
+pub(crate) use super::lod_node::LODNode;
+pub(crate) use super::decal_effect::DecalEffect;

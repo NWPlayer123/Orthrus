@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use bevy_animation::prelude::*;
+use bevy_animation::{prelude::*, AnimationTarget, AnimationTargetId};
 use bevy_app::prelude::*;
 use bevy_asset::io::Reader;
 use bevy_asset::prelude::*;
@@ -10,6 +10,7 @@ use bevy_core::prelude::*;
 use bevy_ecs::prelude::*;
 use bevy_hierarchy::prelude::*;
 use bevy_log::prelude::*;
+use bevy_math::prelude::*;
 use bevy_pbr::prelude::*;
 use bevy_pbr::{ExtendedMaterial, MaterialExtension};
 use bevy_reflect::prelude::*;
@@ -17,44 +18,93 @@ use bevy_render::mesh::skinning::{SkinnedMesh, SkinnedMeshInverseBindposes};
 use bevy_render::mesh::{Indices, MeshVertexBufferLayoutRef, PrimitiveTopology, VertexAttributeValues};
 use bevy_render::prelude::*;
 use bevy_render::render_asset::RenderAssetUsages;
-use bevy_render::render_resource::{
-    AsBindGroup, Face, RenderPipelineDescriptor, SpecializedMeshPipelineError,
-};
+use bevy_render::render_resource::*;
 use bevy_render::texture::{
     ImageAddressMode, ImageFilterMode, ImageLoaderSettings, ImageSampler, ImageSamplerDescriptor,
 };
 use bevy_scene::prelude::*;
-use bevy_tasks::block_on;
+use bevy_tasks::prelude::*;
 use bevy_transform::prelude::*;
 use bitflags::bitflags;
 use hashbrown::HashMap;
 use orthrus_core::prelude::*;
 use serde::{Deserialize, Serialize};
+use smallvec::SmallVec;
 
 use crate::nodes::prelude::*;
+use crate::nodes::transform_state::TransformFlags;
 use crate::prelude::*;
 
-//TODO: add node support, prepare collision, finish writing joint stuff, test animations
+//TODO: add node support, prepare collision, finish writing joint stuff, test animations, make it more robust
+//by checking that we've actually visited all nodes?, also I think the character paths need to include the
+//bundle, as well as all the tables
+
+#[derive(Debug, Default)]
+pub(crate) struct Effects {
+    is_billboard: bool,
+    is_decal: bool,
+}
+
+impl Effects {
+    fn new(asset: &BinaryAsset, parent: &Effects, render_effects: &RenderEffects) -> Self {
+        let mut is_billboard = parent.is_billboard;
+        let mut is_decal = parent.is_decal;
+
+        for effect in &render_effects.effect_refs {
+            match &asset.nodes[*effect as usize] {
+                PandaObject::BillboardEffect(_) => {
+                    //TODO: store the actual billboard data
+                    is_billboard = true;
+                }
+                PandaObject::DecalEffect(_) => is_decal = true,
+                PandaObject::CharacterJointEffect(_) => (), // We already handle Characters so just ignore it
+                effect => panic!("Unexpected Render Effect! {:?}", effect),
+            }
+        }
+
+        Self { is_billboard, is_decal }
+    }
+}
+
+// Just steal this from bevy_gltf, it's a good structure
+#[derive(Clone, Debug)]
+struct AnimationContext {
+    // The nearest ancestor animation root.
+    root: Entity,
+    // The path to the animation root. This is used for constructing the
+    // animation target UUIDs.
+    path: SmallVec<[Name; 8]>,
+}
 
 impl BinaryAsset {
     /// This function is used to recursively convert all child nodes
     pub(crate) fn recurse_nodes(
-        &self, world: &mut World, parent: Entity, settings: &LoadSettings, context: &mut LoadContext,
-        assets: &mut BamAssets, joint_data: Option<&SkinnedMesh>, node_index: usize,
+        &self, world: &mut World, parent: Option<Entity>, settings: &LoadSettings, context: &mut LoadContext,
+        assets: &mut PandaAsset, effects: &Effects, joint_data: Option<&SkinnedMesh>, node_index: usize,
     ) -> Result<(), bam::Error> {
         match &self.nodes[node_index] {
             PandaObject::ModelRoot(node) => {
                 // If we've called this, we're at the scene root, create a named node and setup all children
                 let child = world.spawn((SpatialBundle::default(), Name::new(node.node.name.clone()))).id();
-                world.entity_mut(parent).add_child(child);
+                if let Some(parent) = parent {
+                    world.entity_mut(parent).add_child(child);
+                }
+
+                let render_effects = match &self.nodes[node.node.effects_ref as usize] {
+                    PandaObject::RenderEffects(node) => node,
+                    _ => panic!("Unexpected RenderEffects node!"),
+                };
+
+                let effects = Effects::new(&self, effects, render_effects);
 
                 for child_ref in &node.node.child_refs {
                     self.recurse_nodes(
                         world,
-                        child,
+                        Some(child),
                         settings,
                         context,
                         assets,
+                        &effects,
                         joint_data,
                         child_ref.0 as usize,
                     )?;
@@ -64,15 +114,25 @@ impl BinaryAsset {
                 // We're either at the scene root, or an arbitrary child node, create a named node and setup
                 // all children
                 let child = world.spawn((SpatialBundle::default(), Name::new(node.node.name.clone()))).id();
-                world.entity_mut(parent).add_child(child);
+                if let Some(parent) = parent {
+                    world.entity_mut(parent).add_child(child);
+                }
+
+                let render_effects = match &self.nodes[node.node.effects_ref as usize] {
+                    PandaObject::RenderEffects(node) => node,
+                    _ => panic!("Unexpected RenderEffects node!"),
+                };
+
+                let effects = Effects::new(&self, effects, render_effects);
 
                 for child_ref in &node.node.child_refs {
                     self.recurse_nodes(
                         world,
-                        child,
+                        Some(child),
                         settings,
                         context,
                         assets,
+                        &effects,
                         joint_data,
                         child_ref.0 as usize,
                     )?;
@@ -81,40 +141,63 @@ impl BinaryAsset {
             PandaObject::PandaNode(node) => {
                 // This is just used as a generic node, so spawn a new child and keep traversing
                 let child = world.spawn((SpatialBundle::default(), Name::new(node.name.clone()))).id();
-                world.entity_mut(parent).add_child(child);
+                if let Some(parent) = parent {
+                    world.entity_mut(parent).add_child(child);
+                }
+
+                let render_effects = match &self.nodes[node.effects_ref as usize] {
+                    PandaObject::RenderEffects(node) => node,
+                    _ => panic!("Unexpected RenderEffects node!"),
+                };
+
+                let effects = Effects::new(&self, effects, render_effects);
 
                 for child_ref in &node.child_refs {
                     self.recurse_nodes(
                         world,
-                        child,
+                        Some(child),
                         settings,
                         context,
                         assets,
+                        &effects,
                         joint_data,
                         child_ref.0 as usize,
                     )?;
                 }
             }
             PandaObject::GeomNode(node) => {
-                // This is considered a leaf node, which we process into a Mesh+Material. We might be getting
-                // called from a Character parent, so we need to pass joint_data in. TODO: add a marker
-                // Component?
-                let entity = world.spawn((SpatialBundle::default(), Name::new(node.node.name.clone()))).id();
-                world.entity_mut(parent).add_child(entity);
+                // This is considered a leaf node, which we process into a parent node with potentially
+                // several Mesh+Material bundles. We might be getting called from a Character parent, so we
+                // need to pass joint_data in. TODO: add a marker Component?
+
+                let render_effects = match &self.nodes[node.node.effects_ref as usize] {
+                    PandaObject::RenderEffects(node) => node,
+                    _ => panic!("Unexpected RenderEffects node!"),
+                };
 
                 // First, let's create all the actual data
-                block_on(
-                    self.convert_geom_node(world, entity, settings, context, assets, joint_data, node_index),
+                let entity = block_on(
+                    self.convert_geom_node(world, settings, context, assets, node, &effects, joint_data),
                 )?;
 
-                // This may still have children, so handle those
+                // If we do have a parent, link it together
+                if let Some(parent) = parent {
+                    world.entity_mut(parent).add_child(entity);
+                }
+
+                // In order to render properly, we should only apply effects (e.g. decals) to children it
+                // seems? TODO: verify, otherwise we get weird clipping issues
+                let effects = Effects::new(&self, effects, render_effects);
+
+                // This may still have children, so handle those too
                 for child_ref in &node.node.child_refs {
                     self.recurse_nodes(
                         world,
-                        entity,
+                        Some(entity),
                         settings,
                         context,
                         assets,
+                        &effects,
                         joint_data,
                         child_ref.0 as usize,
                     )?;
@@ -125,7 +208,14 @@ impl BinaryAsset {
                 // bunch of Joint data. TODO: add a marker Component?
                 let entity =
                     world.spawn((SpatialBundle::default(), Name::new(node.node.node.name.clone()))).id();
-                world.entity_mut(parent).add_child(entity);
+                if let Some(parent) = parent {
+                    world.entity_mut(parent).add_child(entity);
+                }
+
+                let render_effects = match &self.nodes[node.node.node.effects_ref as usize] {
+                    PandaObject::RenderEffects(node) => node,
+                    _ => panic!("Unexpected RenderEffects node!"),
+                };
 
                 // First, let's handle all related CharacterBundles, and store the joint data for all child
                 // geometry
@@ -133,42 +223,110 @@ impl BinaryAsset {
                     self.convert_character_node(world, entity, settings, context, assets, node_index),
                 )?);
 
+                let effects = Effects::new(&self, effects, render_effects);
+
                 // Then, let's actually process those children
                 for child_ref in &node.node.node.child_refs {
                     self.recurse_nodes(
                         world,
-                        entity,
+                        Some(entity),
                         settings,
                         context,
                         assets,
+                        &effects,
                         joint_data.as_ref(),
                         child_ref.0 as usize,
                     )?;
                 }
             }
-            PandaObject::AnimBundleNode(_node) => {
+            PandaObject::AnimBundleNode(node) => {
                 // This is considered a leaf node, which we'll process into an AnimationClip for the user to
                 // render as needed. TODO: add a marker Component?
+                let entity = world.spawn((SpatialBundle::default(), Name::new(node.node.name.clone()))).id();
+                if let Some(parent) = parent {
+                    world.entity_mut(parent).add_child(entity);
+                }
+
+                let render_effects = match &self.nodes[node.node.effects_ref as usize] {
+                    PandaObject::RenderEffects(node) => node,
+                    _ => panic!("Unexpected RenderEffects node!"),
+                };
+
+                // We just pass this through so we can treat it the same as convert_character_bundle
+                self.convert_anim_node(world, entity, settings, context, assets, node)?;
+
+                //TODO: any effects on AnimBundleNode?
+                let effects = Effects::new(&self, effects, render_effects);
+
+                // Then, let's actually process those children
+                for child_ref in &node.node.child_refs {
+                    self.recurse_nodes(
+                        world,
+                        Some(entity),
+                        settings,
+                        context,
+                        assets,
+                        &effects,
+                        joint_data,
+                        child_ref.0 as usize,
+                    )?;
+                }
             }
+            //TODO: LODNode! this should still work with the highest LOD
             _ => (),
         }
         Ok(())
     }
 
     async fn convert_geom_node(
-        &self, world: &mut World, entity: Entity, settings: &LoadSettings, context: &mut LoadContext<'_>,
-        assets: &mut BamAssets, joint_data: Option<&SkinnedMesh>, node_index: usize,
-    ) -> Result<(), bam::Error> {
-        // First, let's actually grab the node so we can access all its properties
-        let node = match &self.nodes[node_index] {
-            PandaObject::GeomNode(node) => node,
-            _ => panic!("Something has gone horribly wrong!"),
+        &self, world: &mut World, settings: &LoadSettings, context: &mut LoadContext<'_>,
+        assets: &mut PandaAsset, node: &GeomNode, effects: &Effects, joint_data: Option<&SkinnedMesh>,
+    ) -> Result<Entity, bam::Error> {
+        // Then let's create a new entity, and add our various properties.
+        let entity = world.spawn(Name::new(node.node.name.clone())).id();
+
+        let transform_state = match &self.nodes[node.node.transform_ref as usize] {
+            PandaObject::TransformState(node) => node,
+            _ => panic!("Unexpected TransformState node!"),
         };
 
-        //println!("{}", node.node.name);
+        if transform_state.flags.contains(TransformFlags::Identity) {
+            // If we have an identity transform, just chuck the default in
+            world.entity_mut(entity).insert(SpatialBundle::default());
+        } else if transform_state.flags.contains(TransformFlags::MatrixKnown) {
+            // We just have the raw matrix given to us, so construct a transform based off it
+            world.entity_mut(entity).insert(SpatialBundle::from_transform(Transform::from_matrix(
+                transform_state.matrix,
+            )));
+        } else if transform_state.flags.contains(TransformFlags::ComponentsGiven) {
+            // We're given individual components, so let's piece together a transform
+            world.entity_mut(entity).insert(SpatialBundle::from_transform(Transform {
+                translation: transform_state.position,
+                rotation: match transform_state.flags.contains(TransformFlags::RotationGiven) {
+                    true => Quat::from_euler(
+                        EulerRot::YXZ,
+                        transform_state.rotation.x,
+                        transform_state.rotation.y,
+                        transform_state.rotation.z,
+                    ),
+                    false => transform_state.quaternion,
+                },
+                scale: transform_state.scale,
+            }));
+            if transform_state.rotation != Vec3::ZERO {
+                warn!(
+                    "Double check rotation on {:?}! Not sure if right axis.",
+                    context.path()
+                );
+            }
+            if transform_state.shear != Vec3::ZERO {
+                warn!("Non-zero shear on {:?}! Ignoring, needs support.", context.path());
+            }
+        } else {
+            warn!("Unexpected TransformState data! See {:?}", context.path());
+        }
 
-        // TODO: Then, handle any node properties like billboard, transformstate, renderstate whenever they
-        // come up
+        //TODO: handle tags, collide_mask?
 
         // Finally, let's process all the actual geometry
         for geom_ref in &node.geom_refs {
@@ -186,31 +344,32 @@ impl BinaryAsset {
             let child = world.spawn(()).id();
             world.entity_mut(entity).add_child(child);
 
-            // Then, process all primitives
-            for primitive_ref in &geom.primitive_refs {
-                // TODO: get node and decompose it?
-                self.convert_primitive(
-                    world,
-                    child,
-                    settings,
-                    context,
-                    assets,
-                    render_state,
-                    joint_data,
-                    *primitive_ref as usize,
-                    geom.data_ref as usize,
-                )
-                .await?;
-            }
+            //TODO: if we have more than one primitive, we need to implement decomposition.
+            assert!(geom.primitive_refs.len() == 1);
+            //TODO: covering all our bases, I can support this but not right now
+            assert!(geom.bounds_type == BoundsType::Default);
+            self.convert_primitive(
+                world,
+                child,
+                settings,
+                context,
+                assets,
+                render_state,
+                joint_data,
+                geom.primitive_refs[0] as usize,
+                geom.data_ref as usize,
+                effects,
+            )
+            .await?;
         }
 
-        Ok(())
+        Ok(entity)
     }
 
     async fn convert_primitive(
         &self, world: &mut World, entity: Entity, settings: &LoadSettings,
-        load_context: &mut LoadContext<'_>, assets: &mut BamAssets, render_state: &RenderState,
-        joint_data: Option<&SkinnedMesh>, node_index: usize, data_index: usize,
+        load_context: &mut LoadContext<'_>, assets: &mut PandaAsset, render_state: &RenderState,
+        joint_data: Option<&SkinnedMesh>, node_index: usize, data_index: usize, effects: &Effects,
     ) -> Result<(), bam::Error> {
         // First, load the GeomPrimitive and all the associated GeomVertex indices data
         let primitive_node = &self.nodes[node_index];
@@ -233,7 +392,7 @@ impl BinaryAsset {
             false => {
                 let mut context = load_context.begin_labeled_asset();
                 let label = format!("Material{}", assets.materials.len());
-                let material = self.create_material(settings, &mut context, render_state).await;
+                let material = self.create_material(settings, &mut context, render_state, effects).await;
                 let handle = load_context.add_loaded_labeled_asset(label, context.finish(material, None));
                 assets.materials.push(handle.clone());
                 handle
@@ -268,9 +427,9 @@ impl BinaryAsset {
 
     async fn create_material(
         &self, settings: &LoadSettings, context: &mut LoadContext<'_>, render_state: &RenderState,
+        effects: &Effects,
     ) -> Panda3DMaterial {
         let mut material = Panda3DMaterial::default();
-        material.base.unlit = true; //TODO: disable this? Toontown specific
 
         for attrib_ref in &render_state.attrib_refs {
             //println!("{} {:?}", attrib_ref.0, &self.nodes[attrib_ref.0 as usize]);
@@ -407,8 +566,8 @@ impl BinaryAsset {
                 }
                 PandaObject::DepthWriteAttrib(attrib) => {
                     material.extension.depth_write_enabled = match attrib.mode {
-                        DepthMode::Off => 0,
-                        DepthMode::On => 1,
+                        DepthMode::Off => false,
+                        DepthMode::On => true,
                     };
                 }
                 PandaObject::CullBinAttrib(_attrib) => {
@@ -417,6 +576,15 @@ impl BinaryAsset {
                 _ => warn!("Unimplemented Attribute!"), //_ => panic!("Unknown RenderState attribute!"),
             }
         }
+
+        if effects.is_decal {
+            material.extension.decal_effect = true;
+        }
+
+        //TODO: create toggle when loading so users can choose to use actual lighting
+        material.base.unlit = true;
+        material.base.perceptual_roughness = 1.0;
+        material.base.fog_enabled = false;
 
         //println!("Material: {:?} {:?}", material.base, material.extension);
         material
@@ -464,15 +632,18 @@ impl BinaryAsset {
                     mesh.insert_indices(Indices::U16(indices));
                 }
             }
-            // Otherwise, we need to generate indices using first_vertex and ends
+            // Otherwise, we need to generate indices ourselves
             None => {
-                // First, fetch ends since it has a layer of indirection
-                let ends = &self.arrays[primitive.ends_ref.unwrap() as usize];
-                assert!(ends.len() == 1);
-
-                // Then generate a range that goes up to (but doesn't include) ends
-                let indices = (primitive.first_vertex..primitive.first_vertex + ends[0]).collect();
-                mesh.insert_indices(Indices::U32(indices));
+                let start = primitive.first_vertex as u32;
+                let end = match primitive.num_vertices {
+                    -1 => {
+                        let ends = &self.arrays[primitive.ends_ref.unwrap() as usize];
+                        assert!(ends.len() == 1);
+                        ends[0] as u32
+                    }
+                    num_vertices => num_vertices as u32,
+                };
+                mesh.insert_indices(Indices::U32((start..start + end).collect()));
             }
         }
 
@@ -628,7 +799,7 @@ impl BinaryAsset {
         }
 
         // If there's a second array referenced, we have a blend table to worry about.
-        if vertex_data.array_refs.len() > 2 {
+        if vertex_data.array_refs.len() >= 2 {
             assert!(vertex_data.array_refs.len() == 2);
 
             let array_data = match &self.nodes[vertex_data.array_refs[1] as usize] {
@@ -727,11 +898,20 @@ impl BinaryAsset {
                             VertexAttributeValues::Uint16x4(blend_lookup),
                         );
                         mesh.insert_attribute(Mesh::ATTRIBUTE_JOINT_WEIGHT, blend_table);
+                        println!("SkinnedMesh: {:?}", joint_data.unwrap().clone());
                         world.entity_mut(entity).insert(joint_data.unwrap().clone());
                     }
 
                     _ => panic!("Unexpected Vertex Type! {} {:?}", internal_name.name, column),
                 }
+            }
+        } else {
+            // If we've been passed joint data, but the mesh doesn't actually have any, we still want to
+            // parent it to be animated
+            if let Some(joint_data) = joint_data {
+                mesh.insert_attribute(Mesh::ATTRIBUTE_JOINT_INDEX, VertexAttributeValues::Uint16x4(vec![[0, 0, 0, 0]; num_primitives]));
+                mesh.insert_attribute(Mesh::ATTRIBUTE_JOINT_WEIGHT, vec![[1f32, 0f32, 0f32, 0f32]; num_primitives]);
+                world.entity_mut(entity).insert(joint_data.clone());
             }
         }
 
@@ -741,7 +921,7 @@ impl BinaryAsset {
 
     async fn convert_character_node(
         &self, world: &mut World, entity: Entity, settings: &LoadSettings, context: &mut LoadContext<'_>,
-        assets: &mut BamAssets, node_index: usize,
+        assets: &mut PandaAsset, node_index: usize,
     ) -> Result<SkinnedMesh, bam::Error> {
         let character = match &self.nodes[node_index] {
             PandaObject::Character(node) => node,
@@ -755,44 +935,45 @@ impl BinaryAsset {
         let mut joints = Vec::new();
 
         // Iterate all children in the bundle to actually create the hierarchy
-        for bundle_ref in &character.node.bundle_refs {
-            let (child_inverse_bindposes, child_joints) = self.convert_character_bundle(
-                world,
-                entity,
-                settings,
-                context,
-                assets,
-                *bundle_ref as usize,
-                None,
-                None,
-            )?;
-            inverse_bindposes.extend(child_inverse_bindposes);
-            joints.extend(child_joints);
-        }
+        assert!(character.node.bundle_refs.len() == 1);
+        let (child_inverse_bindposes, child_joints) = self.convert_character_bundle(
+            world,
+            entity,
+            settings,
+            context,
+            assets,
+            character.node.bundle_refs[0] as usize,
+            None,
+            None,
+            None,
+        )?;
+        inverse_bindposes.extend(child_inverse_bindposes);
+        joints.extend(child_joints);
 
         //println!("Bindposes: {:?}", inverse_bindposes);
         //println!("Joints: {:?}", joints);
 
         // Add the Bindpose to our list of assets and get its handle
         let label = format!("Bindpose{}", assets.bindposes.len());
-        let inverse_bindpose_handle =
+        let inverse_bindposes =
             context.labeled_asset_scope(label, |_| SkinnedMeshInverseBindposes::from(inverse_bindposes));
-        assets.bindposes.push(inverse_bindpose_handle.clone()); //Cloning a handle is cheap, thankfully
+        assets.bindposes.push(inverse_bindposes.clone()); //Cloning a handle is cheap, thankfully
 
         // The SkinnedMesh needs to be attached to specific primitives so we can't handle it here, just send it back
 
-        Ok(SkinnedMesh { inverse_bindposes: inverse_bindpose_handle, joints: joints.clone() })
+        Ok(SkinnedMesh { inverse_bindposes, joints })
     }
 
     fn convert_character_bundle(
         &self, world: &mut World, parent: Entity, settings: &LoadSettings, context: &mut LoadContext,
-        assets: &mut BamAssets, node_index: usize, parent_joint: Option<&CharacterJoint>,
-        root_transform: Option<Mat4>,
+        assets: &mut PandaAsset, node_index: usize, mut animation_context: Option<AnimationContext>,
+        root_transform: Option<Mat4>, parent_joint: Option<&CharacterJoint>,
     ) -> Result<(Vec<Mat4>, Vec<Entity>), bam::Error> {
         let mut inverse_bindposes = Vec::new();
         let mut joints = Vec::new();
         match &self.nodes[node_index] {
             PandaObject::CharacterJointBundle(node) => {
+                //TODO: this needs work
                 for child_ref in &node.group.child_refs {
                     let (child_inverse_bindposes, child_joints) = self.convert_character_bundle(
                         world,
@@ -803,6 +984,7 @@ impl BinaryAsset {
                         *child_ref as usize,
                         None,
                         Some(node.root_transform),
+                        parent_joint,
                     )?;
                     inverse_bindposes.extend(child_inverse_bindposes);
                     joints.extend(child_joints);
@@ -811,22 +993,39 @@ impl BinaryAsset {
             PandaObject::CharacterJoint(joint) => {
                 // We have an actual joint, so we need to compute the inverse bindpose and create a new node
                 // with a Transform
-                let net_transform = match parent_joint {
+                /*let net_transform = match parent_joint {
                     Some(parent_joint) => {
                         joint.matrix.value * parent_joint.initial_net_transform_inverse.inverse()
                     }
                     None => joint.matrix.value * root_transform.unwrap(),
                 };
-                let _skinning_matrix = joint.initial_net_transform_inverse * net_transform;
+                let _skinning_matrix = joint.initial_net_transform_inverse * net_transform;*/
+                let default_value = match parent_joint {
+                    Some(parent_joint) => {
+                        joint.initial_net_transform_inverse.inverse()
+                            * parent_joint.initial_net_transform_inverse
+                    }
+                    None => joint.initial_net_transform_inverse.inverse(),
+                };
 
-                // Create a new entity, attach a TransformBundle and Name
+                // Create a new entity
+                let name = Name::new(joint.matrix.base.group.name.clone());
                 let joint_entity = world
                     .spawn((
-                        TransformBundle::from(Transform::from_matrix(joint.matrix.default_value)),
-                        Name::new(joint.matrix.base.group.name.clone()),
+                        TransformBundle::from(Transform::from_matrix(default_value)),
+                        name.clone(),
                     ))
                     .id();
                 world.entity_mut(parent).add_child(joint_entity);
+
+                if let Some(animation_context) = animation_context.as_mut() {
+                    animation_context.path.push(name);
+                    println!("{:?}", animation_context);
+                    world.entity_mut(joint_entity).insert(AnimationTarget {
+                        id: AnimationTargetId::from_names(animation_context.path.iter()),
+                        player: animation_context.root,
+                    });
+                }
 
                 inverse_bindposes.push(joint.initial_net_transform_inverse);
                 joints.push(joint_entity);
@@ -839,20 +1038,55 @@ impl BinaryAsset {
                         context,
                         assets,
                         *child_ref as usize,
-                        Some(joint),
+                        animation_context.clone(),
                         root_transform,
+                        Some(joint),
                     )?;
                     inverse_bindposes.extend(child_inverse_bindposes);
                     joints.extend(child_joints);
+                }
+
+                if let Some(animation_context) = animation_context.as_mut() {
+                    animation_context.path.pop();
                 }
             }
             PandaObject::PartGroup(node) => {
                 // If we run into a plain PartGroup, let's treat it as the beginning of the skeleton, so we
                 // can map animations to it easier. This is analogous to running into an AnimGroup when
-                // building an animation.
-                let skeleton = world.spawn((SpatialBundle::default(), Name::from(node.name.clone()))).id();
+                // building an animation. Grab the child and operate off it.
+
+                // First, grab the child joint so we can set up the root node
+                assert!(node.child_refs.len() == 1);
+                let joint = match &self.nodes[node.child_refs[0] as usize] {
+                    PandaObject::CharacterJoint(node) => node,
+                    node => panic!("Unexpected PartGroup child! {:?}", node),
+                };
+
+                // Create an entity for it
+                let name = Name::from(joint.matrix.base.group.name.clone());
+                let skeleton = world
+                    .spawn((
+                        AnimationPlayer::default(),
+                        TransformBundle::from(Transform::from_matrix(joint.matrix.default_value)),
+                        name.clone(),
+                    ))
+                    .id();
+                // Save the root Entity so we can pull it later
+                assets.anim_players.push(skeleton);
+
+                // We know this is the root, so create a new animation context to keep track of everything
+                let mut animation_context = AnimationContext { root: skeleton, path: SmallVec::new() };
+                animation_context.path.push(name);
+                println!("{:?}", animation_context);
+                world.entity_mut(skeleton).insert(AnimationTarget {
+                    id: AnimationTargetId::from_names(animation_context.path.iter()),
+                    player: animation_context.root,
+                });
+
+                inverse_bindposes.push(joint.initial_net_transform_inverse);
+                joints.push(skeleton);
                 world.entity_mut(parent).add_child(skeleton);
-                for child_ref in &node.child_refs {
+                for child_ref in &joint.matrix.base.group.child_refs {
                     let (child_inverse_bindposes, child_joints) = self.convert_character_bundle(
                         world,
                         skeleton,
@@ -860,8 +1094,9 @@ impl BinaryAsset {
                         context,
                         assets,
                         *child_ref as usize,
-                        None,
+                        Some(animation_context.clone()),
                         root_transform,
+                        Some(joint),
                     )?;
                     inverse_bindposes.extend(child_inverse_bindposes);
                     joints.extend(child_joints);
@@ -871,6 +1106,313 @@ impl BinaryAsset {
         }
         Ok((inverse_bindposes, joints))
     }
+
+    fn convert_anim_node(
+        &self, world: &mut World, parent: Entity, settings: &LoadSettings, context: &mut LoadContext,
+        assets: &mut PandaAsset, node: &AnimBundleNode,
+    ) -> Result<(), bam::Error> {
+        // We're at an AnimBundleNode, let's create an AnimationClip, grab our AnimBundle, and manually handle
+        // skeletal and mesh animation data separately.
+        let bundle = match &self.nodes[node.anim_bundle_ref as usize] {
+            PandaObject::AnimBundle(node) => node,
+            _ => panic!("Unexpected AnimBundleNode!"),
+        };
+
+        let mut animation_clip = AnimationClip::default();
+
+        assert!(bundle.group.child_refs.len() == 2);
+        let skeleton_group = match &self.nodes[bundle.group.child_refs[0] as usize] {
+            PandaObject::AnimGroup(node) => node,
+            _ => panic!("Unexpected AnimGroup node!"),
+        };
+        if skeleton_group.child_refs.len() == 1 {
+            //TODO: this will probably break
+
+            self.convert_transform_table(
+                world,
+                parent,
+                settings,
+                context,
+                assets,
+                skeleton_group.child_refs[0] as usize,
+                &mut animation_clip,
+                None,
+                bundle.fps,
+                bundle.num_frames as usize,
+            )?;
+        }
+
+        let _morph_group = match &self.nodes[bundle.group.child_refs[1] as usize] {
+            PandaObject::AnimGroup(node) => node,
+            _ => panic!("Unexpected AnimGroup node!"),
+        };
+        assert!(_morph_group.child_refs.len() == 0);
+        //TODO: actually handle morph data? I don't currently.
+
+        let label = format!("Animation{}", assets.animations.len());
+        context.labeled_asset_scope(label, |_| animation_clip);
+
+        Ok(())
+    }
+
+    fn convert_transform_table(
+        &self, world: &mut World, parent: Entity, settings: &LoadSettings, context: &mut LoadContext,
+        assets: &mut PandaAsset, node_index: usize, animation_clip: &mut AnimationClip,
+        mut animation_context: Option<AnimationContext>, fps: f32, num_frames: usize,
+    ) -> Result<(), bam::Error> {
+        match &self.nodes[node_index] {
+            PandaObject::AnimChannelMatrixXfmTable(node) => {
+                // These joints don't actually "exist", they only encode information, so we only create the
+                // Name to generate the AnimationContext so we can grab an AnimationTargetId as need be
+                let name = Name::from(node.matrix.group.name.clone());
+
+                // Create the AnimationContext if this is the root, and then push the current name
+                if animation_context.is_none() {
+                    animation_context = Some(AnimationContext { root: parent, path: SmallVec::new() });
+                }
+
+                if let Some(ref mut animation_context) = animation_context {
+                    animation_context.path.push(name.clone());
+
+                    println!("{:?}", animation_context);
+                    // Now let's create the AnimationTargetId
+                    let anim_target_id = AnimationTargetId::from_names(animation_context.path.iter());
+
+                    // Handle each "group" of transforms
+                    for n in 0..4 {
+                        let node0 = &node.tables[n * 3 + 0];
+                        let node1 = &node.tables[n * 3 + 1];
+                        let node2 = &node.tables[n * 3 + 2];
+                        println!("{} {} {} {} {:?} {:?} {:?}", n, n * 3 + 0, n * 3 + 1, n * 3 + 2, node0, node1, node2);
+                        if !node0.is_empty() || !node1.is_empty() || !node2.is_empty() {
+                            if n == 1 {
+                                panic!("Unable to handle animations with shear! {:?}", context.path());
+                            }
+                            let length = node0.len().max(node1.len().max(node2.len()));
+
+                            let node0 = match node0.len() {
+                                1 => &vec![node0[0]; num_frames],
+                                _ => node0,
+                            };
+
+                            let node1 = match node1.len() {
+                                1 => &vec![node1[0]; num_frames],
+                                _ => node1,
+                            };
+
+                            let node2 = match node2.len() {
+                                1 => &vec![node2[0]; num_frames],
+                                _ => node2,
+                            };
+
+                            let keyframes = match n {
+                                0 => {
+                                    let mut aggregate = Vec::with_capacity(length);
+                                    for index in 0..length {
+                                        aggregate.push(Vec3::new(
+                                            *node0.get(index).unwrap_or(&1.0),
+                                            *node1.get(index).unwrap_or(&1.0),
+                                            *node2.get(index).unwrap_or(&1.0),
+                                        ));
+                                    }
+                                    println!("Scale {:?}: {:?}", name, aggregate);
+                                    if length != num_frames && length == 1 {
+                                        for _ in 0..num_frames {
+                                            aggregate.push(aggregate[0]);
+                                        }
+                                    }
+                                    println!("Scale {:?}: {:?}", name, aggregate);
+                                    Keyframes::Scale(aggregate)
+                                }
+                                2 => {
+                                    let mut aggregate = Vec::with_capacity(num_frames);
+                                    for index in 0..length {
+                                        let x = *node0.get(index).unwrap_or(&0.0);
+                                        let y = *node1.get(index).unwrap_or(&0.0);
+                                        let z = *node2.get(index).unwrap_or(&0.0);
+                                        println!("{} {} {}", x, y, z);
+                                        aggregate.push(Quat::from_euler(
+                                            EulerRot::ZXY,
+                                            (*node0.get(index).unwrap_or(&0.0)).to_radians(),
+                                            (*node1.get(index).unwrap_or(&0.0)).to_radians(),
+                                            (*node2.get(index).unwrap_or(&0.0)).to_radians(),
+                                        ));
+                                    }
+                                    println!("Rotation {:?}: {:?}", name, aggregate);
+                                    if length != num_frames && length == 1 {
+                                        for _ in 1..num_frames {
+                                            aggregate.push(aggregate[0]);
+                                        }
+                                    }
+                                    println!("Rotation {:?}: {:?}", name, aggregate);
+                                    Keyframes::Rotation(aggregate)
+                                }
+                                3 => {
+                                    let mut aggregate = Vec::with_capacity(length);
+                                    for index in 1..num_frames {
+                                        aggregate.push(Vec3::new(
+                                            *node0.get(index).unwrap_or(&0.0),
+                                            *node1.get(index).unwrap_or(&0.0),
+                                            *node2.get(index).unwrap_or(&0.0),
+                                        ));
+                                    }
+                                    println!("Translation {:?}: {:?}", name, aggregate);
+                                    if length != num_frames && length == 1 {
+                                        for _ in 1..num_frames {
+                                            aggregate.push(aggregate[0]);
+                                        }
+                                    }
+                                    println!("Translation {:?}: {:?}", name, aggregate);
+                                    Keyframes::Translation(aggregate)
+                                }
+                                _ => unreachable!(),
+                            };
+
+                            animation_clip.add_curve_to_target(
+                                anim_target_id,
+                                VariableCurve {
+                                    keyframe_timestamps: (0..num_frames).map(|i| i as f32 / fps).collect(),
+                                    keyframes,
+                                    interpolation: match length {
+                                        1 => Interpolation::Linear,
+                                        _ => Interpolation::Linear,
+                                    },
+                                },
+                            );
+                        }
+                    }
+
+                    for child_ref in &node.matrix.group.child_refs {
+                        self.convert_transform_table(
+                            world,
+                            parent,
+                            settings,
+                            context,
+                            assets,
+                            *child_ref as usize,
+                            animation_clip,
+                            Some(animation_context.clone()),
+                            fps,
+                            num_frames,
+                        )?;
+                    }
+                }
+            }
+            node => panic!("Unexpected TransformTable node! {:?}", node),
+        }
+        Ok(())
+    }
+
+    /*fn convert_animGroup_node(
+        &self, world: &mut World, parent: Entity, settings: &LoadSettings, context: &mut LoadContext,
+        assets: &mut PandaAsset, node_index: usize, mut animation_context: Option<AnimationContext>,
+    ) -> Result<(), bam::Error> {
+        match &self.nodes[node_index] {
+            PandaObject::AnimBundleNode(node) => {
+                for child_ref in &node.group.child_refs {
+                    self.convert_animGroup_node(
+                        world,
+                        parent,
+                        settings,
+                        context,
+                        assets,
+                        *child_ref as usize,
+                        None,
+                    )?;
+                }
+            }
+            PandaObject::CharacterJoint(joint) => {
+                // We have an actual joint, so we need to compute the inverse bindpose and create a new node
+                // with a Transform
+                /*let net_transform = match parent_joint {
+                    Some(parent_joint) => {
+                        joint.matrix.value * parent_joint.initial_net_transform_inverse.inverse()
+                    }
+                    None => joint.matrix.value * root_transform.unwrap(),
+                };
+                let _skinning_matrix = joint.initial_net_transform_inverse * net_transform;*/
+
+                // Create a new entity
+                let name = Name::new(joint.matrix.base.group.name.clone());
+                let joint_entity = world
+                    .spawn((
+                        TransformBundle::from(Transform::from_matrix(joint.matrix.default_value)),
+                        name.clone(),
+                    ))
+                    .id();
+                world.entity_mut(parent).add_child(joint_entity);
+
+                if let Some(animation_context) = animation_context.as_mut() {
+                    animation_context.path.push(name);
+                    world.entity_mut(joint_entity).insert(AnimationTarget {
+                        id: AnimationTargetId::from_names(animation_context.path.iter()),
+                        player: animation_context.root,
+                    });
+                }
+
+                for child_ref in &joint.matrix.base.group.child_refs {
+                    self.convert_anim_bundle(
+                        world,
+                        joint_entity,
+                        settings,
+                        context,
+                        assets,
+                        *child_ref as usize,
+                        animation_context.clone(),
+                    )?;
+                }
+
+                if let Some(animation_context) = animation_context.as_mut() {
+                    animation_context.path.pop();
+                }
+            }
+            PandaObject::PartGroup(node) => {
+                // If we run into a plain PartGroup, let's treat it as the beginning of the skeleton, so we
+                // can map animations to it easier. This is analogous to running into an AnimGroup when
+                // building an animation. Grab the child and operate off it.
+
+                // First, grab the child joint so we can set up the root node
+                assert!(node.child_refs.len() == 1);
+                let joint = match &self.nodes[node.child_refs[0] as usize] {
+                    PandaObject::CharacterJoint(node) => node,
+                    node => panic!("Unexpected PartGroup child! {:?}", node),
+                };
+
+                // Create an entity for it
+                let name = Name::from(joint.matrix.base.group.name.clone());
+                let skeleton = world
+                    .spawn((
+                        AnimationPlayer::default(),
+                        TransformBundle::from(Transform::from_matrix(joint.matrix.default_value)),
+                        name.clone(),
+                    ))
+                    .id();
+
+                // We know this is the root, so create a new animation context to keep track of everything
+                let mut animation_context = AnimationContext { root: skeleton, path: SmallVec::new() };
+                animation_context.path.push(name);
+                world.entity_mut(skeleton).insert(AnimationTarget {
+                    id: AnimationTargetId::from_names(animation_context.path.iter()),
+                    player: animation_context.root,
+                });
+
+                world.entity_mut(parent).add_child(skeleton);
+                for child_ref in &joint.matrix.base.group.child_refs {
+                    self.convert_anim_bundle(
+                        world,
+                        skeleton,
+                        settings,
+                        context,
+                        assets,
+                        *child_ref as usize,
+                        Some(animation_context.clone()),
+                    )?;
+                }
+            }
+            _ => panic!("Something has gone horribly wrong!"),
+        }
+        Ok(())
+    }*/
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -882,16 +1424,18 @@ pub struct LoadSettings {
 #[derive(Debug, Default)]
 pub struct BamLoader;
 
-#[derive(Debug, Default)]
-pub struct BamAssets {
+#[derive(Asset, TypePath, Debug, Default)]
+pub struct PandaAsset {
+    pub scenes: Vec<Handle<Scene>>,
     pub meshes: Vec<Handle<Mesh>>,
     pub materials: Vec<Handle<Panda3DMaterial>>,
     pub bindposes: Vec<Handle<SkinnedMeshInverseBindposes>>,
+    pub anim_players: Vec<Entity>,
     pub animations: Vec<Handle<AnimationClip>>,
 }
 
 impl AssetLoader for BamLoader {
-    type Asset = Scene;
+    type Asset = PandaAsset;
     type Error = bam::Error;
     type Settings = LoadSettings;
 
@@ -909,24 +1453,26 @@ impl AssetLoader for BamLoader {
 
         // Finally, we can actually generate the data
         let mut world = World::default();
-        let root_entity = world.spawn(SpatialBundle::default()).id();
-        let mut assets = BamAssets::default();
+        let mut assets = PandaAsset::default();
         bam.recurse_nodes(
             &mut world,
-            root_entity,
+            None,
             settings,
             load_context,
             &mut assets,
+            &Effects::default(),
             None,
             1,
         )?;
-        let scene = Scene::new(world);
+        let scene = load_context.labeled_asset_scope("Scene0".to_string(), |_| Scene::new(world));
+        assets.scenes.push(scene);
         info!(
             "Model {:?} loaded in {:?}",
             load_context.asset_path(),
             start_time.elapsed()
         );
-        Ok(scene)
+
+        Ok(assets)
     }
 
     fn extensions(&self) -> &[&str] {
@@ -938,23 +1484,27 @@ pub struct Panda3DPlugin;
 
 impl Plugin for Panda3DPlugin {
     fn build(&self, app: &mut bevy_app::App) {
+        //load_internal_asset!(app, SHADER_HANDLE, "shader.wgsl", Shader::from_wgsl);
         app.add_plugins(MaterialPlugin::<
             ExtendedMaterial<StandardMaterial, Panda3DExtension>,
         >::default())
-            .init_asset_loader::<BamLoader>();
+            .init_asset_loader::<BamLoader>()
+            .init_asset::<PandaAsset>();
     }
 }
 
-#[derive(Asset, AsBindGroup, Reflect, Debug, Clone)]
+//const SHADER_HANDLE: Handle<Shader> = Handle::weak_from_u128(63068044759449526956158328048017573322);
+
+#[derive(Asset, AsBindGroup, TypePath, Debug, Clone)]
 #[bind_group_data(Panda3DExtensionKey)]
 pub struct Panda3DExtension {
-    #[uniform(100)]
-    depth_write_enabled: u32,
+    depth_write_enabled: bool,
+    decal_effect: bool,
 }
 
 impl Default for Panda3DExtension {
     fn default() -> Self {
-        Self { depth_write_enabled: 1 }
+        Self { depth_write_enabled: true, decal_effect: false }
     }
 }
 
@@ -970,8 +1520,15 @@ impl MaterialExtension for Panda3DExtension {
                 }
                 false => {
                     depth_stencil.depth_write_enabled = false;
-                    //depth_stencil.depth_compare = CompareFunction::Always; TODO?
                 }
+            }
+            match key.bind_group_data.contains(Panda3DExtensionKey::DECAL_EFFECT) {
+                true => {
+                    depth_stencil.bias.constant = 1; //TODO: tweak these more if they give any trouble
+                    depth_stencil.bias.slope_scale = 0.5;
+                    depth_stencil.depth_write_enabled = false;
+                }
+                false => (),
             }
         }
         Ok(())
@@ -982,6 +1539,7 @@ bitflags! {
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
     pub struct Panda3DExtensionKey: u64 {
         const DEPTH_WRITE_ENABLED = 0x80000000;
+        const DECAL_EFFECT = 0x100000000;
     }
 }
 
@@ -990,8 +1548,9 @@ impl From<&Panda3DExtension> for Panda3DExtensionKey {
         let mut key = Panda3DExtensionKey::empty();
         key.set(
             Panda3DExtensionKey::DEPTH_WRITE_ENABLED,
-            extension.depth_write_enabled != 0,
+            extension.depth_write_enabled,
         );
+        key.set(Panda3DExtensionKey::DECAL_EFFECT, extension.decal_effect);
         key
     }
 }

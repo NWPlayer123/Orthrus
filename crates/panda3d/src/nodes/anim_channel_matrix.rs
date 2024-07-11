@@ -4,8 +4,8 @@ use super::prelude::*;
 #[derive(Debug, Default)]
 #[allow(dead_code)]
 pub(crate) struct AnimChannelMatrix {
-    group: AnimGroup,
-    last_frame: u16,
+    pub group: AnimGroup,
+    pub last_frame: u16,
 }
 
 impl AnimChannelMatrix {

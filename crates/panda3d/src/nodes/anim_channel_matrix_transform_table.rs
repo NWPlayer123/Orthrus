@@ -3,8 +3,8 @@ use super::prelude::*;
 #[derive(Debug, Default)]
 #[allow(dead_code)]
 pub(crate) struct AnimChannelMatrixXfmTable {
-    matrix: AnimChannelMatrix,
-    tables: [Vec<f32>; 12],
+    pub matrix: AnimChannelMatrix,
+    pub tables: [Vec<f32>; 12],
 }
 
 impl AnimChannelMatrixXfmTable {

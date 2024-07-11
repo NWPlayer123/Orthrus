@@ -371,10 +371,12 @@ impl BinaryAsset {
             "CollisionCapsule" => PandaObject::CollisionCapsule(CollisionCapsule::create(self, data)?),
             "CollisionNode" => PandaObject::CollisionNode(CollisionNode::create(self, data)?),
             "CollisionPolygon" => PandaObject::CollisionPolygon(CollisionPolygon::create(self, data)?),
+            "CollisionSphere" => PandaObject::CollisionSphere(CollisionSphere::create(self, data)?),
             "CollisionTube" => PandaObject::CollisionCapsule(CollisionCapsule::create(self, data)?),
             "ColorAttrib" => PandaObject::ColorAttrib(ColorAttrib::create(self, data)?),
             "CullBinAttrib" => PandaObject::CullBinAttrib(CullBinAttrib::create(self, data)?),
             "CullFaceAttrib" => PandaObject::CullFaceAttrib(CullFaceAttrib::create(self, data)?),
+            "DecalEffect" => PandaObject::DecalEffect(DecalEffect::create(self, data)?),
             "DepthWriteAttrib" => PandaObject::DepthWriteAttrib(DepthWriteAttrib::create(self, data)?),
             "Geom" => PandaObject::Geom(Geom::create(self, data)?),
             "GeomNode" => PandaObject::GeomNode(GeomNode::create(self, data)?),
@@ -392,6 +394,7 @@ impl BinaryAsset {
             "JointVertexTransform" => {
                 PandaObject::JointVertexTransform(JointVertexTransform::create(self, data)?)
             }
+            "LODNode" => PandaObject::LODNode(LODNode::create(self, data)?),
             "ModelNode" => PandaObject::ModelNode(ModelNode::create(self, data)?),
             "ModelRoot" => PandaObject::ModelRoot(ModelNode::create(self, data)?),
             "PandaNode" => PandaObject::PandaNode(PandaNode::create(self, data)?),

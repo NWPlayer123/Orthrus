@@ -4,8 +4,8 @@ use super::prelude::*;
 #[allow(dead_code)]
 pub(crate) struct GeomPrimitive {
     pub shade_model: ShadeModel,
-    pub first_vertex: u32,
-    pub num_vertices: u32,
+    pub first_vertex: i32,
+    pub num_vertices: i32,
     pub index_type: NumericType,
     pub usage_hint: UsageHint,
     /// Reference to the Vertex Data
@@ -19,8 +19,8 @@ impl GeomPrimitive {
     pub fn create(loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
         //cycler data
         let shade_model = ShadeModel::from(data.read_u8()?);
-        let first_vertex = data.read_u32()?;
-        let num_vertices = data.read_u32()?;
+        let first_vertex = data.read_i32()?;
+        let num_vertices = data.read_i32()?;
         let index_type = NumericType::from(data.read_u8()?);
         let usage_hint = UsageHint::from(data.read_u8()?);
         let vertices_ref = loader.read_pointer(data)?;

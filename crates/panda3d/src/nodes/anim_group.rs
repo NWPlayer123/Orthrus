@@ -3,9 +3,9 @@ use super::prelude::*;
 #[derive(Debug, Default)]
 #[allow(dead_code)]
 pub(crate) struct AnimGroup {
-    name: String,
-    root_ref: u32,
-    child_refs: Vec<u32>,
+    pub name: String,
+    pub root_ref: u32,
+    pub child_refs: Vec<u32>,
 }
 
 impl AnimGroup {

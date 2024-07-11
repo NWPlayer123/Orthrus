@@ -3,9 +3,9 @@ use super::prelude::*;
 #[derive(Debug, Default)]
 #[allow(dead_code)]
 pub(crate) struct AnimBundle {
-    group: AnimGroup,
-    fps: f32,
-    num_frames: u16,
+    pub group: AnimGroup,
+    pub fps: f32,
+    pub num_frames: u16,
 }
 
 impl AnimBundle {
