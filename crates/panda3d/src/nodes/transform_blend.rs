@@ -1,6 +1,6 @@
 use super::prelude::*;
 
-#[derive(Debug, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 #[allow(dead_code)]
 pub(crate) struct TransformEntry {
     pub transform_ref: u32,

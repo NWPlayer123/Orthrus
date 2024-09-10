@@ -13,6 +13,7 @@ keywords = ["modding", "gamedev"]
 strip = true
 lto = true
 codegen-units = 1
+panic = "abort"
 
 [dependencies]
 orthrus-core = { version = "0.2", path = "crates/core", features = ["time"] }

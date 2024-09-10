@@ -46,7 +46,7 @@ pub(crate) struct Effects {
 }
 
 impl Effects {
-    fn new(asset: &BinaryAsset, parent: &Effects, render_effects: &RenderEffects) -> Self {
+    async fn new(asset: &BinaryAsset, parent: &Effects, render_effects: &RenderEffects) -> Self {
         let mut is_billboard = parent.is_billboard;
         let mut is_decal = parent.is_decal;
 
@@ -77,6 +77,51 @@ struct AnimationContext {
 }
 
 impl BinaryAsset {
+    async fn handle_transform_state(
+        &self, context: &mut LoadContext<'_>, transform_ref: usize,
+    ) -> Result<SpatialBundle, bam::Error> {
+        let transform_state = match &self.nodes[transform_ref] {
+            PandaObject::TransformState(node) => node,
+            _ => panic!("Unexpected TransformState node!"),
+        };
+
+        let bundle = if transform_state.flags.contains(TransformFlags::Identity) {
+            // If we have an identity transform, just chuck the default in
+            SpatialBundle::default()
+        } else if transform_state.flags.contains(TransformFlags::MatrixKnown) {
+            // We just have the raw matrix given to us, so construct a transform based off it
+            SpatialBundle::from_transform(Transform::from_matrix(transform_state.matrix))
+        } else if transform_state.flags.contains(TransformFlags::ComponentsGiven) {
+            // We're given individual components, so let's piece together a transform
+            if transform_state.rotation != Vec3::ZERO {
+                warn!(
+                    "Double check rotation on {:?}! Not sure if right axis.",
+                    context.path()
+                );
+            }
+            if transform_state.shear != Vec3::ZERO {
+                warn!("Non-zero shear on {:?}! Ignoring, needs support.", context.path());
+            }
+            SpatialBundle::from_transform(Transform {
+                translation: transform_state.position,
+                rotation: match transform_state.flags.contains(TransformFlags::RotationGiven) {
+                    true => Quat::from_euler(
+                        EulerRot::YXZ,
+                        transform_state.rotation.x,
+                        transform_state.rotation.y,
+                        transform_state.rotation.z,
+                    ),
+                    false => transform_state.quaternion,
+                },
+                scale: transform_state.scale,
+            })
+        } else {
+            warn!("Unexpected TransformState data! See {:?}", context.path());
+            SpatialBundle::default()
+        };
+        Ok(bundle)
+    }
+
     /// This function is used to recursively convert all child nodes
     pub(crate) fn recurse_nodes(
         &self, world: &mut World, parent: Option<Entity>, settings: &LoadSettings, context: &mut LoadContext,
@@ -85,22 +130,26 @@ impl BinaryAsset {
         match &self.nodes[node_index] {
             PandaObject::ModelRoot(node) => {
                 // If we've called this, we're at the scene root, create a named node and setup all children
-                let child = world.spawn((SpatialBundle::default(), Name::new(node.node.name.clone()))).id();
+                let entity = world.spawn((SpatialBundle::default(), Name::new(node.node.name.clone()))).id();
                 if let Some(parent) = parent {
-                    world.entity_mut(parent).add_child(child);
+                    world.entity_mut(parent).add_child(entity);
                 }
+
+                let spatial_bundle =
+                    block_on(self.handle_transform_state(context, node.node.transform_ref as usize))?;
+                world.entity_mut(entity).insert(spatial_bundle);
 
                 let render_effects = match &self.nodes[node.node.effects_ref as usize] {
                     PandaObject::RenderEffects(node) => node,
                     _ => panic!("Unexpected RenderEffects node!"),
                 };
 
-                let effects = Effects::new(&self, effects, render_effects);
+                let effects = block_on(Effects::new(&self, effects, render_effects));
 
                 for child_ref in &node.node.child_refs {
                     self.recurse_nodes(
                         world,
-                        Some(child),
+                        Some(entity),
                         settings,
                         context,
                         assets,
@@ -111,24 +160,29 @@ impl BinaryAsset {
                 }
             }
             PandaObject::ModelNode(node) => {
-                // We're either at the scene root, or an arbitrary child node, create a named node and setup
-                // all children
-                let child = world.spawn((SpatialBundle::default(), Name::new(node.node.name.clone()))).id();
+                // We're either at the scene root, or an arbitrary child node, create a new node, process all
+                // its attributes, and then recurse to any children.
+                //println!("{} {} {:?}", node_index, node.node.name, node);
+                let entity = world.spawn(Name::new(node.node.name.clone())).id();
                 if let Some(parent) = parent {
-                    world.entity_mut(parent).add_child(child);
+                    world.entity_mut(parent).add_child(entity);
                 }
+
+                let spatial_bundle =
+                    block_on(self.handle_transform_state(context, node.node.transform_ref as usize))?;
+                world.entity_mut(entity).insert(spatial_bundle);
 
                 let render_effects = match &self.nodes[node.node.effects_ref as usize] {
                     PandaObject::RenderEffects(node) => node,
                     _ => panic!("Unexpected RenderEffects node!"),
                 };
 
-                let effects = Effects::new(&self, effects, render_effects);
+                let effects = block_on(Effects::new(&self, effects, render_effects));
 
                 for child_ref in &node.node.child_refs {
                     self.recurse_nodes(
                         world,
-                        Some(child),
+                        Some(entity),
                         settings,
                         context,
                         assets,
@@ -140,22 +194,26 @@ impl BinaryAsset {
             }
             PandaObject::PandaNode(node) => {
                 // This is just used as a generic node, so spawn a new child and keep traversing
-                let child = world.spawn((SpatialBundle::default(), Name::new(node.name.clone()))).id();
+                let entity = world.spawn(Name::new(node.name.clone())).id();
                 if let Some(parent) = parent {
-                    world.entity_mut(parent).add_child(child);
+                    world.entity_mut(parent).add_child(entity);
                 }
+
+                let spatial_bundle =
+                    block_on(self.handle_transform_state(context, node.transform_ref as usize))?;
+                world.entity_mut(entity).insert(spatial_bundle);
 
                 let render_effects = match &self.nodes[node.effects_ref as usize] {
                     PandaObject::RenderEffects(node) => node,
                     _ => panic!("Unexpected RenderEffects node!"),
                 };
 
-                let effects = Effects::new(&self, effects, render_effects);
+                let effects = block_on(Effects::new(&self, effects, render_effects));
 
                 for child_ref in &node.child_refs {
                     self.recurse_nodes(
                         world,
-                        Some(child),
+                        Some(entity),
                         settings,
                         context,
                         assets,
@@ -169,6 +227,14 @@ impl BinaryAsset {
                 // This is considered a leaf node, which we process into a parent node with potentially
                 // several Mesh+Material bundles. We might be getting called from a Character parent, so we
                 // need to pass joint_data in. TODO: add a marker Component?
+                let entity = world.spawn(Name::new(node.node.name.clone())).id();
+                if let Some(parent) = parent {
+                    world.entity_mut(parent).add_child(entity);
+                }
+
+                let spatial_bundle =
+                    block_on(self.handle_transform_state(context, node.node.transform_ref as usize))?;
+                world.entity_mut(entity).insert(spatial_bundle);
 
                 let render_effects = match &self.nodes[node.node.effects_ref as usize] {
                     PandaObject::RenderEffects(node) => node,
@@ -176,18 +242,13 @@ impl BinaryAsset {
                 };
 
                 // First, let's create all the actual data
-                let entity = block_on(
-                    self.convert_geom_node(world, settings, context, assets, node, &effects, joint_data),
-                )?;
-
-                // If we do have a parent, link it together
-                if let Some(parent) = parent {
-                    world.entity_mut(parent).add_child(entity);
-                }
+                block_on(self.convert_geom_node(
+                    world, entity, settings, context, assets, node, &effects, joint_data,
+                ))?;
 
                 // In order to render properly, we should only apply effects (e.g. decals) to children it
                 // seems? TODO: verify, otherwise we get weird clipping issues
-                let effects = Effects::new(&self, effects, render_effects);
+                let effects = block_on(Effects::new(&self, effects, render_effects));
 
                 // This may still have children, so handle those too
                 for child_ref in &node.node.child_refs {
@@ -206,11 +267,14 @@ impl BinaryAsset {
             PandaObject::Character(node) => {
                 // This is a leaf node, which we process into a SkinnedMesh with both a Mesh+Material and a
                 // bunch of Joint data. TODO: add a marker Component?
-                let entity =
-                    world.spawn((SpatialBundle::default(), Name::new(node.node.node.name.clone()))).id();
+                let entity = world.spawn(Name::new(node.node.node.name.clone())).id();
                 if let Some(parent) = parent {
                     world.entity_mut(parent).add_child(entity);
                 }
+
+                let spatial_bundle =
+                    block_on(self.handle_transform_state(context, node.node.node.transform_ref as usize))?;
+                world.entity_mut(entity).insert(spatial_bundle);
 
                 let render_effects = match &self.nodes[node.node.node.effects_ref as usize] {
                     PandaObject::RenderEffects(node) => node,
@@ -223,7 +287,7 @@ impl BinaryAsset {
                     self.convert_character_node(world, entity, settings, context, assets, node_index),
                 )?);
 
-                let effects = Effects::new(&self, effects, render_effects);
+                let effects = block_on(Effects::new(&self, effects, render_effects));
 
                 // Then, let's actually process those children
                 for child_ref in &node.node.node.child_refs {
@@ -256,7 +320,7 @@ impl BinaryAsset {
                 self.convert_anim_node(world, entity, settings, context, assets, node)?;
 
                 //TODO: any effects on AnimBundleNode?
-                let effects = Effects::new(&self, effects, render_effects);
+                let effects = block_on(Effects::new(&self, effects, render_effects));
 
                 // Then, let's actually process those children
                 for child_ref in &node.node.child_refs {
@@ -279,52 +343,10 @@ impl BinaryAsset {
     }
 
     async fn convert_geom_node(
-        &self, world: &mut World, settings: &LoadSettings, context: &mut LoadContext<'_>,
+        &self, world: &mut World, entity: Entity, settings: &LoadSettings, context: &mut LoadContext<'_>,
         assets: &mut PandaAsset, node: &GeomNode, effects: &Effects, joint_data: Option<&SkinnedMesh>,
-    ) -> Result<Entity, bam::Error> {
+    ) -> Result<(), bam::Error> {
         // Then let's create a new entity, and add our various properties.
-        let entity = world.spawn(Name::new(node.node.name.clone())).id();
-
-        let transform_state = match &self.nodes[node.node.transform_ref as usize] {
-            PandaObject::TransformState(node) => node,
-            _ => panic!("Unexpected TransformState node!"),
-        };
-
-        if transform_state.flags.contains(TransformFlags::Identity) {
-            // If we have an identity transform, just chuck the default in
-            world.entity_mut(entity).insert(SpatialBundle::default());
-        } else if transform_state.flags.contains(TransformFlags::MatrixKnown) {
-            // We just have the raw matrix given to us, so construct a transform based off it
-            world.entity_mut(entity).insert(SpatialBundle::from_transform(Transform::from_matrix(
-                transform_state.matrix,
-            )));
-        } else if transform_state.flags.contains(TransformFlags::ComponentsGiven) {
-            // We're given individual components, so let's piece together a transform
-            world.entity_mut(entity).insert(SpatialBundle::from_transform(Transform {
-                translation: transform_state.position,
-                rotation: match transform_state.flags.contains(TransformFlags::RotationGiven) {
-                    true => Quat::from_euler(
-                        EulerRot::YXZ,
-                        transform_state.rotation.x,
-                        transform_state.rotation.y,
-                        transform_state.rotation.z,
-                    ),
-                    false => transform_state.quaternion,
-                },
-                scale: transform_state.scale,
-            }));
-            if transform_state.rotation != Vec3::ZERO {
-                warn!(
-                    "Double check rotation on {:?}! Not sure if right axis.",
-                    context.path()
-                );
-            }
-            if transform_state.shear != Vec3::ZERO {
-                warn!("Non-zero shear on {:?}! Ignoring, needs support.", context.path());
-            }
-        } else {
-            warn!("Unexpected TransformState data! See {:?}", context.path());
-        }
 
         //TODO: handle tags, collide_mask?
 
@@ -363,7 +385,7 @@ impl BinaryAsset {
             .await?;
         }
 
-        Ok(entity)
+        Ok(())
     }
 
     async fn convert_primitive(
@@ -868,6 +890,35 @@ impl BinaryAsset {
                             }
                         }
 
+                        // In the spirit of making things fast, let's build a table for the actual weights
+                        // we're writing since the number of TransformBlends is way less then the number of
+                        // primitives (usually)
+
+                        let mut transforms: Vec<([u16; 4], [f32; 4])> =
+                            Vec::with_capacity(orig_blend_table.blends.len());
+                        for transform in &orig_blend_table.blends {
+                            // Clone it and sort it, generate our blend data for this specific blend
+                            let mut sorted = transform.entries.clone();
+                            sorted.sort_by(|a, b| b.weight.partial_cmp(&a.weight).unwrap());
+                            let cleaned = sorted.iter().take(4).collect::<Vec<_>>();
+                            let mut indices = [0u16, 0u16, 0u16, 0u16];
+                            let mut weights = [0f32, 0f32, 0f32, 0f32];
+                            //println!("{:?}", sorted);
+                            for n in 0..cleaned.len() {
+                                indices[n] = lookup[&cleaned[n].transform_ref];
+                                weights[n] = cleaned[n].weight;
+                            }
+
+                            // Normalize it if we need to
+                            let net_weight: f32 = weights.iter().sum();
+                            if net_weight != 0.0 {
+                                for weight in weights.iter_mut() {
+                                    *weight /= net_weight;
+                                }
+                            }
+                            transforms.push((indices, weights));
+                        }
+
                         // Now, let's actually build ATTRIBUTE_JOINT_WEIGHT and ATTRIBUTE_JOINT_INDEX
                         let mut blend_lookup = vec![[0u16, 0u16, 0u16, 0u16]; num_primitives];
                         let mut blend_table = vec![[0f32, 0f32, 0f32, 0f32]; num_primitives];
@@ -877,18 +928,10 @@ impl BinaryAsset {
                             assert!(column.contents == Contents::Index);
                             data.set_position(column.start as usize + (array_format.stride as usize * n));
 
-                            // Grab the lookup ID and the transform this polygon is using
+                            // Then, let's write the blend data
                             let lookup_id = data.read_u16().unwrap();
-                            let transform = &orig_blend_table.blends[lookup_id as usize];
-                            // We can only store four weights, TODO: implement blend normalizing
-                            assert!(transform.entries.len() <= 4);
-
-                            // Now, let's actually write out our data
-                            for index in 0..core::cmp::min(transform.entries.len(), 4) {
-                                let entry = &transform.entries[index];
-                                blend_lookup[n][index] = lookup[&entry.transform_ref];
-                                blend_table[n][index] = entry.weight;
-                            }
+                            blend_lookup[n] = transforms[lookup_id as usize].0;
+                            blend_table[n] = transforms[lookup_id as usize].1;
                         }
 
                         // In order to correctly render, the SkinnedMesh needs to be on this specific entity,
@@ -898,22 +941,21 @@ impl BinaryAsset {
                             VertexAttributeValues::Uint16x4(blend_lookup),
                         );
                         mesh.insert_attribute(Mesh::ATTRIBUTE_JOINT_WEIGHT, blend_table);
-                        println!("SkinnedMesh: {:?}", joint_data.unwrap().clone());
                         world.entity_mut(entity).insert(joint_data.unwrap().clone());
                     }
 
                     _ => panic!("Unexpected Vertex Type! {} {:?}", internal_name.name, column),
                 }
             }
-        } else {
-            // If we've been passed joint data, but the mesh doesn't actually have any, we still want to
-            // parent it to be animated
-            if let Some(joint_data) = joint_data {
-                mesh.insert_attribute(Mesh::ATTRIBUTE_JOINT_INDEX, VertexAttributeValues::Uint16x4(vec![[0, 0, 0, 0]; num_primitives]));
-                mesh.insert_attribute(Mesh::ATTRIBUTE_JOINT_WEIGHT, vec![[1f32, 0f32, 0f32, 0f32]; num_primitives]);
-                world.entity_mut(entity).insert(joint_data.clone());
-            }
-        }
+        } /* else {
+              // If we've been passed joint data, but the mesh doesn't actually have any, we still want to
+              // parent it to be animated
+              if let Some(joint_data) = joint_data {
+                  mesh.insert_attribute(Mesh::ATTRIBUTE_JOINT_INDEX, VertexAttributeValues::Uint16x4(vec![[0, 0, 0, 0]; num_primitives]));
+                  mesh.insert_attribute(Mesh::ATTRIBUTE_JOINT_WEIGHT, vec![[1f32, 0f32, 0f32, 0f32]; num_primitives]);
+                  world.entity_mut(entity).insert(joint_data.clone());
+              }
+          }*/
 
         //println!("Mesh: {:?}", mesh);
         mesh
@@ -1008,6 +1050,15 @@ impl BinaryAsset {
                     None => joint.initial_net_transform_inverse.inverse(),
                 };
 
+                println!(
+                    "{} Default Value {}\n{}\n{}\n{}",
+                    joint.matrix.base.group.name,
+                    joint.matrix.default_value.x_axis,
+                    joint.matrix.default_value.y_axis,
+                    joint.matrix.default_value.z_axis,
+                    joint.matrix.default_value.w_axis
+                );
+
                 // Create a new entity
                 let name = Name::new(joint.matrix.base.group.name.clone());
                 let joint_entity = world
@@ -1067,7 +1118,7 @@ impl BinaryAsset {
                 let skeleton = world
                     .spawn((
                         AnimationPlayer::default(),
-                        TransformBundle::from(Transform::from_matrix(joint.matrix.default_value)),
+                        TransformBundle::from(Transform::from_matrix(Mat4::default())),
                         name.clone(),
                     ))
                     .id();
@@ -1083,7 +1134,16 @@ impl BinaryAsset {
                     player: animation_context.root,
                 });
 
-                inverse_bindposes.push(joint.initial_net_transform_inverse);
+                println!(
+                    "{} Default Value {}\n{}\n{}\n{}",
+                    joint.matrix.base.group.name,
+                    joint.matrix.default_value.x_axis,
+                    joint.matrix.default_value.y_axis,
+                    joint.matrix.default_value.z_axis,
+                    joint.matrix.default_value.w_axis
+                );
+
+                inverse_bindposes.push(Mat4::default());
                 joints.push(skeleton);
                 world.entity_mut(parent).add_child(skeleton);
                 for child_ref in &joint.matrix.base.group.child_refs {
@@ -1149,6 +1209,8 @@ impl BinaryAsset {
         assert!(_morph_group.child_refs.len() == 0);
         //TODO: actually handle morph data? I don't currently.
 
+        //println!("{:?}", animation_clip);
+
         let label = format!("Animation{}", assets.animations.len());
         context.labeled_asset_scope(label, |_| animation_clip);
 
@@ -1174,109 +1236,108 @@ impl BinaryAsset {
                 if let Some(ref mut animation_context) = animation_context {
                     animation_context.path.push(name.clone());
 
-                    println!("{:?}", animation_context);
                     // Now let's create the AnimationTargetId
                     let anim_target_id = AnimationTargetId::from_names(animation_context.path.iter());
+
+                    /*for n in 0..12 {
+                        println!(
+                            "{} {} {} {} {:?}",
+                            fps,
+                            num_frames,
+                            "ijkabcrphxyz".chars().nth(n).unwrap(),
+                            node.tables[n].len(),
+                            node.tables[n]
+                        );
+                    }*/
 
                     // Handle each "group" of transforms
                     for n in 0..4 {
                         let node0 = &node.tables[n * 3 + 0];
                         let node1 = &node.tables[n * 3 + 1];
                         let node2 = &node.tables[n * 3 + 2];
-                        println!("{} {} {} {} {:?} {:?} {:?}", n, n * 3 + 0, n * 3 + 1, n * 3 + 2, node0, node1, node2);
                         if !node0.is_empty() || !node1.is_empty() || !node2.is_empty() {
                             if n == 1 {
-                                panic!("Unable to handle animations with shear! {:?}", context.path());
+                                warn!("Unable to handle animations with shear! {:?}", context.path());
+                                continue; // Let's skip it, try not to panic
                             }
-                            let length = node0.len().max(node1.len().max(node2.len()));
 
+                            // Get the default value for what table it is
+                            let default = match n {
+                                0 => 1.0, // Scale
+                                2 => 0.0, // Rotation
+                                3 => 0.0, // Translation
+                                _ => unreachable!(),
+                            };
+
+                            // Now we need to generate full tables for the number of frames there is. If it's
+                            // empty, generate the default value, if it's one, extend that value over the
+                            // whole range, otherwise use the full data.
                             let node0 = match node0.len() {
+                                0 => &vec![default; num_frames],
                                 1 => &vec![node0[0]; num_frames],
                                 _ => node0,
                             };
 
                             let node1 = match node1.len() {
+                                0 => &vec![default; num_frames],
                                 1 => &vec![node1[0]; num_frames],
                                 _ => node1,
                             };
 
                             let node2 = match node2.len() {
+                                0 => &vec![default; num_frames],
                                 1 => &vec![node2[0]; num_frames],
                                 _ => node2,
                             };
 
+                            //println!("{} {} {}", node0.len(), node1.len(), node2.len());
+
                             let keyframes = match n {
                                 0 => {
-                                    let mut aggregate = Vec::with_capacity(length);
-                                    for index in 0..length {
+                                    let mut aggregate = Vec::with_capacity(num_frames);
+                                    for index in 0..num_frames {
                                         aggregate.push(Vec3::new(
-                                            *node0.get(index).unwrap_or(&1.0),
-                                            *node1.get(index).unwrap_or(&1.0),
-                                            *node2.get(index).unwrap_or(&1.0),
+                                            node0[index].to_radians(),
+                                            node1[index].to_radians(),
+                                            node2[index].to_radians(),
                                         ));
                                     }
-                                    println!("Scale {:?}: {:?}", name, aggregate);
-                                    if length != num_frames && length == 1 {
-                                        for _ in 0..num_frames {
-                                            aggregate.push(aggregate[0]);
-                                        }
-                                    }
-                                    println!("Scale {:?}: {:?}", name, aggregate);
                                     Keyframes::Scale(aggregate)
                                 }
                                 2 => {
                                     let mut aggregate = Vec::with_capacity(num_frames);
-                                    for index in 0..length {
-                                        let x = *node0.get(index).unwrap_or(&0.0);
-                                        let y = *node1.get(index).unwrap_or(&0.0);
-                                        let z = *node2.get(index).unwrap_or(&0.0);
-                                        println!("{} {} {}", x, y, z);
+                                    for index in 0..num_frames {
                                         aggregate.push(Quat::from_euler(
                                             EulerRot::ZXY,
-                                            (*node0.get(index).unwrap_or(&0.0)).to_radians(),
-                                            (*node1.get(index).unwrap_or(&0.0)).to_radians(),
-                                            (*node2.get(index).unwrap_or(&0.0)).to_radians(),
+                                            node0[index].to_radians(),
+                                            node1[index].to_radians(),
+                                            node2[index].to_radians(),
                                         ));
                                     }
-                                    println!("Rotation {:?}: {:?}", name, aggregate);
-                                    if length != num_frames && length == 1 {
-                                        for _ in 1..num_frames {
-                                            aggregate.push(aggregate[0]);
-                                        }
-                                    }
-                                    println!("Rotation {:?}: {:?}", name, aggregate);
                                     Keyframes::Rotation(aggregate)
                                 }
                                 3 => {
-                                    let mut aggregate = Vec::with_capacity(length);
-                                    for index in 1..num_frames {
+                                    let mut aggregate = Vec::with_capacity(num_frames);
+                                    for index in 0..num_frames {
                                         aggregate.push(Vec3::new(
-                                            *node0.get(index).unwrap_or(&0.0),
-                                            *node1.get(index).unwrap_or(&0.0),
-                                            *node2.get(index).unwrap_or(&0.0),
+                                            node0[index].to_radians(),
+                                            node1[index].to_radians(),
+                                            node2[index].to_radians(),
                                         ));
                                     }
-                                    println!("Translation {:?}: {:?}", name, aggregate);
-                                    if length != num_frames && length == 1 {
-                                        for _ in 1..num_frames {
-                                            aggregate.push(aggregate[0]);
-                                        }
-                                    }
-                                    println!("Translation {:?}: {:?}", name, aggregate);
                                     Keyframes::Translation(aggregate)
                                 }
                                 _ => unreachable!(),
                             };
+
+                            //println!("{} {:?}", (0..num_frames).len(), keyframes);
 
                             animation_clip.add_curve_to_target(
                                 anim_target_id,
                                 VariableCurve {
                                     keyframe_timestamps: (0..num_frames).map(|i| i as f32 / fps).collect(),
                                     keyframes,
-                                    interpolation: match length {
-                                        1 => Interpolation::Linear,
-                                        _ => Interpolation::Linear,
-                                    },
+                                    interpolation: Interpolation::Linear,
                                 },
                             );
                         }

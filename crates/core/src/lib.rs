@@ -25,8 +25,12 @@ pub mod certificate;
 #[cfg(feature = "time")]
 pub mod time;
 
-pub mod identify;
-
 pub mod util;
 
 pub mod prelude;
+
+pub mod take;
+
+#[cfg(feature = "std")]
+pub mod identify;
+

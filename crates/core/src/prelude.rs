@@ -14,6 +14,8 @@ pub use crate::data::{
 };
 #[doc(inline)]
 pub use crate::identify::{FileIdentifier, FileInfo, IdentifyFn};
+#[doc(inline)]
+pub use crate::take::ByteStream;
 
 /// Includes [`data::Error`], which is used in Results returned by [`DataCursor`],
 /// [`DataCursorRef`], and [`DataCursorMut`].
