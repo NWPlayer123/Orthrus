@@ -12,7 +12,7 @@ pub(super) mod bam {
     pub(crate) use crate::bam::Error;
 }
 
-pub(crate) use bevy_math::{Mat4, UVec3, Vec2, Vec3, Vec4, Quat};
+pub(crate) use bevy_math::{Mat4, Quat, UVec3, Vec2, Vec3, Vec4};
 
 pub(crate) use super::anim_bundle::AnimBundle;
 pub(crate) use super::anim_bundle_node::AnimBundleNode;
@@ -29,9 +29,11 @@ pub(crate) use super::collision_node::CollisionNode;
 pub(crate) use super::collision_plane::CollisionPlane;
 pub(crate) use super::collision_polygon::CollisionPolygon;
 pub(crate) use super::collision_solid::CollisionSolid;
+pub(crate) use super::collision_sphere::CollisionSphere;
 pub(crate) use super::color_attrib::{ColorAttrib, ColorType};
 pub(crate) use super::cull_bin_attrib::CullBinAttrib;
 pub(crate) use super::cull_face_attrib::{CullFaceAttrib, CullMode};
+pub(crate) use super::decal_effect::DecalEffect;
 pub(crate) use super::depth_write_attrib::{DepthMode, DepthWriteAttrib};
 pub(crate) use super::dispatch::PandaObject;
 pub(crate) use super::geom::Geom;
@@ -46,6 +48,7 @@ pub(crate) use super::geom_vertex_data::GeomVertexData;
 pub(crate) use super::geom_vertex_format::GeomVertexFormat;
 pub(crate) use super::internal_name::InternalName;
 pub(crate) use super::joint_vertex_transform::JointVertexTransform;
+pub(crate) use super::lod_node::LODNode;
 pub(crate) use super::model_node::ModelNode;
 pub(crate) use super::moving_part_base::MovingPartBase;
 pub(crate) use super::moving_part_matrix::MovingPartMatrix;
@@ -65,6 +68,3 @@ pub(crate) use super::transform_blend::TransformBlend;
 pub(crate) use super::transform_blend_table::TransformBlendTable;
 pub(crate) use super::transform_state::TransformState;
 pub(crate) use super::transparency_attrib::{TransparencyAttrib, TransparencyMode};
-pub(crate) use super::collision_sphere::CollisionSphere;
-pub(crate) use super::lod_node::LODNode;
-pub(crate) use super::decal_effect::DecalEffect;

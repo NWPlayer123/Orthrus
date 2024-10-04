@@ -31,7 +31,7 @@ impl AnimChannelMatrixXfmTable {
         } else {
             panic!("Haven't implemented animation decompression in AnimChannelMatrixXfmTable");
         }
-        
+
         Ok(Self { matrix, tables })
     }
 }

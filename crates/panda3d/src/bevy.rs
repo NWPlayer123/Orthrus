@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
-use bevy_animation::{prelude::*, AnimationTarget, AnimationTargetId};
+use bevy_animation::prelude::*;
+use bevy_animation::{AnimationTarget, AnimationTargetId};
 use bevy_app::prelude::*;
 use bevy_asset::io::Reader;
 use bevy_asset::prelude::*;
@@ -698,7 +699,8 @@ impl BinaryAsset {
                     // Then, build an array with the expected data
                     let mut vertex_data = Vec::with_capacity(num_primitives);
                     for n in 0..num_primitives {
-                        data.set_position(column.start as usize + (array_format.stride as usize * n)).unwrap();
+                        data.set_position(column.start as usize + (array_format.stride as usize * n))
+                            .unwrap();
 
                         vertex_data.push([
                             data.read_f32().unwrap(),
@@ -718,7 +720,8 @@ impl BinaryAsset {
                     // Then, build an array with the expected data
                     let mut normal_data = Vec::with_capacity(num_primitives);
                     for n in 0..num_primitives {
-                        data.set_position(column.start as usize + (array_format.stride as usize * n)).unwrap();
+                        data.set_position(column.start as usize + (array_format.stride as usize * n))
+                            .unwrap();
 
                         normal_data.push([
                             data.read_f32().unwrap(),
@@ -738,7 +741,8 @@ impl BinaryAsset {
                     // Then, build an array with the expected data
                     let mut tangent_data = Vec::with_capacity(num_primitives);
                     for n in 0..num_primitives {
-                        data.set_position(column.start as usize + (array_format.stride as usize * n)).unwrap();
+                        data.set_position(column.start as usize + (array_format.stride as usize * n))
+                            .unwrap();
 
                         // TODO: calculate handedness using the binormal column? For now, just set it to +1.0
                         tangent_data.push([
@@ -783,7 +787,8 @@ impl BinaryAsset {
                     // Then, build an array with the expected data
                     let mut texcoord_data = Vec::with_capacity(num_primitives);
                     for n in 0..num_primitives {
-                        data.set_position(column.start as usize + (array_format.stride as usize * n)).unwrap();
+                        data.set_position(column.start as usize + (array_format.stride as usize * n))
+                            .unwrap();
 
                         // Panda3D stores flipped Y values to support OpenGL, so we do 1.0 - value.
                         texcoord_data.push([data.read_f32().unwrap(), 1.0 - data.read_f32().unwrap()]);
@@ -800,7 +805,8 @@ impl BinaryAsset {
                         // Then, build an array with the expected data
                         let mut color_data = Vec::with_capacity(num_primitives);
                         for n in 0..num_primitives {
-                            data.set_position(column.start as usize + (array_format.stride as usize * n)).unwrap();
+                            data.set_position(column.start as usize + (array_format.stride as usize * n))
+                                .unwrap();
 
                             let color = data.read_u32().unwrap();
                             let a = ((color >> 24) & 0xFF) as f32 / 255.0;
@@ -926,7 +932,8 @@ impl BinaryAsset {
                             // First, verify we're good to read the lookup table
                             assert!(column.numeric_type == NumericType::U16);
                             assert!(column.contents == Contents::Index);
-                            data.set_position(column.start as usize + (array_format.stride as usize * n)).unwrap();
+                            data.set_position(column.start as usize + (array_format.stride as usize * n))
+                                .unwrap();
 
                             // Then, let's write the blend data
                             let lookup_id = data.read_u16().unwrap();
@@ -1001,7 +1008,8 @@ impl BinaryAsset {
             context.labeled_asset_scope(label, |_| SkinnedMeshInverseBindposes::from(inverse_bindposes));
         assets.bindposes.push(inverse_bindposes.clone()); //Cloning a handle is cheap, thankfully
 
-        // The SkinnedMesh needs to be attached to specific primitives so we can't handle it here, just send it back
+        // The SkinnedMesh needs to be attached to specific primitives so we can't handle it here, just send
+        // it back
 
         Ok(SkinnedMesh { inverse_bindposes, joints })
     }

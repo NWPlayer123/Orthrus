@@ -1,11 +1,11 @@
-/// This module provides functionality to load Portable Executable (PE) files, normally denoted with a .exe file extension.
+/// This module provides functionality to load Portable Executable (PE) files, normally denoted with a
+/// .exe file extension.
 use bitflags::bitflags;
 use zerocopy::{
     BigEndian, FromBytes, Immutable, KnownLayout, LittleEndian, TryFromBytes, Unaligned, U16, U32,
 };
 
-#[derive(PartialEq, Eq, Clone, Copy, Debug, Default)]
-#[derive(FromBytes, KnownLayout, Immutable, Unaligned)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug, Default, FromBytes, KnownLayout, Immutable, Unaligned)]
 #[repr(C)]
 struct Version {
     major: U16<LittleEndian>,
@@ -247,14 +247,15 @@ enum OptionalHeader<'a> {
 #[derive(FromBytes, KnownLayout, Immutable, Unaligned)]
 #[repr(C)]
 struct NTHeader32 {
-    /// Preferred loading address, must be aligned to 0x10000. Windows CE defaults to 0x10000, DLLs default to
-    /// 0x10000000, and modern Windows defaults to 0x400000.
+    /// Preferred loading address, must be aligned to 0x10000. Windows CE defaults to 0x10000, DLLs default
+    /// to 0x10000000, and modern Windows defaults to 0x400000.
     image_base: U32<LittleEndian>,
     /// Section alignment, must be equal or greater than the file alignment. The default is the page size for
     /// an architecture.
     section_alignment: U32<LittleEndian>,
-    /// File alignment, should be a power of 2 between 0x200 and 0x10000. The default is 0x200. If the section
-    /// alignment is less than the architecture's page size, this must match the section alignment.
+    /// File alignment, should be a power of 2 between 0x200 and 0x10000. The default is 0x200. If the
+    /// section alignment is less than the architecture's page size, this must match the section
+    /// alignment.
     file_alignment: U32<LittleEndian>,
     /// Required version for the Operating System
     os_version: Version,
@@ -266,11 +267,12 @@ struct NTHeader32 {
     win32_version: Version,
     /// Total size of the loaded image, including all headers. Must be a multiple of the section alignment.
     image_size: U32<LittleEndian>,
-    /// Total size of the MZ header, PE header, and section headers. Must be a multiple of the file alignment.
+    /// Total size of the MZ header, PE header, and section headers. Must be a multiple of the file
+    /// alignment.
     header_size: U32<LittleEndian>,
-    
+
     checksum: U32<LittleEndian>,
-    subsystem:U16<LittleEndian>,
+    subsystem: U16<LittleEndian>,
 }
 
 #[derive(FromBytes, KnownLayout, Immutable, Unaligned)]
@@ -302,7 +304,7 @@ struct OptionalHeader64 {}
 
 impl OptionalHeader64 {
     fn load(input: &[u8], offset: usize) -> Option<&Self> {
-        Some(&OptionalHeader64 {  })
+        Some(&OptionalHeader64 {})
     }
 }
 
@@ -325,7 +327,8 @@ impl<'a> PortableExecutable<'a> {
         // Check if we have an optional header
         let optional_header = match pe_header.object.optional_size.get() > 0 {
             true => {
-                // If we do, check the magic to see if it's PE32 or PE32+ (if the magic is unknown, just return)
+                // If we do, check the magic to see if it's PE32 or PE32+ (if the magic is unknown, just
+                // return)
                 match u16::from_le_bytes([input[offset], input[offset + 1]]) {
                     //TODO: 0x107?
                     0x10B => Some(OptionalHeader::Header32(OptionalHeader32::load(input, offset)?)),
@@ -335,7 +338,7 @@ impl<'a> PortableExecutable<'a> {
             }
             false => None,
         };
-        
+
         Some(Self { mz_header, pe_header, optional_header })
     }
 }

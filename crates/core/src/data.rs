@@ -1,14 +1,12 @@
-use core::{
-    mem::MaybeUninit,
-    ops::{Deref, DerefMut},
-};
+use core::mem::MaybeUninit;
+use core::ops::{Deref, DerefMut};
+
 use snafu::prelude::*;
 
 #[cfg(feature = "alloc")]
 extern crate alloc;
 #[cfg(feature = "alloc")]
 use alloc::borrow::Cow;
-
 #[cfg(feature = "std")]
 use std::{
     io::{ErrorKind, Read, Seek, SeekFrom, Write},
@@ -1172,6 +1170,7 @@ impl<T: Write> WriteExt for ByteStream<T> {
 
 impl<T> Deref for ByteStream<T> {
     type Target = T;
+
     fn deref(&self) -> &Self::Target {
         &self.inner
     }

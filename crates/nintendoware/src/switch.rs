@@ -624,9 +624,7 @@ impl SoundInfo {
         Some(count * core::mem::size_of::<u32>())
     }
 
-    fn read_string_id<T: ReadExt + SeekExt>(
-        &mut self, data: &mut T, position: usize,
-    ) -> Option<u32> {
+    fn read_string_id<T: ReadExt + SeekExt>(&mut self, data: &mut T, position: usize) -> Option<u32> {
         // If the bit is set, get its data
         if let Some(offset) = self.get_value(0) {
             data.set_position(offset + position).unwrap();
@@ -638,9 +636,7 @@ impl SoundInfo {
         Some(self.string_id)
     }
 
-    fn read_pan_mode<T: ReadExt + SeekExt>(
-        &mut self, data: &mut T, position: usize,
-    ) -> Option<PanMode> {
+    fn read_pan_mode<T: ReadExt + SeekExt>(&mut self, data: &mut T, position: usize) -> Option<PanMode> {
         // If the bit is set, get its data
         if let Some(offset) = self.get_value(1) {
             data.set_position(offset + position).unwrap();
@@ -652,9 +648,7 @@ impl SoundInfo {
         Some(self.pan_mode)
     }
 
-    fn read_pan_curve<T: ReadExt + SeekExt>(
-        &mut self, data: &mut T, position: usize,
-    ) -> Option<PanCurve> {
+    fn read_pan_curve<T: ReadExt + SeekExt>(&mut self, data: &mut T, position: usize) -> Option<PanCurve> {
         // If the bit is set, get its data
         if let Some(offset) = self.get_value(1) {
             data.set_position(offset + position as usize).unwrap();
@@ -666,9 +660,7 @@ impl SoundInfo {
         Some(self.pan_curve)
     }
 
-    fn read_player_prio<T: ReadExt + SeekExt>(
-        &mut self, data: &mut T, position: usize,
-    ) -> Option<u8> {
+    fn read_player_prio<T: ReadExt + SeekExt>(&mut self, data: &mut T, position: usize) -> Option<u8> {
         // If the bit is set, get its data
         if let Some(offset) = self.get_value(2) {
             data.set_position(offset + position).unwrap();
@@ -680,9 +672,7 @@ impl SoundInfo {
         Some(self.player_prio)
     }
 
-    fn read_player_actor_id<T: ReadExt + SeekExt>(
-        &mut self, data: &mut T, position: usize,
-    ) -> Option<u8> {
+    fn read_player_actor_id<T: ReadExt + SeekExt>(&mut self, data: &mut T, position: usize) -> Option<u8> {
         // If the bit is set, get its data
         if let Some(offset) = self.get_value(2) {
             data.set_position(offset + position).unwrap();
@@ -694,9 +684,7 @@ impl SoundInfo {
         Some(self.player_actor_id)
     }
 
-    fn read_play_type<T: ReadExt + SeekExt>(
-        &mut self, data: &mut T, position: usize,
-    ) -> Option<PlayType> {
+    fn read_play_type<T: ReadExt + SeekExt>(&mut self, data: &mut T, position: usize) -> Option<PlayType> {
         // If the bit is set, get its data
         if let Some(offset) = self.get_value(3) {
             data.set_position(offset + position).unwrap();
@@ -708,9 +696,7 @@ impl SoundInfo {
         Some(self.play_type)
     }
 
-    fn read_play_duration<T: ReadExt + SeekExt>(
-        &mut self, data: &mut T, position: usize,
-    ) -> Option<u16> {
+    fn read_play_duration<T: ReadExt + SeekExt>(&mut self, data: &mut T, position: usize) -> Option<u16> {
         // If the bit is set, get its data
         if let Some(offset) = self.get_value(3) {
             data.set_position(offset + position).unwrap();
@@ -723,9 +709,7 @@ impl SoundInfo {
     }
 
     /// Returns an offset to Sound3DInfo parameters.
-    fn get_3d_info_offset<T: ReadExt + SeekExt>(
-        &mut self, data: &mut T, position: usize,
-    ) -> Option<u32> {
+    fn get_3d_info_offset<T: ReadExt + SeekExt>(&mut self, data: &mut T, position: usize) -> Option<u32> {
         let mut value = None;
         // If the bit is set, get its data
         if let Some(offset) = self.get_value(8) {
@@ -737,9 +721,7 @@ impl SoundInfo {
         value
     }
 
-    fn is_front_bypass<T: ReadExt + SeekExt>(
-        &mut self, data: &mut T, position: usize,
-    ) -> Option<bool> {
+    fn is_front_bypass<T: ReadExt + SeekExt>(&mut self, data: &mut T, position: usize) -> Option<bool> {
         // If the bit is set, get its data
         if let Some(offset) = self.get_value(17) {
             data.set_position(offset + position).unwrap();
@@ -751,9 +733,7 @@ impl SoundInfo {
         Some(self.is_front_bypass)
     }
 
-    fn read_user_param<T: ReadExt + SeekExt>(
-        &mut self, data: &mut T, position: usize,
-    ) -> Option<u32> {
+    fn read_user_param<T: ReadExt + SeekExt>(&mut self, data: &mut T, position: usize) -> Option<u32> {
         // If the bit is set, get its data
         if let Some(offset) = self.get_value(31) {
             data.set_position(offset + position).unwrap();
