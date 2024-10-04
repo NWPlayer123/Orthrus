@@ -1,5 +1,7 @@
-use core::{mem::MaybeUninit, ops::{Deref, DerefMut}, slice};
-use std::io::ErrorKind;
+use core::{
+    mem::MaybeUninit,
+    ops::{Deref, DerefMut},
+};
 use snafu::prelude::*;
 
 #[cfg(feature = "alloc")]
@@ -9,7 +11,7 @@ use alloc::borrow::Cow;
 
 #[cfg(feature = "std")]
 use std::{
-    io::{Read, Seek, SeekFrom, Write},
+    io::{ErrorKind, Read, Seek, SeekFrom, Write},
     path::Path,
 };
 
@@ -150,15 +152,9 @@ pub trait ReadExt: EndianExt {
         let slice = self.read_slice(length)?;
         match slice {
             Cow::Borrowed(bytes) => {
-                core::str::from_utf8(bytes)
-                    .map(Cow::Borrowed)
-                    .map_err(|_| Error::InvalidUtf8)
+                core::str::from_utf8(bytes).map(Cow::Borrowed).map_err(|_| Error::InvalidUtf8)
             }
-            Cow::Owned(bytes) => {
-                String::from_utf8(bytes)
-                    .map(Cow::Owned)
-                    .map_err(|_| Error::InvalidUtf8)
-            }
+            Cow::Owned(bytes) => String::from_utf8(bytes).map(Cow::Owned).map_err(|_| Error::InvalidUtf8),
         }
     }
 
@@ -592,7 +588,7 @@ impl ReadExt for DataCursor {
         // SAFETY: We're within bounds since we're reading to the end, and will always have a valid alignment.
         let result = unsafe {
             let ptr = self.data.as_ptr().add(self.position);
-            slice::from_raw_parts(ptr, self.data.len() - self.position)
+            core::slice::from_raw_parts(ptr, self.data.len() - self.position)
         };
         self.position = self.data.len();
         Ok(result)
@@ -604,7 +600,7 @@ impl ReadExt for DataCursor {
         // SAFETY: We're within bounds since we're reading to the end, and will always have a valid alignment.
         let result = unsafe {
             let ptr = self.data.as_ptr().add(self.position);
-            slice::from_raw_parts(ptr, self.data.len() - self.position)
+            core::slice::from_raw_parts(ptr, self.data.len() - self.position)
         };
         self.position = self.data.len();
         Ok(Cow::Borrowed(result))
@@ -798,7 +794,7 @@ impl ReadExt for DataCursorRef<'_> {
         // SAFETY: We're within bounds since we're reading to the end, and will always have a valid alignment.
         let result = unsafe {
             let ptr = self.data.as_ptr().add(self.position);
-            slice::from_raw_parts(ptr, self.data.len() - self.position)
+            core::slice::from_raw_parts(ptr, self.data.len() - self.position)
         };
         self.position = self.data.len();
         Ok(result)
@@ -810,7 +806,7 @@ impl ReadExt for DataCursorRef<'_> {
         // SAFETY: We're within bounds since we're reading to the end, and will always have a valid alignment.
         let result = unsafe {
             let ptr = self.data.as_ptr().add(self.position);
-            slice::from_raw_parts(ptr, self.data.len() - self.position)
+            core::slice::from_raw_parts(ptr, self.data.len() - self.position)
         };
         self.position = self.data.len();
         Ok(Cow::Borrowed(result))
@@ -1000,7 +996,7 @@ impl ReadExt for DataCursorMut<'_> {
         // SAFETY: We're within bounds since we're reading to the end, and will always have a valid alignment.
         let result = unsafe {
             let ptr = self.data.as_ptr().add(self.position);
-            slice::from_raw_parts(ptr, self.data.len() - self.position)
+            core::slice::from_raw_parts(ptr, self.data.len() - self.position)
         };
         self.position = self.data.len();
         Ok(result)
@@ -1012,7 +1008,7 @@ impl ReadExt for DataCursorMut<'_> {
         // SAFETY: We're within bounds since we're reading to the end, and will always have a valid alignment.
         let result = unsafe {
             let ptr = self.data.as_ptr().add(self.position);
-            slice::from_raw_parts(ptr, self.data.len() - self.position)
+            core::slice::from_raw_parts(ptr, self.data.len() - self.position)
         };
         self.position = self.data.len();
         Ok(Cow::Borrowed(result))
@@ -1135,16 +1131,16 @@ impl<T: Read> ReadExt for ByteStream<T> {
     #[inline]
     fn read_length(&mut self, buffer: &mut [u8]) -> Result<usize, Error> {
         match self.inner.read_exact(buffer) {
-            Ok(()) =>  {
+            Ok(()) => {
                 self.position = buffer.len() as u64;
                 Ok(buffer.len())
-            },
+            }
             Err(e) if e.kind() == ErrorKind::UnexpectedEof => {
                 let actually_read = self.inner.read(buffer).context(IoSnafu)?;
                 self.position += actually_read as u64;
                 Ok(actually_read)
             }
-            Err(e) => Err(Error::Io { source: e })
+            Err(e) => Err(Error::Io { source: e }),
         }
     }
 
