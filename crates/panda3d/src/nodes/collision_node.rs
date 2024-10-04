@@ -1,7 +1,7 @@
 use super::prelude::*;
 
 #[derive(Debug, Default)]
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub(crate) struct CollisionNode {
     /// CollisionNode is a superclass of a PandaNode, so we include its data here
     node: PandaNode,

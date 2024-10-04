@@ -42,11 +42,11 @@ impl From<std::io::Error> for Error {
     }
 }
 
-impl From<data::Error> for Error {
+impl From<DataError> for Error {
     #[inline]
-    fn from(error: data::Error) -> Self {
+    fn from(error: DataError) -> Self {
         match error {
-            data::Error::EndOfFile => Self::EndOfFile,
+            DataError::EndOfFile => Self::EndOfFile,
             _ => panic!("Unexpected data::error! Something has gone horribly wrong"),
         }
     }
@@ -133,7 +133,7 @@ impl ResourceArchive {
     #[inline]
     fn read_header<T: ReadExt + SeekExt>(data: &mut T) -> Result<Header> {
         //Store the starting position since all offsets are relative
-        let start_pos = data.position()?;
+        let start_pos = data.position();
 
         //Read the magic and make sure we're actually parsing a Resource Archive
         let magic = data.read_slice(4)?;
@@ -168,7 +168,7 @@ impl ResourceArchive {
     #[inline]
     fn read_data_header<T: ReadExt + SeekExt>(data: &mut T) -> Result<DataHeader> {
         //Store the starting position since all offsets are relative
-        let start_pos = data.position()?;
+        let start_pos = data.position();
 
         //Read data
         let node_count = data.read_u32()?;

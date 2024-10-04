@@ -26,7 +26,6 @@ bitflags! {
 }
 
 #[derive(Debug)]
-#[allow(dead_code)]
 pub(crate) struct TransformState {
     pub flags: TransformFlags,
     pub position: Vec3,

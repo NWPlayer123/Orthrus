@@ -1,7 +1,7 @@
 use super::prelude::*;
 
 #[derive(Debug, Default)]
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub(crate) struct GeomPrimitive {
     pub shade_model: ShadeModel,
     pub first_vertex: i32,

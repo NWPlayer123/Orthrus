@@ -11,7 +11,7 @@ pub(crate) enum CullMode {
 }
 
 #[derive(Debug, Default)]
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub(crate) struct CullFaceAttrib {
     pub mode: CullMode,
     pub reverse: bool,

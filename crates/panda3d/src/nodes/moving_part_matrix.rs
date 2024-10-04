@@ -2,7 +2,7 @@ use super::prelude::*;
 
 //TODO: This is technically a generic but I don't want to make it a generic right now
 #[derive(Debug, Default)]
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub(crate) struct MovingPartMatrix {
     pub base: MovingPartBase,
     pub value: Mat4,

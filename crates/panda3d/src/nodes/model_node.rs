@@ -19,7 +19,7 @@ enum PreserveTransform {
 }
 
 #[derive(Debug, Default)]
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub(crate) struct ModelNode {
     /// ModelNode is a superclass of a PandaNode, so we include its data here
     pub node: PandaNode,

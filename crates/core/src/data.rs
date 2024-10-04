@@ -15,13 +15,17 @@ use std::{
 
 /// Error conditions for when reading/writing data.
 #[derive(Debug, Snafu)]
-pub enum Error {
+#[non_exhaustive]
+pub enum DataError {
     /// Thrown if reading/writing tries to go out of bounds.
     #[snafu(display("Tried to read out-of-bounds"))]
     EndOfFile,
     /// Thrown if UTF-8 validation fails when trying to convert a slice.
     #[snafu(display("Invalid UTF-8 sequence"))]
-    InvalidUtf8,
+    InvalidStr { source: core::str::Utf8Error },
+    /// Thrown if UTF-8 validation fails when trying to convert a slice.
+    #[snafu(display("Invalid UTF-8 sequence"))]
+    InvalidString { source: alloc::string::FromUtf8Error },
     /// Thrown when an I/O operation fails on a [`ByteStream`].
     #[cfg(feature = "std")]
     #[snafu(display("I/O error: {}", source))]
@@ -30,6 +34,7 @@ pub enum Error {
 
 /// Represents the endianness of the data being read or written.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Endian {
     Little,
     Big,
@@ -61,27 +66,27 @@ pub trait EndianExt {
 /// Trait for types that support seeking operations.
 pub trait SeekExt {
     /// Returns the current position.
-    fn position(&mut self) -> Result<usize, Error>;
+    fn position(&mut self) -> usize;
 
     /// Sets the current position.
     ///
     /// # Errors
     /// Returns an error if the position cannot be set.
-    fn set_position(&mut self, position: usize) -> Result<usize, Error>;
+    fn set_position(&mut self, position: usize) -> Result<usize, DataError>;
 
     /// Returns the total length of the data.
     ///
     /// # Errors
     /// Returns an error if unable to determine the length of the stream.
-    fn len(&mut self) -> Result<usize, Error>;
+    fn len(&mut self) -> Result<usize, DataError>;
 
     /// Returns `true` if the remaining data is empty.
     ///
     /// # Errors
     /// Returns an error if unable to determine either the length of the stream or the position inside it.
     #[inline]
-    fn is_empty(&mut self) -> Result<bool, Error> {
-        Ok(self.len()? - self.position()? == 0)
+    fn is_empty(&mut self) -> Result<bool, DataError> {
+        Ok(self.len()?.saturating_sub(self.position()) == 0)
     }
 }
 
@@ -91,38 +96,38 @@ pub trait ReadExt: EndianExt {
     ///
     /// # Errors
     /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds.
-    fn read_exact<const N: usize>(&mut self) -> Result<[u8; N], Error>;
+    fn read_exact<const N: usize>(&mut self) -> Result<[u8; N], DataError>;
 
     /// Attempts to fill the buffer with data.
     ///
     /// # Errors
     /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds.
-    fn read_length(&mut self, buffer: &mut [u8]) -> Result<usize, Error>;
+    fn read_length(&mut self, buffer: &mut [u8]) -> Result<usize, DataError>;
 
     /// Reads a slice of the given length from the current position.
     ///
     /// # Errors
     /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds.
     #[cfg(not(feature = "alloc"))]
-    fn read_slice(&mut self, length: usize) -> Result<&[u8], Error>;
+    fn read_slice(&mut self, length: usize) -> Result<&[u8], DataError>;
 
     /// Reads a slice of the given length from the current position.
     ///
     /// # Errors
     /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds.
     #[cfg(feature = "alloc")]
-    fn read_slice(&mut self, length: usize) -> Result<Cow<[u8]>, Error>;
+    fn read_slice(&mut self, length: usize) -> Result<Cow<[u8]>, DataError>;
 
     /// Reads a UTF-8 encoded string of the given length from the current position.
     ///
     /// # Errors
     /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds.
-    /// Returns [`InvalidUtf8`](Error::InvalidUtf8) if the bytes are not valid UTF-8.
+    /// Returns [`InvalidStr`](Error::InvalidStr) if the bytes are not valid UTF-8.
     #[inline]
     #[cfg(not(feature = "alloc"))]
-    fn read_string(&mut self, length: usize) -> Result<&str, Error> {
+    fn read_string(&mut self, length: usize) -> Result<&str, DataError> {
         let slice = self.read_slice(length)?;
-        core::str::from_utf8(slice).map_err(|_| Error::InvalidUtf8)
+        core::str::from_utf8(slice).context(InvalidStrSnafu)
     }
 
     /// Returns the remaining data from the current position.
@@ -130,29 +135,27 @@ pub trait ReadExt: EndianExt {
     /// # Errors
     /// Returns an error if the remaining data cannot be read.
     #[cfg(not(feature = "alloc"))]
-    fn remaining_slice(&mut self) -> Result<&[u8], Error>;
+    fn remaining_slice(&mut self) -> Result<&[u8], DataError>;
 
     /// Returns the remaining data from the current position.
     ///
     /// # Errors
     /// Returns an error if the remaining data cannot be read.
     #[cfg(feature = "alloc")]
-    fn remaining_slice(&mut self) -> Result<Cow<[u8]>, Error>;
+    fn remaining_slice(&mut self) -> Result<Cow<[u8]>, DataError>;
 
     /// Reads a UTF-8 encoded string of the given length from the current position.
     ///
     /// # Errors
     /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds.
-    /// Returns [`InvalidUtf8`](Error::InvalidUtf8) if the bytes are not valid UTF-8.
+    /// Returns [`InvalidStr`](Error::InvalidStr) if the bytes are not valid UTF-8.
     #[inline]
     #[cfg(feature = "alloc")]
-    fn read_string(&mut self, length: usize) -> Result<Cow<str>, Error> {
+    fn read_string(&mut self, length: usize) -> Result<Cow<str>, DataError> {
         let slice = self.read_slice(length)?;
         match slice {
-            Cow::Borrowed(bytes) => {
-                core::str::from_utf8(bytes).map(Cow::Borrowed).map_err(|_| Error::InvalidUtf8)
-            }
-            Cow::Owned(bytes) => String::from_utf8(bytes).map(Cow::Owned).map_err(|_| Error::InvalidUtf8),
+            Cow::Borrowed(bytes) => core::str::from_utf8(bytes).map(Cow::Borrowed).context(InvalidStrSnafu),
+            Cow::Owned(bytes) => String::from_utf8(bytes).map(Cow::Owned).context(InvalidStringSnafu),
         }
     }
 
@@ -161,7 +164,7 @@ pub trait ReadExt: EndianExt {
     /// # Errors
     /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds.
     #[inline]
-    fn read_u8(&mut self) -> Result<u8, Error> {
+    fn read_u8(&mut self) -> Result<u8, DataError> {
         Ok(self.read_exact::<1>()?[0])
     }
 
@@ -170,7 +173,7 @@ pub trait ReadExt: EndianExt {
     /// # Errors
     /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds.
     #[inline]
-    fn read_i8(&mut self) -> Result<i8, Error> {
+    fn read_i8(&mut self) -> Result<i8, DataError> {
         Ok(self.read_u8()? as i8)
     }
 
@@ -179,7 +182,7 @@ pub trait ReadExt: EndianExt {
     /// # Errors
     /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds.
     #[inline]
-    fn read_u16(&mut self) -> Result<u16, Error> {
+    fn read_u16(&mut self) -> Result<u16, DataError> {
         let bytes = self.read_exact()?;
         Ok(match self.endian() {
             Endian::Little => u16::from_le_bytes(bytes),
@@ -192,7 +195,7 @@ pub trait ReadExt: EndianExt {
     /// # Errors
     /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds.
     #[inline]
-    fn read_i16(&mut self) -> Result<i16, Error> {
+    fn read_i16(&mut self) -> Result<i16, DataError> {
         Ok(self.read_u16()? as i16)
     }
 
@@ -201,7 +204,7 @@ pub trait ReadExt: EndianExt {
     /// # Errors
     /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds.
     #[inline]
-    fn read_u32(&mut self) -> Result<u32, Error> {
+    fn read_u32(&mut self) -> Result<u32, DataError> {
         let bytes = self.read_exact()?;
         Ok(match self.endian() {
             Endian::Little => u32::from_le_bytes(bytes),
@@ -214,7 +217,7 @@ pub trait ReadExt: EndianExt {
     /// # Errors
     /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds.
     #[inline]
-    fn read_i32(&mut self) -> Result<i32, Error> {
+    fn read_i32(&mut self) -> Result<i32, DataError> {
         Ok(self.read_u32()? as i32)
     }
 
@@ -223,7 +226,7 @@ pub trait ReadExt: EndianExt {
     /// # Errors
     /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds.
     #[inline]
-    fn read_u64(&mut self) -> Result<u64, Error> {
+    fn read_u64(&mut self) -> Result<u64, DataError> {
         let bytes = self.read_exact()?;
         Ok(match self.endian() {
             Endian::Little => u64::from_le_bytes(bytes),
@@ -236,7 +239,7 @@ pub trait ReadExt: EndianExt {
     /// # Errors
     /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds.
     #[inline]
-    fn read_i64(&mut self) -> Result<i64, Error> {
+    fn read_i64(&mut self) -> Result<i64, DataError> {
         Ok(self.read_u64()? as i64)
     }
 
@@ -245,7 +248,7 @@ pub trait ReadExt: EndianExt {
     /// # Errors
     /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds.
     #[inline]
-    fn read_f32(&mut self) -> Result<f32, Error> {
+    fn read_f32(&mut self) -> Result<f32, DataError> {
         let bytes = self.read_exact()?;
         Ok(match self.endian() {
             Endian::Little => f32::from_le_bytes(bytes),
@@ -258,7 +261,7 @@ pub trait ReadExt: EndianExt {
     /// # Errors
     /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds.
     #[inline]
-    fn read_f64(&mut self) -> Result<f64, Error> {
+    fn read_f64(&mut self) -> Result<f64, DataError> {
         let bytes = self.read_exact()?;
         Ok(match self.endian() {
             Endian::Little => f64::from_le_bytes(bytes),
@@ -273,14 +276,14 @@ pub trait WriteExt: EndianExt {
     ///
     /// # Errors
     /// Returns an error if the write operation fails.
-    fn write_exact<const N: usize>(&mut self, bytes: &[u8; N]) -> Result<(), Error>;
+    fn write_exact<const N: usize>(&mut self, bytes: &[u8; N]) -> Result<(), DataError>;
 
     /// Writes an unsigned 8-bit integer.
     ///
     /// # Errors
     /// Returns an error if the write operation fails.
     #[inline]
-    fn write_u8(&mut self, value: u8) -> Result<(), Error> {
+    fn write_u8(&mut self, value: u8) -> Result<(), DataError> {
         self.write_exact(&[value])
     }
 
@@ -289,7 +292,7 @@ pub trait WriteExt: EndianExt {
     /// # Errors
     /// Returns an error if the write operation fails.
     #[inline]
-    fn write_i8(&mut self, value: i8) -> Result<(), Error> {
+    fn write_i8(&mut self, value: i8) -> Result<(), DataError> {
         self.write_u8(value as u8)
     }
 
@@ -298,7 +301,7 @@ pub trait WriteExt: EndianExt {
     /// # Errors
     /// Returns an error if the write operation fails.
     #[inline]
-    fn write_u16(&mut self, value: u16) -> Result<(), Error> {
+    fn write_u16(&mut self, value: u16) -> Result<(), DataError> {
         let bytes = match self.endian() {
             Endian::Little => value.to_le_bytes(),
             Endian::Big => value.to_be_bytes(),
@@ -311,7 +314,7 @@ pub trait WriteExt: EndianExt {
     /// # Errors
     /// Returns an error if the write operation fails.
     #[inline]
-    fn write_i16(&mut self, value: i16) -> Result<(), Error> {
+    fn write_i16(&mut self, value: i16) -> Result<(), DataError> {
         self.write_u16(value as u16)
     }
 
@@ -320,7 +323,7 @@ pub trait WriteExt: EndianExt {
     /// # Errors
     /// Returns an error if the write operation fails.
     #[inline]
-    fn write_u32(&mut self, value: u32) -> Result<(), Error> {
+    fn write_u32(&mut self, value: u32) -> Result<(), DataError> {
         let bytes = match self.endian() {
             Endian::Little => value.to_le_bytes(),
             Endian::Big => value.to_be_bytes(),
@@ -333,7 +336,7 @@ pub trait WriteExt: EndianExt {
     /// # Errors
     /// Returns an error if the write operation fails.
     #[inline]
-    fn write_i32(&mut self, value: i32) -> Result<(), Error> {
+    fn write_i32(&mut self, value: i32) -> Result<(), DataError> {
         self.write_u32(value as u32)
     }
 
@@ -342,7 +345,7 @@ pub trait WriteExt: EndianExt {
     /// # Errors
     /// Returns an error if the write operation fails.
     #[inline]
-    fn write_u64(&mut self, value: u64) -> Result<(), Error> {
+    fn write_u64(&mut self, value: u64) -> Result<(), DataError> {
         let bytes = match self.endian() {
             Endian::Little => value.to_le_bytes(),
             Endian::Big => value.to_be_bytes(),
@@ -355,7 +358,7 @@ pub trait WriteExt: EndianExt {
     /// # Errors
     /// Returns an error if the write operation fails.
     #[inline]
-    fn write_i64(&mut self, value: i64) -> Result<(), Error> {
+    fn write_i64(&mut self, value: i64) -> Result<(), DataError> {
         self.write_u64(value as u64)
     }
 
@@ -364,7 +367,7 @@ pub trait WriteExt: EndianExt {
     /// # Errors
     /// Returns an error if the write operation fails.
     #[inline]
-    fn write_f32(&mut self, value: f32) -> Result<(), Error> {
+    fn write_f32(&mut self, value: f32) -> Result<(), DataError> {
         let bytes = match self.endian() {
             Endian::Little => value.to_le_bytes(),
             Endian::Big => value.to_be_bytes(),
@@ -377,7 +380,7 @@ pub trait WriteExt: EndianExt {
     /// # Errors
     /// Returns an error if the write operation fails.
     #[inline]
-    fn write_f64(&mut self, value: f64) -> Result<(), Error> {
+    fn write_f64(&mut self, value: f64) -> Result<(), DataError> {
         let bytes = match self.endian() {
             Endian::Little => value.to_le_bytes(),
             Endian::Big => value.to_be_bytes(),
@@ -415,12 +418,14 @@ impl DataCursor {
 
     /// Consumes the `DataCursor` and returns the underlying data.
     #[inline]
+    #[must_use]
     pub fn into_inner(self) -> Box<[u8]> {
         self.data
     }
 
     /// Shrinks the underlying data to the new length and returns the modified `DataCursor`.
     #[inline]
+    #[must_use]
     pub fn shrink_to(mut self, new_len: usize) -> Self {
         // If the user tries to expand, just keep the current length.
         if new_len < self.data.len() {
@@ -437,12 +442,11 @@ impl DataCursor {
     /// Copies data from this `DataCursor` to another mutable slice.
     #[inline]
     pub fn copy_data_to(&self, other: &mut [u8]) {
-        let other_slice = other.as_mut();
-        let len = self.data.len().min(other_slice.len());
+        let len = self.data.len().min(other.len());
         // SAFETY: We have a valid length, other cannot overlap self since there's no way to acquire a mutable
         // reference, and we will always have a valid alignment.
         unsafe {
-            core::ptr::copy_nonoverlapping(self.data.as_ptr(), other_slice.as_mut_ptr(), len);
+            core::ptr::copy_nonoverlapping(self.data.as_ptr(), other.as_mut_ptr(), len);
         }
     }
 
@@ -460,14 +464,23 @@ impl DataCursor {
     /// Returns [`EndOfFile`](Error::EndOfFile) if either the source range or the destination
     /// range would be out of bounds.
     #[inline]
-    pub fn copy_within(&mut self, src: core::ops::Range<usize>, dest: usize) -> Result<(), Error> {
-        let length = src.end - src.start;
+    pub fn copy_within(&mut self, src: core::ops::Range<usize>, dest: usize) -> Result<(), DataError> {
+        let length = src.end.saturating_sub(src.start);
         ensure!(
-            src.end <= self.data.len() && dest + length <= self.data.len(),
+            src.end <= self.data.len() && dest.saturating_add(length) <= self.data.len(),
             EndOfFileSnafu
         );
 
-        if !src.contains(&dest) {
+        if src.contains(&dest) {
+            for i in 0..length {
+                // SAFETY: We want specific behavior if the ranges overlap, due to how Yaz0 compression works.
+                // Both ranges are within bounds and have a valid alignment.
+                unsafe {
+                    *self.data.as_mut_ptr().add(dest.saturating_add(i)) =
+                        *self.data.as_ptr().add(src.start.saturating_add(i));
+                }
+            }
+        } else {
             // SAFETY: Both ranges are within bounds, do not overlap, and have a valid alignment.
             unsafe {
                 core::ptr::copy_nonoverlapping(
@@ -475,14 +488,6 @@ impl DataCursor {
                     self.data.as_mut_ptr().add(dest),
                     length,
                 );
-            }
-        } else {
-            // SAFETY: We want specific behavior if they do overlap, due to how Yaz0 compression works. Both
-            // ranges are within bounds and have a valid alignment.
-            for i in 0..length {
-                unsafe {
-                    *self.data.as_mut_ptr().add(dest + i) = *self.data.as_ptr().add(src.start + i);
-                }
             }
         }
         Ok(())
@@ -503,44 +508,45 @@ impl EndianExt for DataCursor {
 
 impl SeekExt for DataCursor {
     #[inline]
-    fn position(&mut self) -> Result<usize, Error> {
-        Ok(self.position)
+    fn position(&mut self) -> usize {
+        self.position
     }
 
     #[inline]
-    fn set_position(&mut self, position: usize) -> Result<usize, Error> {
+    fn set_position(&mut self, position: usize) -> Result<usize, DataError> {
         self.position = position.min(self.data.len());
         Ok(self.position)
     }
 
     #[inline]
-    fn len(&mut self) -> Result<usize, Error> {
+    fn len(&mut self) -> Result<usize, DataError> {
         Ok(self.data.len())
     }
 }
 
 impl ReadExt for DataCursor {
     #[inline]
-    fn read_exact<const N: usize>(&mut self) -> Result<[u8; N], Error> {
-        ensure!(self.position + N <= self.data.len(), EndOfFileSnafu);
+    fn read_exact<const N: usize>(&mut self) -> Result<[u8; N], DataError> {
+        ensure!(self.position.saturating_add(N) <= self.data.len(), EndOfFileSnafu);
 
+        let mut result: MaybeUninit<[u8; N]> = MaybeUninit::uninit();
         // SAFETY: We're within bounds of `self.data` and will always have a valid alignment. We use
         // MaybeUninit here to skip some overhead when we immediately overwrite it with new data.
-        let mut result: MaybeUninit<[u8; N]> = MaybeUninit::uninit();
         unsafe {
             core::ptr::copy_nonoverlapping(
                 self.data.as_ptr().add(self.position),
-                result.as_mut_ptr() as *mut u8,
+                result.as_mut_ptr().cast(),
                 N,
             );
         }
-        self.position += N;
+        self.position = self.position.saturating_add(N);
+        // SAFETY: We've initialized this data, so this is safe.
         Ok(unsafe { result.assume_init() })
     }
 
     #[inline]
-    fn read_length(&mut self, buffer: &mut [u8]) -> Result<usize, Error> {
-        let length = buffer.len().min(self.data.len() - self.position);
+    fn read_length(&mut self, buffer: &mut [u8]) -> Result<usize, DataError> {
+        let length = buffer.len().min(self.data.len().saturating_sub(self.position));
 
         // SAFETY: We're within the bounds of both `buf` and `self.data`, and will always have a valid
         // alignment. There is no way to get a mutable reference to the inner data, so buffer cannot overlap.
@@ -548,14 +554,17 @@ impl ReadExt for DataCursor {
             let src_ptr = self.data.as_ptr().add(self.position);
             core::ptr::copy_nonoverlapping(src_ptr, buffer.as_mut_ptr(), length);
         }
-        self.position += length;
+        self.position = self.position.saturating_add(length);
         Ok(length)
     }
 
     #[inline]
     #[cfg(not(feature = "alloc"))]
-    fn read_slice(&mut self, length: usize) -> Result<&[u8], Error> {
-        ensure!(self.position + length <= self.data.len(), EndOfFileSnafu);
+    fn read_slice(&mut self, length: usize) -> Result<&[u8], DataError> {
+        ensure!(
+            self.position.saturating_add(length) <= self.data.len(),
+            EndOfFileSnafu
+        );
 
         // SAFETY: We're within bounds of `self.data` and will always have a valid alignment.
         let result = unsafe {
@@ -568,25 +577,28 @@ impl ReadExt for DataCursor {
 
     #[inline]
     #[cfg(feature = "alloc")]
-    fn read_slice(&mut self, length: usize) -> Result<Cow<[u8]>, Error> {
-        ensure!(self.position + length <= self.data.len(), EndOfFileSnafu);
+    fn read_slice(&mut self, length: usize) -> Result<Cow<[u8]>, DataError> {
+        ensure!(
+            self.position.saturating_add(length) <= self.data.len(),
+            EndOfFileSnafu
+        );
 
         // SAFETY: We're within bounds of `self.data` and will always have a valid alignment.
         let result = unsafe {
             let ptr = self.data.as_ptr().add(self.position);
             core::slice::from_raw_parts(ptr, length)
         };
-        self.position += length;
+        self.position = self.position.saturating_add(length);
         Ok(Cow::Borrowed(result))
     }
 
     #[inline]
     #[cfg(not(feature = "alloc"))]
-    fn remaining_slice(&mut self) -> Result<&[u8], Error> {
+    fn remaining_slice(&mut self) -> Result<&[u8], DataError> {
         // SAFETY: We're within bounds since we're reading to the end, and will always have a valid alignment.
         let result = unsafe {
             let ptr = self.data.as_ptr().add(self.position);
-            core::slice::from_raw_parts(ptr, self.data.len() - self.position)
+            core::slice::from_raw_parts(ptr, self.data.len().saturating_sub(self.position))
         };
         self.position = self.data.len();
         Ok(result)
@@ -594,11 +606,11 @@ impl ReadExt for DataCursor {
 
     #[inline]
     #[cfg(feature = "alloc")]
-    fn remaining_slice(&mut self) -> Result<Cow<[u8]>, Error> {
+    fn remaining_slice(&mut self) -> Result<Cow<[u8]>, DataError> {
         // SAFETY: We're within bounds since we're reading to the end, and will always have a valid alignment.
         let result = unsafe {
             let ptr = self.data.as_ptr().add(self.position);
-            core::slice::from_raw_parts(ptr, self.data.len() - self.position)
+            core::slice::from_raw_parts(ptr, self.data.len().saturating_sub(self.position))
         };
         self.position = self.data.len();
         Ok(Cow::Borrowed(result))
@@ -607,8 +619,8 @@ impl ReadExt for DataCursor {
 
 impl WriteExt for DataCursor {
     #[inline]
-    fn write_exact<const N: usize>(&mut self, bytes: &[u8; N]) -> Result<(), Error> {
-        ensure!(self.position + N <= self.data.len(), EndOfFileSnafu);
+    fn write_exact<const N: usize>(&mut self, bytes: &[u8; N]) -> Result<(), DataError> {
+        ensure!(self.position.saturating_add(N) <= self.data.len(), EndOfFileSnafu);
 
         // SAFETY: We're within the bounds of `self.data`, `bytes` will always be valid, and we'll always have
         // a valid alignment.
@@ -616,7 +628,7 @@ impl WriteExt for DataCursor {
             let dst_ptr = self.data.as_mut_ptr().add(self.position);
             core::ptr::copy_nonoverlapping(bytes.as_ptr(), dst_ptr, N);
         }
-        self.position += N;
+        self.position = self.position.saturating_add(N);
         Ok(())
     }
 }
@@ -672,12 +684,14 @@ pub struct DataCursorRef<'a> {
 impl<'a> DataCursorRef<'a> {
     /// Creates a new `DataCursorRef` with the given data and endianness.
     #[inline]
+    #[must_use]
     pub fn new(data: &'a [u8], endian: Endian) -> Self {
         Self { data, position: 0, endian }
     }
 
     /// Consumes the `DataCursorRef` and returns the underlying data.
     #[inline]
+    #[must_use]
     pub fn into_inner(self) -> &'a [u8] {
         self.data
     }
@@ -685,12 +699,11 @@ impl<'a> DataCursorRef<'a> {
     /// Copies data from this `DataCursorRef` to a mutable slice.
     #[inline]
     pub fn copy_data_to(&self, other: &mut [u8]) {
-        let other_slice = other.as_mut();
-        let len = self.data.len().min(other_slice.len());
+        let len = self.data.len().min(other.len());
         // SAFETY: We have a valid length, other cannot overlap self since there's no way to acquire a mutable
         // reference, and we will always have a valid alignment.
         unsafe {
-            core::ptr::copy_nonoverlapping(self.data.as_ptr(), other_slice.as_mut_ptr(), len);
+            core::ptr::copy_nonoverlapping(self.data.as_ptr(), other.as_mut_ptr(), len);
         }
     }
 }
@@ -709,44 +722,45 @@ impl EndianExt for DataCursorRef<'_> {
 
 impl SeekExt for DataCursorRef<'_> {
     #[inline]
-    fn position(&mut self) -> Result<usize, Error> {
-        Ok(self.position)
+    fn position(&mut self) -> usize {
+        self.position
     }
 
     #[inline]
-    fn set_position(&mut self, position: usize) -> Result<usize, Error> {
+    fn set_position(&mut self, position: usize) -> Result<usize, DataError> {
         self.position = position.min(self.data.len());
         Ok(self.position)
     }
 
     #[inline]
-    fn len(&mut self) -> Result<usize, Error> {
+    fn len(&mut self) -> Result<usize, DataError> {
         Ok(self.data.len())
     }
 }
 
 impl ReadExt for DataCursorRef<'_> {
     #[inline]
-    fn read_exact<const N: usize>(&mut self) -> Result<[u8; N], Error> {
-        ensure!(self.position + N <= self.data.len(), EndOfFileSnafu);
+    fn read_exact<const N: usize>(&mut self) -> Result<[u8; N], DataError> {
+        ensure!(self.position.saturating_add(N) <= self.data.len(), EndOfFileSnafu);
 
+        let mut result: MaybeUninit<[u8; N]> = MaybeUninit::uninit();
         // SAFETY: We're within bounds of `self.data` and will always have a valid alignment. We use
         // MaybeUninit here to skip some overhead when we immediately overwrite it with new data.
-        let mut result: MaybeUninit<[u8; N]> = MaybeUninit::uninit();
         unsafe {
             core::ptr::copy_nonoverlapping(
                 self.data.as_ptr().add(self.position),
-                result.as_mut_ptr() as *mut u8,
+                result.as_mut_ptr().cast(),
                 N,
             );
         }
-        self.position += N;
+        self.position = self.position.saturating_add(N);
+        // SAFETY: We've initialized this with data, so it's safe.
         Ok(unsafe { result.assume_init() })
     }
 
     #[inline]
-    fn read_length(&mut self, buffer: &mut [u8]) -> Result<usize, Error> {
-        let length = buffer.len().min(self.data.len() - self.position);
+    fn read_length(&mut self, buffer: &mut [u8]) -> Result<usize, DataError> {
+        let length = buffer.len().min(self.data.len().saturating_sub(self.position));
 
         // SAFETY: We're within the bounds of both `buf` and `self.data`, and will always have a valid
         // alignment. There is no way to get a mutable reference to the inner data, so buffer cannot overlap.
@@ -754,14 +768,17 @@ impl ReadExt for DataCursorRef<'_> {
             let src_ptr = self.data.as_ptr().add(self.position);
             core::ptr::copy_nonoverlapping(src_ptr, buffer.as_mut_ptr(), length);
         }
-        self.position += length;
+        self.position = self.position.saturating_add(length);
         Ok(length)
     }
 
     #[inline]
     #[cfg(not(feature = "alloc"))]
-    fn read_slice(&mut self, length: usize) -> Result<&[u8], Error> {
-        ensure!(self.position + length <= self.data.len(), EndOfFileSnafu);
+    fn read_slice(&mut self, length: usize) -> Result<&[u8], DataError> {
+        ensure!(
+            self.position.saturating_add(length) <= self.data.len(),
+            EndOfFileSnafu
+        );
 
         // SAFETY: We're within bounds of `self.data` and will always have a valid alignment.
         let result = unsafe {
@@ -774,25 +791,28 @@ impl ReadExt for DataCursorRef<'_> {
 
     #[inline]
     #[cfg(feature = "alloc")]
-    fn read_slice(&mut self, length: usize) -> Result<Cow<[u8]>, Error> {
-        ensure!(self.position + length <= self.data.len(), EndOfFileSnafu);
+    fn read_slice(&mut self, length: usize) -> Result<Cow<[u8]>, DataError> {
+        ensure!(
+            self.position.saturating_add(length) <= self.data.len(),
+            EndOfFileSnafu
+        );
 
         // SAFETY: We're within bounds of `self.data` and will always have a valid alignment.
         let result = unsafe {
             let ptr = self.data.as_ptr().add(self.position);
             core::slice::from_raw_parts(ptr, length)
         };
-        self.position += length;
+        self.position = self.position.saturating_add(length);
         Ok(Cow::Borrowed(result))
     }
 
     #[inline]
     #[cfg(not(feature = "alloc"))]
-    fn remaining_slice(&mut self) -> Result<&[u8], Error> {
+    fn remaining_slice(&mut self) -> Result<&[u8], DataError> {
         // SAFETY: We're within bounds since we're reading to the end, and will always have a valid alignment.
         let result = unsafe {
             let ptr = self.data.as_ptr().add(self.position);
-            core::slice::from_raw_parts(ptr, self.data.len() - self.position)
+            core::slice::from_raw_parts(ptr, self.data.len().saturating_sub(self.position))
         };
         self.position = self.data.len();
         Ok(result)
@@ -800,11 +820,11 @@ impl ReadExt for DataCursorRef<'_> {
 
     #[inline]
     #[cfg(feature = "alloc")]
-    fn remaining_slice(&mut self) -> Result<Cow<[u8]>, Error> {
+    fn remaining_slice(&mut self) -> Result<Cow<[u8]>, DataError> {
         // SAFETY: We're within bounds since we're reading to the end, and will always have a valid alignment.
         let result = unsafe {
             let ptr = self.data.as_ptr().add(self.position);
-            core::slice::from_raw_parts(ptr, self.data.len() - self.position)
+            core::slice::from_raw_parts(ptr, self.data.len().saturating_sub(self.position))
         };
         self.position = self.data.len();
         Ok(Cow::Borrowed(result))
@@ -814,6 +834,7 @@ impl ReadExt for DataCursorRef<'_> {
 impl Deref for DataCursorRef<'_> {
     type Target = [u8];
 
+    #[inline]
     fn deref(&self) -> &Self::Target {
         self.data
     }
@@ -838,6 +859,7 @@ impl<'a> DataCursorMut<'a> {
 
     /// Consumes the `DataCursorMut` and returns the underlying data.
     #[inline]
+    #[must_use]
     pub fn into_inner(self) -> &'a mut [u8] {
         self.data
     }
@@ -845,11 +867,10 @@ impl<'a> DataCursorMut<'a> {
     /// Copies data from this `DataCursorMut` to another mutable slice.
     #[inline]
     pub fn copy_data_to(&self, other: &mut [u8]) {
-        let other_slice = other.as_mut();
-        let len = self.data.len().min(other_slice.len());
+        let len = self.data.len().min(other.len());
         // SAFETY: We're within bounds of both slices, and they don't overlap.
         unsafe {
-            core::ptr::copy_nonoverlapping(self.data.as_ptr(), other_slice.as_mut_ptr(), len);
+            core::ptr::copy_nonoverlapping(self.data.as_ptr(), other.as_mut_ptr(), len);
         }
     }
 
@@ -868,14 +889,23 @@ impl<'a> DataCursorMut<'a> {
     /// Returns [`EndOfFile`](Error::EndOfFile) if either the source range or the destination
     /// range would be out of bounds.
     #[inline]
-    pub fn copy_within(&mut self, src: core::ops::Range<usize>, dest: usize) -> Result<(), Error> {
-        let length = src.end - src.start;
+    pub fn copy_within(&mut self, src: core::ops::Range<usize>, dest: usize) -> Result<(), DataError> {
+        let length = src.end.saturating_sub(src.start);
         ensure!(
-            src.end <= self.data.len() && dest + length <= self.data.len(),
+            src.end <= self.data.len() && dest.saturating_add(length) <= self.data.len(),
             EndOfFileSnafu
         );
 
-        if !src.contains(&dest) {
+        if src.contains(&dest) {
+            for i in 0..length {
+                // SAFETY: We want specific behavior if they do overlap, due to how Yaz0 compression works.
+                // Both ranges are within bounds and have a valid alignment.
+                unsafe {
+                    *self.data.as_mut_ptr().add(dest.saturating_add(i)) =
+                        *self.data.as_ptr().add(src.start.saturating_add(i));
+                }
+            }
+        } else {
             // SAFETY: Both ranges are within bounds, do not overlap, and have a valid alignment.
             unsafe {
                 core::ptr::copy_nonoverlapping(
@@ -883,14 +913,6 @@ impl<'a> DataCursorMut<'a> {
                     self.data.as_mut_ptr().add(dest),
                     length,
                 );
-            }
-        } else {
-            // SAFETY: We want specific behavior if they do overlap, due to how Yaz0 compression works. Both
-            // ranges are within bounds and have a valid alignment.
-            for i in 0..length {
-                unsafe {
-                    *self.data.as_mut_ptr().add(dest + i) = *self.data.as_ptr().add(src.start + i);
-                }
             }
         }
         Ok(())
@@ -911,44 +933,45 @@ impl EndianExt for DataCursorMut<'_> {
 
 impl SeekExt for DataCursorMut<'_> {
     #[inline]
-    fn position(&mut self) -> Result<usize, Error> {
-        Ok(self.position)
+    fn position(&mut self) -> usize {
+        self.position
     }
 
     #[inline]
-    fn set_position(&mut self, position: usize) -> Result<usize, Error> {
+    fn set_position(&mut self, position: usize) -> Result<usize, DataError> {
         self.position = position.min(self.data.len());
         Ok(self.position)
     }
 
     #[inline]
-    fn len(&mut self) -> Result<usize, Error> {
+    fn len(&mut self) -> Result<usize, DataError> {
         Ok(self.data.len())
     }
 }
 
 impl ReadExt for DataCursorMut<'_> {
     #[inline]
-    fn read_exact<const N: usize>(&mut self) -> Result<[u8; N], Error> {
-        ensure!(self.position + N <= self.data.len(), EndOfFileSnafu);
+    fn read_exact<const N: usize>(&mut self) -> Result<[u8; N], DataError> {
+        ensure!(self.position.saturating_add(N) <= self.data.len(), EndOfFileSnafu);
 
+        let mut result: MaybeUninit<[u8; N]> = MaybeUninit::uninit();
         // SAFETY: We're within bounds of `self.data` and will always have a valid alignment. We use
         // MaybeUninit here to skip some overhead when we immediately overwrite it with new data.
-        let mut result: MaybeUninit<[u8; N]> = MaybeUninit::uninit();
         unsafe {
             core::ptr::copy_nonoverlapping(
                 self.data.as_ptr().add(self.position),
-                result.as_mut_ptr() as *mut u8,
+                result.as_mut_ptr().cast(),
                 N,
             );
         }
-        self.position += N;
+        self.position = self.position.saturating_add(N);
+        // SAFETY: We've initialized this with data, so it's safe.
         Ok(unsafe { result.assume_init() })
     }
 
     #[inline]
-    fn read_length(&mut self, buffer: &mut [u8]) -> Result<usize, Error> {
-        let length = buffer.len().min(self.data.len() - self.position);
+    fn read_length(&mut self, buffer: &mut [u8]) -> Result<usize, DataError> {
+        let length = buffer.len().min(self.data.len().saturating_sub(self.position));
 
         // SAFETY: We're within the bounds of both `buf` and `self.data`, and will always have a valid
         // alignment. There is no way to get a mutable reference to the inner data, so buffer cannot overlap.
@@ -956,14 +979,17 @@ impl ReadExt for DataCursorMut<'_> {
             let src_ptr = self.data.as_ptr().add(self.position);
             core::ptr::copy_nonoverlapping(src_ptr, buffer.as_mut_ptr(), length);
         }
-        self.position += length;
+        self.position = self.position.saturating_add(length);
         Ok(length)
     }
 
     #[inline]
     #[cfg(not(feature = "alloc"))]
-    fn read_slice(&mut self, length: usize) -> Result<&[u8], Error> {
-        ensure!(self.position + length <= self.data.len(), EndOfFileSnafu);
+    fn read_slice(&mut self, length: usize) -> Result<&[u8], DataError> {
+        ensure!(
+            self.position.saturating_add(length) <= self.data.len(),
+            EndOfFileSnafu
+        );
 
         // SAFETY: We're within bounds of `self.data` and will always have a valid alignment.
         let result = unsafe {
@@ -976,25 +1002,28 @@ impl ReadExt for DataCursorMut<'_> {
 
     #[inline]
     #[cfg(feature = "alloc")]
-    fn read_slice(&mut self, length: usize) -> Result<Cow<[u8]>, Error> {
-        ensure!(self.position + length <= self.data.len(), EndOfFileSnafu);
+    fn read_slice(&mut self, length: usize) -> Result<Cow<[u8]>, DataError> {
+        ensure!(
+            self.position.saturating_add(length) <= self.data.len(),
+            EndOfFileSnafu
+        );
 
         // SAFETY: We're within bounds of `self.data` and will always have a valid alignment.
         let result = unsafe {
             let ptr = self.data.as_ptr().add(self.position);
             core::slice::from_raw_parts(ptr, length)
         };
-        self.position += length;
+        self.position = self.position.saturating_add(length);
         Ok(Cow::Borrowed(result))
     }
 
     #[inline]
     #[cfg(not(feature = "alloc"))]
-    fn remaining_slice(&mut self) -> Result<&[u8], Error> {
+    fn remaining_slice(&mut self) -> Result<&[u8], DataError> {
         // SAFETY: We're within bounds since we're reading to the end, and will always have a valid alignment.
         let result = unsafe {
             let ptr = self.data.as_ptr().add(self.position);
-            core::slice::from_raw_parts(ptr, self.data.len() - self.position)
+            core::slice::from_raw_parts(ptr, self.data.len().saturating_sub(self.position))
         };
         self.position = self.data.len();
         Ok(result)
@@ -1002,11 +1031,11 @@ impl ReadExt for DataCursorMut<'_> {
 
     #[inline]
     #[cfg(feature = "alloc")]
-    fn remaining_slice(&mut self) -> Result<Cow<[u8]>, Error> {
+    fn remaining_slice(&mut self) -> Result<Cow<[u8]>, DataError> {
         // SAFETY: We're within bounds since we're reading to the end, and will always have a valid alignment.
         let result = unsafe {
             let ptr = self.data.as_ptr().add(self.position);
-            core::slice::from_raw_parts(ptr, self.data.len() - self.position)
+            core::slice::from_raw_parts(ptr, self.data.len().saturating_sub(self.position))
         };
         self.position = self.data.len();
         Ok(Cow::Borrowed(result))
@@ -1015,8 +1044,8 @@ impl ReadExt for DataCursorMut<'_> {
 
 impl WriteExt for DataCursorMut<'_> {
     #[inline]
-    fn write_exact<const N: usize>(&mut self, bytes: &[u8; N]) -> Result<(), Error> {
-        ensure!(self.position + N <= self.data.len(), EndOfFileSnafu);
+    fn write_exact<const N: usize>(&mut self, bytes: &[u8; N]) -> Result<(), DataError> {
+        ensure!(self.position.saturating_add(N) <= self.data.len(), EndOfFileSnafu);
 
         // SAFETY: We're within the bounds of `self.data`, `bytes` will always be valid, and we'll always have
         // a valid alignment.
@@ -1024,7 +1053,7 @@ impl WriteExt for DataCursorMut<'_> {
             let dst_ptr = self.data.as_mut_ptr().add(self.position);
             core::ptr::copy_nonoverlapping(bytes.as_ptr(), dst_ptr, N);
         }
-        self.position += N;
+        self.position = self.position.saturating_add(N);
         Ok(())
     }
 }
@@ -1086,14 +1115,14 @@ impl<T> EndianExt for ByteStream<T> {
 
 impl<T: Seek> SeekExt for ByteStream<T> {
     #[inline]
-    fn position(&mut self) -> Result<usize, Error> {
-        Ok(self.position.try_into().unwrap())
+    fn position(&mut self) -> usize {
+        self.position as usize
     }
 
     #[inline]
-    fn set_position(&mut self, position: usize) -> Result<usize, Error> {
+    fn set_position(&mut self, position: usize) -> Result<usize, DataError> {
         self.position = self.inner.seek(SeekFrom::Start(position as u64)).context(IoSnafu)?;
-        Ok(position.try_into().unwrap())
+        Ok(self.position as usize)
     }
 
     /// Returns the total length of the data.
@@ -1104,7 +1133,7 @@ impl<T: Seek> SeekExt for ByteStream<T> {
     /// # Errors
     /// Returns an error if unable to determine the length of the stream.
     #[inline]
-    fn len(&mut self) -> Result<usize, Error> {
+    fn len(&mut self) -> Result<usize, DataError> {
         let length = self.inner.seek(SeekFrom::End(0)).context(IoSnafu)?;
 
         // Avoid seeking a third time when we were already at the end of the
@@ -1113,21 +1142,21 @@ impl<T: Seek> SeekExt for ByteStream<T> {
             self.inner.seek(SeekFrom::Start(self.position)).context(IoSnafu)?;
         }
 
-        Ok(length.try_into().unwrap())
+        Ok(length as usize)
     }
 }
 
 impl<T: Read> ReadExt for ByteStream<T> {
     #[inline]
-    fn read_exact<const N: usize>(&mut self) -> Result<[u8; N], Error> {
+    fn read_exact<const N: usize>(&mut self) -> Result<[u8; N], DataError> {
         let mut buffer = [0u8; N];
         self.inner.read_exact(&mut buffer).context(IoSnafu)?;
-        self.position += N as u64;
+        self.position = self.position.saturating_add(N as u64);
         Ok(buffer)
     }
 
     #[inline]
-    fn read_length(&mut self, buffer: &mut [u8]) -> Result<usize, Error> {
+    fn read_length(&mut self, buffer: &mut [u8]) -> Result<usize, DataError> {
         match self.inner.read_exact(buffer) {
             Ok(()) => {
                 self.position = buffer.len() as u64;
@@ -1135,35 +1164,35 @@ impl<T: Read> ReadExt for ByteStream<T> {
             }
             Err(e) if e.kind() == ErrorKind::UnexpectedEof => {
                 let actually_read = self.inner.read(buffer).context(IoSnafu)?;
-                self.position += actually_read as u64;
+                self.position = self.position.saturating_add(actually_read as u64);
                 Ok(actually_read)
             }
-            Err(e) => Err(Error::Io { source: e }),
+            Err(e) => Err(DataError::Io { source: e }),
         }
     }
 
     #[inline]
-    fn read_slice(&mut self, length: usize) -> Result<Cow<[u8]>, Error> {
+    fn read_slice(&mut self, length: usize) -> Result<Cow<[u8]>, DataError> {
         let mut buffer = vec![0u8; length];
-        self.inner.read_exact(&mut buffer).map_err(|_| Error::EndOfFile)?;
-        self.position += length as u64;
+        self.inner.read_exact(&mut buffer).context(IoSnafu)?;
+        self.position = self.position.saturating_add(length as u64);
         Ok(Cow::Owned(buffer))
     }
 
     #[inline]
-    fn remaining_slice(&mut self) -> Result<Cow<[u8]>, Error> {
+    fn remaining_slice(&mut self) -> Result<Cow<[u8]>, DataError> {
         let mut buffer = Vec::new();
         self.inner.read_to_end(&mut buffer).context(IoSnafu)?;
-        self.position += buffer.len() as u64;
+        self.position = self.position.saturating_add(buffer.len() as u64);
         Ok(Cow::Owned(buffer))
     }
 }
 
 impl<T: Write> WriteExt for ByteStream<T> {
     #[inline]
-    fn write_exact<const N: usize>(&mut self, bytes: &[u8; N]) -> Result<(), Error> {
-        self.inner.write_all(bytes).map_err(|_| Error::EndOfFile)?;
-        self.position += N as u64;
+    fn write_exact<const N: usize>(&mut self, bytes: &[u8; N]) -> Result<(), DataError> {
+        self.inner.write_all(bytes).context(IoSnafu)?;
+        self.position = self.position.saturating_add(N as u64);
         Ok(())
     }
 }
@@ -1171,12 +1200,14 @@ impl<T: Write> WriteExt for ByteStream<T> {
 impl<T> Deref for ByteStream<T> {
     type Target = T;
 
+    #[inline]
     fn deref(&self) -> &Self::Target {
         &self.inner
     }
 }
 
 impl<T> DerefMut for ByteStream<T> {
+    #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.inner
     }

@@ -10,7 +10,6 @@ pub(crate) enum ColorType {
 }
 
 #[derive(Debug, Default)]
-#[allow(dead_code)]
 pub(crate) struct ColorAttrib {
     pub color_type: ColorType,
     pub color: Vec4,

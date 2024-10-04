@@ -70,11 +70,11 @@ impl From<std::io::Error> for Error {
     }
 }
 
-impl From<data::Error> for Error {
+impl From<DataError> for Error {
     #[inline]
-    fn from(error: data::Error) -> Self {
+    fn from(error: DataError) -> Self {
         match error {
-            data::Error::EndOfFile => Self::EndOfFile,
+            DataError::EndOfFile => Self::EndOfFile,
             _ => panic!("Unexpected data::error! Something has gone horribly wrong"),
         }
     }
@@ -276,10 +276,10 @@ impl BinaryAsset {
             //println!("Filling in {} from {:#X}", type_name, data.position());
             self.fillin(data, &type_name)?;
         }
-        if data.position()? != data.len()? {
+        if data.position() != data.len()? {
             println!(
                 "Finished at {:#X}, Data size {:#X}\n",
-                data.position()?,
+                data.position(),
                 data.len()?
             );
         }

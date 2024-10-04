@@ -1,7 +1,7 @@
 use super::prelude::*;
 
 #[derive(Debug)]
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub(crate) enum PandaObject {
     AnimBundle(AnimBundle),
     AnimBundleNode(AnimBundleNode),

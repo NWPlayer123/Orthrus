@@ -2,7 +2,7 @@ use super::geom_enums::AnimationType;
 use super::prelude::*;
 
 #[derive(Default, Debug)]
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub(crate) struct GeomVertexAnimationSpec {
     animation_type: AnimationType,
     num_transforms: u16,

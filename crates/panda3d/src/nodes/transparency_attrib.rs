@@ -21,7 +21,6 @@ pub(crate) enum TransparencyMode {
 }
 
 #[derive(Debug, Default)]
-#[allow(dead_code)]
 pub(crate) struct TransparencyAttrib {
     pub mode: TransparencyMode,
 }

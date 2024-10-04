@@ -53,7 +53,7 @@ impl Identifier {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ByteOrderMark(u16);
 
-#[allow(non_upper_case_globals)]
+#[expect(non_upper_case_globals)]
 impl ByteOrderMark {
     pub const Big: ByteOrderMark = ByteOrderMark(0xFEFF);
     pub const Little: ByteOrderMark = ByteOrderMark(0xFFFE);
@@ -332,7 +332,7 @@ impl Read for StreamSoundExtension {
             stream_type_info: data.read_u32()?,
             loop_start_frame: data.read_u32()?,
             loop_end_frame: data.read_u32()?,
-            temp_position: data.position()? - 8,
+            temp_position: data.position() - 8,
         })
     }
 }
@@ -354,7 +354,7 @@ struct StreamTrackInfo {
 impl Read for StreamTrackInfo {
     fn read<T: ReadExt + SeekExt>(data: &mut T) -> Result<Self> {
         // Save our relative position
-        let offset = data.position()?;
+        let offset = data.position();
 
         let mut info = Self::default();
         info.volume = data.read_u8()?;
@@ -379,7 +379,7 @@ impl Read for StreamTrackInfo {
         }
 
         // Now we need to align, and theoretically that's where send_value is
-        let position = data.position()?;
+        let position = data.position();
         data.set_position((position + 3) & !3)?;
 
         data.set_position(offset + send_value_ref.offset as usize)?;
@@ -403,7 +403,7 @@ struct StreamSoundInfo {
 impl Read for StreamSoundInfo {
     fn read<T: ReadExt + SeekExt>(data: &mut T) -> Result<Self> {
         // Save relative position
-        let offset = data.position()?;
+        let offset = data.position();
 
         let mut info = Self::default();
 
@@ -748,7 +748,7 @@ impl SoundInfo {
 
 impl Read for SoundInfo {
     fn read<T: ReadExt + SeekExt>(data: &mut T) -> Result<Self> {
-        let readback = data.position()?;
+        let readback = data.position();
 
         let file_id = data.read_u32()?;
         let player_id = data.read_u32()?;
@@ -762,7 +762,7 @@ impl Read for SoundInfo {
 
         let mut info = Self { file_id, player_id, volume, filter, options, ..Default::default() };
 
-        let position = data.position()?;
+        let position = data.position();
 
         info.read_string_id(data, position);
         info.read_pan_mode(data, position);
@@ -806,7 +806,7 @@ impl StringBlock {
 
     fn read_string_table<T: ReadExt + SeekExt>(data: &mut T) -> Result<Vec<String>> {
         // Store relative position
-        let offset = data.position()?;
+        let offset = data.position();
 
         // Read in the reference table
         let references: Vec<SizedReference> = Table::read(data)?;
@@ -821,7 +821,8 @@ impl StringBlock {
 
                     // Read the string and store it, includes the trailing \0
                     let string = data.read_slice(reference.size as usize)?.to_vec();
-                    strings.push(String::from_utf8(string).map_err(|_| data::Error::InvalidUtf8)?);
+                    strings
+                        .push(String::from_utf8(string).map_err(|source| DataError::InvalidString { source })?);
                 }
                 _ => InvalidDataSnafu { reason: "Unexpected String Identifier!" }.fail()?,
             }
@@ -841,7 +842,7 @@ impl Read for StringBlock {
         );
 
         // Store the relative position for all offsets
-        let offset = data.position()?;
+        let offset = data.position();
 
         // Read both sections
         let mut sections: [Reference; 2] = Default::default();
@@ -885,7 +886,7 @@ impl InfoBlock {
         let _header = SectionHeader::read(data)?;
 
         // Store relative position
-        let offset = data.position()?;
+        let offset = data.position();
 
         let mut info = Self::default();
 
@@ -960,7 +961,6 @@ impl BFSAR {
     pub const MAGIC: [u8; 4] = *b"FSAR";
 
     #[inline]
-    #[allow(dead_code)]
     fn read_header<T: ReadExt + SeekExt>(data: &mut T) -> Result<BinaryHeader> {
         // Read the header
         let header = BinaryHeader::read(data)?;
@@ -1015,7 +1015,7 @@ impl BFSAR {
         }
 
         // Align to a 32-byte boundary
-        let position = data.position()?;
+        let position = data.position();
         data.set_position((position + 31) & !31)?;
 
         // Then read all the section data

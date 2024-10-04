@@ -13,7 +13,6 @@ bitflags! {
 }
 
 #[derive(Debug, Default)]
-#[allow(dead_code)]
 pub(crate) struct CollisionSolid {
     pub flags: Flags,
     pub effective_normal: Vec3,

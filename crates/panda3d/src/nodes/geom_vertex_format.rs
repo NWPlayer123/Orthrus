@@ -1,7 +1,7 @@
 use super::prelude::*;
 
 #[derive(Debug, Default)]
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub(crate) struct GeomVertexFormat {
     pub animation: GeomVertexAnimationSpec,
     /// References to all GeomVertexArrayFormat data

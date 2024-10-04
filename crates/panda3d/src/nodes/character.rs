@@ -1,7 +1,7 @@
 use super::prelude::*;
 
 #[derive(Debug, Default)]
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub(crate) struct Character {
     pub node: PartBundleNode,
     pub temp_part_refs: Vec<u32>,

@@ -1,7 +1,7 @@
 use super::prelude::*;
 
 #[derive(Debug, Default)]
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub(crate) struct GeomVertexArrayFormat {
     pub stride: u16,
     pub total_bytes: u16,

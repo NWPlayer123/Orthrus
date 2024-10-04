@@ -1,7 +1,7 @@
 use super::prelude::*;
 
 #[derive(Default, Debug)]
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub(crate) struct BillboardEffect {
     off: bool,
     up_vector: Vec3,

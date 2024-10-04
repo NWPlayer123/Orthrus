@@ -1,14 +1,12 @@
 use super::prelude::*;
 
 #[derive(Clone, Copy, Debug, Default)]
-#[allow(dead_code)]
 pub(crate) struct TransformEntry {
     pub transform_ref: u32,
     pub weight: f32,
 }
 
 #[derive(Debug, Default)]
-#[allow(dead_code)]
 pub(crate) struct TransformBlend {
     pub entries: Vec<TransformEntry>,
 }

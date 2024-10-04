@@ -43,7 +43,6 @@ pub(crate) enum FilterType {
 }
 
 #[derive(Debug)]
-#[allow(dead_code)]
 pub(crate) struct SamplerState {
     pub wrap_u: WrapMode,
     pub wrap_v: WrapMode,

@@ -145,17 +145,16 @@ impl From<std::io::Error> for Error {
     }
 }
 
-impl From<data::Error> for Error {
+impl From<DataError> for Error {
     #[inline]
-    fn from(error: data::Error) -> Self {
+    fn from(error: DataError) -> Self {
         match error {
-            data::Error::EndOfFile => Self::EndOfFile,
+            DataError::EndOfFile => Self::EndOfFile,
             _ => panic!("Unexpected data::error! Something has gone horribly wrong"),
         }
     }
 }
 
-#[allow(dead_code)]
 struct Header {
     version: Version,
     scale_factor: u32,
@@ -170,7 +169,6 @@ struct Header {
 ///
 /// For more details on the Multifile format, see the [module documentation](self#format).
 #[derive(Debug)]
-#[allow(dead_code)]
 pub struct Multifile {
     data: DataCursor,
     files: Vec<Subfile>,
@@ -216,7 +214,6 @@ impl Multifile {
     /// Multifile, or [`UnknownVersion`](Error::UnknownVersion) if the Multifile version is
     /// too new to be supported.
     #[inline]
-    #[allow(dead_code)]
     fn read_header<T: ReadExt>(data: &mut T) -> Result<Header> {
         //Read the magic and make sure we're actually parsing a Multifile
         let mut magic = [0u8; 6];

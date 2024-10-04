@@ -1,7 +1,7 @@
 use super::prelude::*;
 
 #[derive(Debug, Default)]
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub(crate) struct MovingPartBase {
     pub group: PartGroup,
     pub forced_channel_ref: Option<u32>,

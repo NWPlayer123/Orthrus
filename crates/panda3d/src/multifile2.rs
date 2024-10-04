@@ -25,11 +25,11 @@ pub enum Error {
     UnknownVersion,
 }
 
-impl From<data::Error> for Error {
+impl From<DataError> for Error {
     #[inline]
-    fn from(error: data::Error) -> Self {
+    fn from(error: DataError) -> Self {
         match error {
-            data::Error::EndOfFile => Self::EndOfFile,
+            DataError::EndOfFile => Self::EndOfFile,
             _ => todo!(),
         }
     }
@@ -62,7 +62,7 @@ pub struct MultifileHeader {
     timestamp: u32,
 }
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub struct Multifile {
     header: MultifileHeader,
     files: BTreeMap<String, Subfile>,
@@ -281,7 +281,7 @@ impl SubfileHeader {
     }
 }
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 struct Subfile {
     attributes: Attributes,
     original_length: u32,

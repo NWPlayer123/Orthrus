@@ -2,7 +2,7 @@ use super::collision_solid::Flags;
 use super::prelude::*;
 
 #[derive(Debug, Default)]
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub(crate) struct CollisionCapsule {
     flags: Flags,
     effective_normal: Vec3,

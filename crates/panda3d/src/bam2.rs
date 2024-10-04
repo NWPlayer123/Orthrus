@@ -9,7 +9,7 @@ pub enum Error {
     ReadFile { source: std::io::Error, path: String },
 }
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub struct BinaryAsset {
     data: Vec<u8>,
 }

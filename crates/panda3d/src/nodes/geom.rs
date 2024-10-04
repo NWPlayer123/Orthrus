@@ -1,7 +1,7 @@
 use super::prelude::*;
 
 #[derive(Debug, Default)]
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub(crate) struct Geom {
     /// Reference to the associated GeomVertexData
     pub data_ref: u32,

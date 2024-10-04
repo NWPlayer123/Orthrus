@@ -1,7 +1,7 @@
 use super::prelude::*;
 
 #[derive(Debug, Default)]
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub(crate) struct Switch {
     start: f32,
     end: f32,
@@ -17,7 +17,7 @@ impl Switch {
 }
 
 #[derive(Debug, Default)]
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub(crate) struct LODNode {
     node: PandaNode,
     center: Vec3,

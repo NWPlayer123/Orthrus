@@ -11,7 +11,7 @@ pub(crate) enum BlendType {
 }
 
 #[derive(Debug, Default)]
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub(crate) struct PartBundle {
     pub group: PartGroup,
     anim_preload_ref: Option<u32>,

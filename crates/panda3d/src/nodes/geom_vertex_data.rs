@@ -1,7 +1,7 @@
 use super::prelude::*;
 
 #[derive(Debug, Default)]
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub(crate) struct GeomVertexData {
     pub name: String, //_name
     /// Reference to the associated GeomVertexFormat that defines the current data

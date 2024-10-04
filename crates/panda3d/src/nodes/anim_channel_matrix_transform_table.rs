@@ -1,7 +1,6 @@
 use super::prelude::*;
 
 #[derive(Debug, Default)]
-#[allow(dead_code)]
 pub(crate) struct AnimChannelMatrixXfmTable {
     pub matrix: AnimChannelMatrix,
     pub tables: [Vec<f32>; 12],

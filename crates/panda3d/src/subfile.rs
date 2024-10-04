@@ -36,7 +36,6 @@ bitflags! {
 ///
 /// For more details on the Multifile format, see the [module documentation](self#format).
 #[derive(Default, Debug)]
-#[allow(dead_code)]
 pub struct Subfile {
     pub(crate) offset: u32,
     pub(crate) length: u32,
@@ -55,7 +54,6 @@ impl Subfile {
     ///
     /// # Errors
     /// Returns [`EndOfFile`] if it tries to read out of bounds.
-    #[allow(dead_code)]
     pub(crate) fn load<T: ReadExt>(input: &mut T, version: Version) -> Result<Self> {
         let offset = input.read_u32()?;
         let data_length = input.read_u32()?;

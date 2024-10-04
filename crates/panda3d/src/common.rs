@@ -28,7 +28,7 @@ impl<'a> Datagram<'a> {
     #[inline]
     pub(crate) fn new<T: ReadExt>(
         data: &'a mut T, endian: Endian, float_type: bool,
-    ) -> Result<Self, data::Error> {
+    ) -> Result<Self, DataError> {
         let length = data.read_u32()? as usize;
         let data = match data.read_slice(length)? {
             Cow::Borrowed(data) => data,
@@ -37,14 +37,14 @@ impl<'a> Datagram<'a> {
         Ok(Self { cursor: DataCursorRef::new(&data, endian), float_type })
     }
 
-    pub(crate) fn read_string(&mut self) -> Result<String, data::Error> {
+    pub(crate) fn read_string(&mut self) -> Result<String, DataError> {
         let length = self.cursor.read_u16()?;
         let slice = self.cursor.read_slice(length.into())?;
-        let string = core::str::from_utf8(&slice).map_err(|_| data::Error::InvalidUtf8)?;
+        let string = core::str::from_utf8(&slice).map_err(|source| DataError::InvalidStr { source })?;
         Ok(string.to_owned())
     }
 
-    pub(crate) fn read_float(&mut self) -> Result<f32, data::Error> {
+    pub(crate) fn read_float(&mut self) -> Result<f32, DataError> {
         if self.float_type == true {
             Ok(self.cursor.read_f64()? as f32)
         } else {
@@ -52,7 +52,7 @@ impl<'a> Datagram<'a> {
         }
     }
 
-    pub(crate) fn read_bool(&mut self) -> Result<bool, data::Error> {
+    pub(crate) fn read_bool(&mut self) -> Result<bool, DataError> {
         Ok(self.cursor.read_u8()? != 0)
     }
 }

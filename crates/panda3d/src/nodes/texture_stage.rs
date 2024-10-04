@@ -72,7 +72,7 @@ enum CombineOperand {
 }
 
 #[derive(Debug, Default)]
-#[allow(dead_code)]
+#[expect(dead_code)]
 struct CombineConfig {
     mode: CombineMode,
     num_operands: u8,
@@ -123,7 +123,7 @@ impl CombineConfig {
 }
 
 #[derive(Debug)]
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub(crate) struct TextureStage {
     pub name: String,
     sort: i32,

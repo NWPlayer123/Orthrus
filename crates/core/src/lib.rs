@@ -7,12 +7,12 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(feature = "alloc")]
-#[allow(unused_imports)] //TODO: verify no_std again
+#[expect(unused_imports, reason = "TODO: verify no_std still works")]
 mod no_std {
     extern crate alloc;
-    pub use alloc::boxed::Box;
-    pub use alloc::format;
-    pub use alloc::string::String;
+    use alloc::boxed::Box;
+    use alloc::format;
+    use alloc::string::String;
 }
 
 pub mod prelude;

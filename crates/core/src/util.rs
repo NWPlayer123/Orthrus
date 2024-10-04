@@ -12,6 +12,7 @@ use crate::no_std::*;
 /// This function uses f64, which on a 64-bit system will lose precision if the length is too large,
 /// but it should still round to a close-enough value.
 #[must_use]
+#[inline]
 pub fn format_size(length: usize) -> String {
     const UNITS: [&str; 7] = ["bytes", "KB", "MB", "GB", "TB", "PB", "EB"];
     let mut size = length as f64;

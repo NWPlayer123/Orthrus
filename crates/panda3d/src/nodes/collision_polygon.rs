@@ -1,7 +1,7 @@
 use super::prelude::*;
 
 #[derive(Debug, Default)]
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub(crate) struct CollisionPolygon {
     plane: CollisionPlane,
     points: Vec<(Vec2, Vec2)>,

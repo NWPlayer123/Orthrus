@@ -1,7 +1,6 @@
 use super::prelude::*;
 
 #[derive(Debug, Default)]
-#[allow(dead_code)]
 pub(crate) struct RenderState {
     /// This stores a pointer to each RenderAttrib and its associated override value
     pub attrib_refs: Vec<(u32, i32)>,

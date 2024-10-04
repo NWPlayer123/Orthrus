@@ -1,7 +1,7 @@
 use super::prelude::*;
 
 #[derive(Debug, Default)]
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub(crate) struct SparseArray {
     subranges: Vec<(i32, i32)>,
     inverse: bool,

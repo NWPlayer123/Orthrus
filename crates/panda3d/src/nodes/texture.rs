@@ -151,7 +151,7 @@ enum ComponentType {
 }
 
 #[derive(Debug, Default)]
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub(crate) struct Texture {
     pub name: String,
     pub filename: String,
@@ -186,7 +186,7 @@ pub(crate) struct TextureBody {
 }
 
 #[derive(Debug, Default)]
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub(crate) struct TextureData {
     size: UVec3,
     pad_size: UVec3,
@@ -348,7 +348,7 @@ impl Texture {
         })
     }
 
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub fn has_simple_ram_image(&self) -> bool {
         !self.body.image.is_empty()
     }

@@ -5,7 +5,7 @@
 //! use orthrus_nintendoware::prelude::*;
 //! ```
 
-#[allow(non_snake_case)]
+#[expect(non_snake_case)]
 pub mod Switch {
     #[doc(inline)]
     pub use crate::switch::BFSAR;

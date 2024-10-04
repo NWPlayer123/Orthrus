@@ -1,4 +1,3 @@
-#[allow(unused_imports)]
 pub(crate) mod prelude;
 
 pub(crate) mod dispatch;

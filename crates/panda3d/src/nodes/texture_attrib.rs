@@ -1,7 +1,7 @@
 use super::prelude::*;
 
 #[derive(Debug, Default)]
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub(crate) struct StageNode {
     pub sampler: Option<SamplerState>,
     /// Reference to the associated TextureStage data
@@ -51,7 +51,7 @@ impl StageNode {
 }
 
 #[derive(Debug, Default)]
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub(crate) struct TextureAttrib {
     pub off_all_stages: bool,
     /// References to associated TextureStage data

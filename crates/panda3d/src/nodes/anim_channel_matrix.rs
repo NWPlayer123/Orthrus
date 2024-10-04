@@ -2,7 +2,7 @@ use super::prelude::*;
 
 // This is technically a generic but I don't feel like making one
 #[derive(Debug, Default)]
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub(crate) struct AnimChannelMatrix {
     pub group: AnimGroup,
     pub last_frame: u16,

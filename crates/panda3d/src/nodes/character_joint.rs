@@ -1,7 +1,7 @@
 use super::prelude::*;
 
 #[derive(Debug, Default)]
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub(crate) struct CharacterJoint {
     pub matrix: MovingPartMatrix,
     pub character_ref: Option<u32>,
