@@ -7,7 +7,7 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-snafu = { version = "0.8", default-features = false }
+snafu = { version = "0.8", default-features = false, features = ["rust_1_81"] }
 
 # Required for time module
 time = { version = "0.3", features = ["local-offset"], optional = true }
@@ -18,6 +18,7 @@ x509-cert = { version = "0.2", optional = true }
 
 [features]
 default = ["std"]
-std = []
+alloc = []
+std = ["alloc", "snafu/std", "time?/std"]
 time = ["dep:time"]
 certificate = ["der", "x509-cert"]

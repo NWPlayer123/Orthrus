@@ -15,7 +15,7 @@ use bevy_pbr::prelude::*;
 use bevy_pbr::{ExtendedMaterial, MaterialExtension};
 use bevy_reflect::prelude::*;
 use bevy_render::mesh::skinning::{SkinnedMesh, SkinnedMeshInverseBindposes};
-use bevy_render::mesh::{Indices, MeshVertexBufferLayoutRef, PrimitiveTopology, VertexAttributeValues};
+use bevy_render::mesh::{Indices, MeshVertexBufferLayoutRef, PrimitiveTopology};
 use bevy_render::prelude::*;
 use bevy_render::render_asset::RenderAssetUsages;
 use bevy_render::render_resource::*;
@@ -613,7 +613,7 @@ impl BinaryAsset {
     }
 
     async fn create_mesh(
-        &self, world: &mut World, entity: Entity, primitive_node: &PandaObject, primitive: &GeomPrimitive,
+        &self, world: &mut World, _entity: Entity, primitive_node: &PandaObject, primitive: &GeomPrimitive,
         vertex_data: &GeomVertexData, vertex_format: &GeomVertexFormat, joint_data: Option<&SkinnedMesh>,
     ) -> Mesh {
         let topology = match primitive_node {
@@ -647,7 +647,7 @@ impl BinaryAsset {
                     assert!(internal_name.name == "index");
 
                     let mut data = DataCursorRef::new(&array_data.buffer, Endian::Little);
-                    let mut indices = Vec::with_capacity(data.len() / 2);
+                    let mut indices = Vec::with_capacity(data.len().unwrap() / 2);
                     for _ in 0..indices.capacity() {
                         indices.push(data.read_u16().unwrap());
                     }
@@ -698,7 +698,7 @@ impl BinaryAsset {
                     // Then, build an array with the expected data
                     let mut vertex_data = Vec::with_capacity(num_primitives);
                     for n in 0..num_primitives {
-                        data.set_position(column.start as usize + (array_format.stride as usize * n));
+                        data.set_position(column.start as usize + (array_format.stride as usize * n)).unwrap();
 
                         vertex_data.push([
                             data.read_f32().unwrap(),
@@ -718,7 +718,7 @@ impl BinaryAsset {
                     // Then, build an array with the expected data
                     let mut normal_data = Vec::with_capacity(num_primitives);
                     for n in 0..num_primitives {
-                        data.set_position(column.start as usize + (array_format.stride as usize * n));
+                        data.set_position(column.start as usize + (array_format.stride as usize * n)).unwrap();
 
                         normal_data.push([
                             data.read_f32().unwrap(),
@@ -738,7 +738,7 @@ impl BinaryAsset {
                     // Then, build an array with the expected data
                     let mut tangent_data = Vec::with_capacity(num_primitives);
                     for n in 0..num_primitives {
-                        data.set_position(column.start as usize + (array_format.stride as usize * n));
+                        data.set_position(column.start as usize + (array_format.stride as usize * n)).unwrap();
 
                         // TODO: calculate handedness using the binormal column? For now, just set it to +1.0
                         tangent_data.push([
@@ -783,7 +783,7 @@ impl BinaryAsset {
                     // Then, build an array with the expected data
                     let mut texcoord_data = Vec::with_capacity(num_primitives);
                     for n in 0..num_primitives {
-                        data.set_position(column.start as usize + (array_format.stride as usize * n));
+                        data.set_position(column.start as usize + (array_format.stride as usize * n)).unwrap();
 
                         // Panda3D stores flipped Y values to support OpenGL, so we do 1.0 - value.
                         texcoord_data.push([data.read_f32().unwrap(), 1.0 - data.read_f32().unwrap()]);
@@ -800,7 +800,7 @@ impl BinaryAsset {
                         // Then, build an array with the expected data
                         let mut color_data = Vec::with_capacity(num_primitives);
                         for n in 0..num_primitives {
-                            data.set_position(column.start as usize + (array_format.stride as usize * n));
+                            data.set_position(column.start as usize + (array_format.stride as usize * n)).unwrap();
 
                             let color = data.read_u32().unwrap();
                             let a = ((color >> 24) & 0xFF) as f32 / 255.0;
@@ -926,7 +926,7 @@ impl BinaryAsset {
                             // First, verify we're good to read the lookup table
                             assert!(column.numeric_type == NumericType::U16);
                             assert!(column.contents == Contents::Index);
-                            data.set_position(column.start as usize + (array_format.stride as usize * n));
+                            data.set_position(column.start as usize + (array_format.stride as usize * n)).unwrap();
 
                             // Then, let's write the blend data
                             let lookup_id = data.read_u16().unwrap();
@@ -936,12 +936,12 @@ impl BinaryAsset {
 
                         // In order to correctly render, the SkinnedMesh needs to be on this specific entity,
                         // so add it now that we know we need it.
-                        mesh.insert_attribute(
+                        /*mesh.insert_attribute(
                             Mesh::ATTRIBUTE_JOINT_INDEX,
                             VertexAttributeValues::Uint16x4(blend_lookup),
-                        );
-                        mesh.insert_attribute(Mesh::ATTRIBUTE_JOINT_WEIGHT, blend_table);
-                        world.entity_mut(entity).insert(joint_data.unwrap().clone());
+                        );*/
+                        //mesh.insert_attribute(Mesh::ATTRIBUTE_JOINT_WEIGHT, blend_table);
+                        //world.entity_mut(entity).insert(joint_data.unwrap().clone());
                     }
 
                     _ => panic!("Unexpected Vertex Type! {} {:?}", internal_name.name, column),

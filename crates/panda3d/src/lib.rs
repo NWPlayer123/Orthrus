@@ -24,3 +24,8 @@ pub mod common;
 pub mod prelude;
 
 mod nodes;
+
+pub mod bam2;
+mod nodes2;
+
+pub mod multifile2;

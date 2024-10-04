@@ -56,7 +56,7 @@ impl Subfile {
     /// # Errors
     /// Returns [`EndOfFile`] if it tries to read out of bounds.
     #[allow(dead_code)]
-    pub(crate) fn load<T: EndianRead>(input: &mut T, version: Version) -> Result<Self> {
+    pub(crate) fn load<T: ReadExt>(input: &mut T, version: Version) -> Result<Self> {
         let offset = input.read_u32()?;
         let data_length = input.read_u32()?;
         let flags = Flags::from_bits_truncate(input.read_u16()?);
@@ -73,8 +73,8 @@ impl Subfile {
 
         let name_length = input.read_u16()?;
         let mut filename = String::with_capacity(name_length.into());
-        for _ in 0..name_length {
-            filename.push((255 - input.read_u8()?) as char);
+        for c in &*input.read_slice(name_length.into())? {
+            filename.push((255 - *c).into());
         }
 
         Ok(Self { offset, length, flags, timestamp, filename })

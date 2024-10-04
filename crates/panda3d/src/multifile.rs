@@ -217,7 +217,7 @@ impl Multifile {
     /// too new to be supported.
     #[inline]
     #[allow(dead_code)]
-    fn read_header<T: DataCursorTrait + EndianRead>(data: &mut T) -> Result<Header> {
+    fn read_header<T: ReadExt>(data: &mut T) -> Result<Header> {
         //Read the magic and make sure we're actually parsing a Multifile
         let mut magic = [0u8; 6];
         data.read_length(&mut magic)?;
@@ -269,8 +269,8 @@ impl Multifile {
     #[inline]
     pub fn load<I: Into<Box<[u8]>>>(input: I, offset: usize) -> Result<Self> {
         let mut data = DataCursor::new(input, Endian::Little);
-        data.set_position(offset);
-        data.set_position(Self::parse_header_prefix(&data));
+        data.set_position(offset)?;
+        data.set_position(Self::parse_header_prefix(&data))?;
 
         let header = Self::read_header(&mut data)?;
         let mut multifile = Self {
@@ -291,7 +291,7 @@ impl Multifile {
 
             multifile.files.push(subfile);
 
-            multifile.data.set_position(next_index as usize);
+            multifile.data.set_position(next_index as usize)?;
             next_index = multifile.data.read_u32()? * header.scale_factor;
         }
 
@@ -313,8 +313,8 @@ impl Multifile {
         let mut saved_files = 0;
         for subfile in &mut self.files {
             if !subfile.flags.intersects(Flags::Signature | Flags::Compressed | Flags::Encrypted) {
-                self.data.set_position(subfile.offset as usize);
-                subfile.write_file(self.data.get_slice(subfile.length as usize)?, &output)?;
+                self.data.set_position(subfile.offset as usize)?;
+                subfile.write_file(&*self.data.read_slice(subfile.length as usize)?, &output)?;
                 saved_files += 1;
             }
         }
@@ -350,8 +350,8 @@ impl Multifile {
     pub fn extract_from<P: AsRef<Path>>(input: &[u8], output: P, offset: usize) -> Result<()> {
         //Use a DataCursorRef internally because it makes reading structured data a lot easier
         let mut data = DataCursorRef::new(input, Endian::Little);
-        data.set_position(offset);
-        data.set_position(Self::parse_header_prefix(&data));
+        data.set_position(offset)?;
+        data.set_position(Self::parse_header_prefix(&data))?;
 
         let header = Self::read_header(&mut data)?;
 
@@ -364,16 +364,16 @@ impl Multifile {
                 subfile.timestamp = header.timestamp;
             }
 
-            data.set_position(subfile.offset as usize);
+            data.set_position(subfile.offset as usize)?;
             if !subfile.flags.contains(Flags::Signature) {
-                subfile.write_file(data.get_slice(subfile.length as usize)?, &output)?;
+                subfile.write_file(&*data.read_slice(subfile.length as usize)?, &output)?;
             } /* else if cfg!(signature) {
                   println!("{:?}", subfile);
                   data.set_position(subfile.offset as usize);
                   Self::check_signatures(data.get_slice(subfile.length as usize)?)?;
               }*/
 
-            data.set_position(next_index as usize);
+            data.set_position(next_index as usize)?;
             next_index = data.read_u32()? * header.scale_factor;
         }
 

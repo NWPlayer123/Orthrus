@@ -10,12 +10,10 @@
 
 #[doc(inline)]
 pub use crate::data::{
-    DataCursor, DataCursorMut, DataCursorRef, DataCursorTrait, Endian, EndianRead, EndianWrite, SeekFrom,
+    ByteStream, DataCursor, DataCursorMut, DataCursorRef, Endian, EndianExt, ReadExt, SeekExt, WriteExt,
 };
 #[doc(inline)]
 pub use crate::identify::{FileIdentifier, FileInfo, IdentifyFn};
-#[doc(inline)]
-pub use crate::take::ByteStream;
 
 /// Includes [`data::Error`], which is used in Results returned by [`DataCursor`],
 /// [`DataCursorRef`], and [`DataCursorMut`].

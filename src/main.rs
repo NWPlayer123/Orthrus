@@ -1,3 +1,8 @@
+use mimalloc::MiMalloc;
+
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
+
 use std::io::prelude::*;
 use std::path::PathBuf;
 
@@ -136,7 +141,7 @@ fn main() -> Result<()> {
                         // Ideally I could log each file path as it's written but I would have
                         // to refactor Multifile to use slice_take
                         let output = data.output.unwrap_or_else(|| ".".to_string());
-                        Multifile::extract_from_path(data.input, output, 0)?;
+                        orthrus_panda3d::multifile2::Multifile::extract_from_file(data.input, output)?;
                     }
                     None => eprintln!("Please select exactly one operation!"),
                     _ => unreachable!("Oops! Forgot to cover all operations."),

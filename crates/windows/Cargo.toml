@@ -1,0 +1,18 @@
+[package]
+name = "orthrus-windows"
+version = "0.1.0"
+edition = "2021"
+description = "Orthrus module supporting Microsoft Windows formats"
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+orthrus-core = { version = "0.2", path = "../core" }
+
+snafu = { version = "0.8", default-features = false, features = ["rust_1_81"] }
+zerocopy = { version = "0.8" }
+bitflags = { version = "2.6" }
+
+[features]
+default = ["std"]
+std = ["snafu/std", "orthrus-core/std", "zerocopy/std"]

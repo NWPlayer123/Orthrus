@@ -276,11 +276,11 @@ impl BinaryAsset {
             //println!("Filling in {} from {:#X}", type_name, data.position());
             self.fillin(data, &type_name)?;
         }
-        if data.position() != data.len() {
+        if data.position()? != data.len()? {
             println!(
                 "Finished at {:#X}, Data size {:#X}\n",
-                data.position(),
-                data.len()
+                data.position()?,
+                data.len()?
             );
         }
         Ok(())
@@ -293,7 +293,7 @@ impl BinaryAsset {
         if !self.type_registry.contains_key(&type_handle) {
             //read_slice
             let length = data.read_u16()?;
-            let slice = data.get_slice(length as usize)?;
+            let slice = data.read_slice(length as usize)?;
 
             let type_name = core::str::from_utf8(&slice).map_err(|_| Error::InvalidType)?.to_owned();
             //println!("Registering Type {type_name} -> {type_handle}");

@@ -332,7 +332,7 @@ impl Texture {
             };
             let size = data.read_u32()?;
             let mut allocation = vec![0; size as usize];
-            allocation.copy_from_slice(data.get_slice(size as usize)?);
+            allocation.copy_from_slice(&data.read_slice(size as usize)?);
             ram_images.push((page_size, allocation));
         }
 

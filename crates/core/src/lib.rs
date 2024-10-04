@@ -4,11 +4,10 @@
 //! By default, this crate only enables modules which do not have any crate dependencies (aside from
 //! snafu, which is required for errors).
 
-//#![feature(const_slice_index)]
-
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg(not(feature = "std"))]
+#[cfg(feature = "alloc")]
+#[allow(unused_imports)] //TODO: verify no_std again
 mod no_std {
     extern crate alloc;
     pub use alloc::boxed::Box;
@@ -16,21 +15,19 @@ mod no_std {
     pub use alloc::string::String;
 }
 
-//Always have data enabled
-pub mod data;
+pub mod prelude;
 
+// Enable any crates that don't have dependencies by default
+pub mod data;
+pub mod util;
+
+#[cfg(feature = "std")]
+pub mod identify;
+
+// Optional crates
 #[cfg(feature = "certificate")]
 pub mod certificate;
 
 #[cfg(feature = "time")]
 pub mod time;
-
-pub mod util;
-
-pub mod prelude;
-
-pub mod take;
-
-#[cfg(feature = "std")]
-pub mod identify;
 

@@ -12,7 +12,7 @@ use snafu::prelude::*;
 use crate::error::*;
 
 trait Read {
-    fn read<T: DataCursorTrait + EndianRead>(data: &mut T) -> Result<Self>
+    fn read<T: ReadExt + SeekExt>(data: &mut T) -> Result<Self>
     where
         Self: Sized;
 }
@@ -83,7 +83,7 @@ pub struct Version {
 }
 
 impl Read for Version {
-    fn read<T: DataCursorTrait + EndianRead>(data: &mut T) -> Result<Self> {
+    fn read<T: ReadExt>(data: &mut T) -> Result<Self> {
         let mut version = Self::default();
         version.major = data.read_u8()?;
         version.minor = data.read_u8()?;
@@ -115,7 +115,7 @@ struct BinaryHeader {
 }
 
 impl Read for BinaryHeader {
-    fn read<T: DataCursorTrait + EndianRead>(data: &mut T) -> Result<Self> {
+    fn read<T: ReadExt + SeekExt>(data: &mut T) -> Result<Self> {
         // Create a header, so we can copy in its magic
         let mut header = Self::default();
 
@@ -136,7 +136,7 @@ impl Read for BinaryHeader {
         header.version = Version::read(data)?;
         header.file_size = data.read_u32()?;
         header.num_sections = data.read_u16()?;
-        data.seek(SeekFrom::Current(2))?; //Skip alignment
+        data.read_u16()?; // Skip alignment
 
         Ok(header)
     }
@@ -153,9 +153,9 @@ struct SizedReference {
 }
 
 impl Read for SizedReference {
-    fn read<T: DataCursorTrait + EndianRead>(data: &mut T) -> Result<Self> {
+    fn read<T: ReadExt>(data: &mut T) -> Result<Self> {
         let identifier = data.read_u16()?;
-        data.seek(SeekFrom::Current(2))?;
+        data.read_u16()?;
 
         let offset = data.read_u32()?;
         let size = data.read_u32()?;
@@ -172,9 +172,9 @@ struct Reference {
 }
 
 impl Read for Reference {
-    fn read<T: DataCursorTrait + EndianRead>(data: &mut T) -> Result<Self> {
+    fn read<T: ReadExt>(data: &mut T) -> Result<Self> {
         let identifier = data.read_u16()?;
-        data.seek(SeekFrom::Current(2))?;
+        data.read_u16()?;
 
         let offset = data.read_u32()?;
 
@@ -191,7 +191,7 @@ struct SectionHeader {
 }
 
 impl Read for SectionHeader {
-    fn read<T: DataCursorTrait + EndianRead>(data: &mut T) -> Result<Self> {
+    fn read<T: ReadExt>(data: &mut T) -> Result<Self> {
         let mut header = SectionHeader::default();
         data.read_length(&mut header.magic)?;
         header.size = data.read_u32()?;
@@ -207,7 +207,7 @@ struct Table<V: Read> {
 }
 
 impl<V: Read> Table<V> {
-    fn read<T: DataCursorTrait + EndianRead>(data: &mut T) -> Result<Vec<V>> {
+    fn read<T: ReadExt + SeekExt>(data: &mut T) -> Result<Vec<V>> {
         let count = data.read_u32()?;
 
         let mut values = Vec::with_capacity(count as usize);
@@ -232,7 +232,7 @@ struct PatriciaNode {
 }
 
 impl Read for PatriciaNode {
-    fn read<T: DataCursorTrait + EndianRead>(data: &mut T) -> Result<Self> {
+    fn read<T: ReadExt>(data: &mut T) -> Result<Self> {
         Ok(Self {
             flags: data.read_u16()?,
             search_index: data.read_u16()?,
@@ -288,7 +288,7 @@ impl PatriciaTree {
 }
 
 impl Read for PatriciaTree {
-    fn read<T: DataCursorTrait + EndianRead>(data: &mut T) -> Result<Self> {
+    fn read<T: ReadExt + SeekExt>(data: &mut T) -> Result<Self> {
         let mut tree = Self::default();
 
         // First, get the root index
@@ -310,7 +310,7 @@ struct SendValue {
 }
 
 impl Read for SendValue {
-    fn read<T: DataCursorTrait + EndianRead>(data: &mut T) -> Result<Self> {
+    fn read<T: ReadExt>(data: &mut T) -> Result<Self> {
         Ok(Self {
             main_send: data.read_u8()?,
             fx_send: [data.read_u8()?, data.read_u8()?, data.read_u8()?],
@@ -327,12 +327,12 @@ struct StreamSoundExtension {
 }
 
 impl Read for StreamSoundExtension {
-    fn read<T: DataCursorTrait + EndianRead>(data: &mut T) -> Result<Self> {
+    fn read<T: ReadExt + SeekExt>(data: &mut T) -> Result<Self> {
         Ok(Self {
             stream_type_info: data.read_u32()?,
             loop_start_frame: data.read_u32()?,
             loop_end_frame: data.read_u32()?,
-            temp_position: data.position() - 8,
+            temp_position: data.position()? - 8,
         })
     }
 }
@@ -352,9 +352,9 @@ struct StreamTrackInfo {
 }
 
 impl Read for StreamTrackInfo {
-    fn read<T: DataCursorTrait + EndianRead>(data: &mut T) -> Result<Self> {
+    fn read<T: ReadExt + SeekExt>(data: &mut T) -> Result<Self> {
         // Save our relative position
-        let offset = data.position();
+        let offset = data.position()?;
 
         let mut info = Self::default();
         info.volume = data.read_u8()?;
@@ -368,9 +368,9 @@ impl Read for StreamTrackInfo {
         info.lpf_freq = data.read_u8()?;
         info.biquad_type = data.read_u8()?;
         info.biquad_value = data.read_u8()?;
-        data.seek(SeekFrom::Current(1))?;
+        data.read_u8()?;
 
-        data.set_position(offset + global_channel_ref.offset as usize);
+        data.set_position(offset + global_channel_ref.offset as usize)?;
         // This is a raw type so I just do this manually instead of calling Table::read
         let index_count = data.read_u32()?;
         info.global_channel_indices = Vec::with_capacity(index_count as usize);
@@ -379,9 +379,10 @@ impl Read for StreamTrackInfo {
         }
 
         // Now we need to align, and theoretically that's where send_value is
-        data.set_position((data.position() + 3) & !3);
+        let position = data.position()?;
+        data.set_position((position + 3) & !3)?;
 
-        data.set_position(offset + send_value_ref.offset as usize);
+        data.set_position(offset + send_value_ref.offset as usize)?;
         info.send_value = SendValue::read(data)?;
 
         Ok(info)
@@ -400,9 +401,9 @@ struct StreamSoundInfo {
 }
 
 impl Read for StreamSoundInfo {
-    fn read<T: DataCursorTrait + EndianRead>(data: &mut T) -> Result<Self> {
+    fn read<T: ReadExt + SeekExt>(data: &mut T) -> Result<Self> {
         // Save relative position
-        let offset = data.position();
+        let offset = data.position()?;
 
         let mut info = Self::default();
 
@@ -421,7 +422,7 @@ impl Read for StreamSoundInfo {
         // Get the TrackInfo, which is a reference table to a bunch of StreamTrackInfos
         let track_table: Vec<Reference> = Table::read(data)?;
 
-        data.set_position(offset + track_info_ref.offset as usize);
+        data.set_position(offset + track_info_ref.offset as usize)?;
         // Pre-allocate and read all tracks in
         let mut tracks = Vec::with_capacity(track_table.len());
         for reference in &track_table {
@@ -435,10 +436,10 @@ impl Read for StreamSoundInfo {
 
         info.tracks = tracks;
 
-        data.set_position(offset + send_value_ref.offset as usize);
+        data.set_position(offset + send_value_ref.offset as usize)?;
         info.send_value = SendValue::read(data)?;
 
-        data.set_position(offset + extension_ref.offset as usize);
+        data.set_position(offset + extension_ref.offset as usize)?;
         info.extension = StreamSoundExtension::read(data)?;
 
         Ok(info)
@@ -538,14 +539,14 @@ struct Sound3DInfo {
 }
 
 impl Read for Sound3DInfo {
-    fn read<T: DataCursorTrait + EndianRead>(data: &mut T) -> Result<Self> {
+    fn read<T: ReadExt>(data: &mut T) -> Result<Self> {
         let mut info = Self::default();
 
         info.flags = Sound3DFlags::from_bits_truncate(data.read_u32()?);
         info.decay_ratio = data.read_f32()?;
         info.decay_curve = data.read_u8()?;
         info.doppler_factor = data.read_u8()?;
-        data.seek(SeekFrom::Current(2))?;
+        data.read_u16()?;
         info.options = data.read_u32()?;
 
         Ok(info)
@@ -623,12 +624,12 @@ impl SoundInfo {
         Some(count * core::mem::size_of::<u32>())
     }
 
-    fn read_string_id<T: DataCursorTrait + EndianRead>(
+    fn read_string_id<T: ReadExt + SeekExt>(
         &mut self, data: &mut T, position: usize,
     ) -> Option<u32> {
         // If the bit is set, get its data
         if let Some(offset) = self.get_value(0) {
-            data.set_position(offset + position);
+            data.set_position(offset + position).unwrap();
 
             let value = data.read_u32().ok().unwrap();
             self.string_id = value;
@@ -637,12 +638,12 @@ impl SoundInfo {
         Some(self.string_id)
     }
 
-    fn read_pan_mode<T: DataCursorTrait + EndianRead>(
+    fn read_pan_mode<T: ReadExt + SeekExt>(
         &mut self, data: &mut T, position: usize,
     ) -> Option<PanMode> {
         // If the bit is set, get its data
         if let Some(offset) = self.get_value(1) {
-            data.set_position(offset + position);
+            data.set_position(offset + position).unwrap();
 
             let value = data.read_u32().ok().unwrap();
             self.pan_mode = PanMode::from((value & 0xFF) as u8);
@@ -651,12 +652,12 @@ impl SoundInfo {
         Some(self.pan_mode)
     }
 
-    fn read_pan_curve<T: DataCursorTrait + EndianRead>(
+    fn read_pan_curve<T: ReadExt + SeekExt>(
         &mut self, data: &mut T, position: usize,
     ) -> Option<PanCurve> {
         // If the bit is set, get its data
         if let Some(offset) = self.get_value(1) {
-            data.set_position(offset + position as usize);
+            data.set_position(offset + position as usize).unwrap();
 
             let value = data.read_u32().ok().unwrap();
             self.pan_curve = PanCurve::from(((value >> 8) & 0xFF) as u8);
@@ -665,12 +666,12 @@ impl SoundInfo {
         Some(self.pan_curve)
     }
 
-    fn read_player_prio<T: DataCursorTrait + EndianRead>(
+    fn read_player_prio<T: ReadExt + SeekExt>(
         &mut self, data: &mut T, position: usize,
     ) -> Option<u8> {
         // If the bit is set, get its data
         if let Some(offset) = self.get_value(2) {
-            data.set_position(offset + position);
+            data.set_position(offset + position).unwrap();
 
             let value = data.read_u32().ok().unwrap();
             self.player_prio = (value & 0xFF) as u8;
@@ -679,12 +680,12 @@ impl SoundInfo {
         Some(self.player_prio)
     }
 
-    fn read_player_actor_id<T: DataCursorTrait + EndianRead>(
+    fn read_player_actor_id<T: ReadExt + SeekExt>(
         &mut self, data: &mut T, position: usize,
     ) -> Option<u8> {
         // If the bit is set, get its data
         if let Some(offset) = self.get_value(2) {
-            data.set_position(offset + position);
+            data.set_position(offset + position).unwrap();
 
             let value = data.read_u32().ok().unwrap();
             self.player_actor_id = ((value >> 8) & 0xFF) as u8;
@@ -693,12 +694,12 @@ impl SoundInfo {
         Some(self.player_actor_id)
     }
 
-    fn read_play_type<T: DataCursorTrait + EndianRead>(
+    fn read_play_type<T: ReadExt + SeekExt>(
         &mut self, data: &mut T, position: usize,
     ) -> Option<PlayType> {
         // If the bit is set, get its data
         if let Some(offset) = self.get_value(3) {
-            data.set_position(offset + position);
+            data.set_position(offset + position).unwrap();
 
             let value = data.read_u32().ok().unwrap();
             self.play_type = PlayType::from((value & 0xFF) as u8);
@@ -707,12 +708,12 @@ impl SoundInfo {
         Some(self.play_type)
     }
 
-    fn read_play_duration<T: DataCursorTrait + EndianRead>(
+    fn read_play_duration<T: ReadExt + SeekExt>(
         &mut self, data: &mut T, position: usize,
     ) -> Option<u16> {
         // If the bit is set, get its data
         if let Some(offset) = self.get_value(3) {
-            data.set_position(offset + position);
+            data.set_position(offset + position).unwrap();
 
             let value = data.read_u32().ok().unwrap();
             self.play_duration = ((value >> 16) & 0xFFFF) as u16;
@@ -722,13 +723,13 @@ impl SoundInfo {
     }
 
     /// Returns an offset to Sound3DInfo parameters.
-    fn get_3d_info_offset<T: DataCursorTrait + EndianRead>(
+    fn get_3d_info_offset<T: ReadExt + SeekExt>(
         &mut self, data: &mut T, position: usize,
     ) -> Option<u32> {
         let mut value = None;
         // If the bit is set, get its data
         if let Some(offset) = self.get_value(8) {
-            data.set_position(offset + position);
+            data.set_position(offset + position).unwrap();
 
             value = data.read_u32().ok();
         }
@@ -736,12 +737,12 @@ impl SoundInfo {
         value
     }
 
-    fn is_front_bypass<T: DataCursorTrait + EndianRead>(
+    fn is_front_bypass<T: ReadExt + SeekExt>(
         &mut self, data: &mut T, position: usize,
     ) -> Option<bool> {
         // If the bit is set, get its data
         if let Some(offset) = self.get_value(17) {
-            data.set_position(offset + position);
+            data.set_position(offset + position).unwrap();
 
             let value = data.read_u32().ok().unwrap();
             self.is_front_bypass = (value & 1) == 1;
@@ -750,12 +751,12 @@ impl SoundInfo {
         Some(self.is_front_bypass)
     }
 
-    fn read_user_param<T: DataCursorTrait + EndianRead>(
+    fn read_user_param<T: ReadExt + SeekExt>(
         &mut self, data: &mut T, position: usize,
     ) -> Option<u32> {
         // If the bit is set, get its data
         if let Some(offset) = self.get_value(31) {
-            data.set_position(offset + position);
+            data.set_position(offset + position).unwrap();
 
             let value = data.read_u32().ok().unwrap();
             self.user_param = value;
@@ -766,14 +767,14 @@ impl SoundInfo {
 }
 
 impl Read for SoundInfo {
-    fn read<T: DataCursorTrait + EndianRead>(data: &mut T) -> Result<Self> {
-        let readback = data.position();
+    fn read<T: ReadExt + SeekExt>(data: &mut T) -> Result<Self> {
+        let readback = data.position()?;
 
         let file_id = data.read_u32()?;
         let player_id = data.read_u32()?;
         let volume = data.read_u8()?;
         let filter = data.read_u8()?;
-        data.seek(SeekFrom::Current(2))?;
+        data.read_u16()?;
 
         // Reference to SoundDetails
         let details_ref = Reference::read(data)?;
@@ -781,7 +782,7 @@ impl Read for SoundInfo {
 
         let mut info = Self { file_id, player_id, volume, filter, options, ..Default::default() };
 
-        let position = data.position();
+        let position = data.position()?;
 
         info.read_string_id(data, position);
         info.read_pan_mode(data, position);
@@ -792,14 +793,14 @@ impl Read for SoundInfo {
         info.read_play_duration(data, position);
 
         if let Some(offset) = info.get_3d_info_offset(data, position) {
-            data.set_position(readback + offset as usize);
+            data.set_position(readback + offset as usize)?;
             info.virtual_info = Sound3DInfo::read(data)?;
         }
 
         info.is_front_bypass(data, position);
         info.read_user_param(data, position);
 
-        data.set_position(readback + details_ref.offset as usize);
+        data.set_position(readback + details_ref.offset as usize)?;
         info.details = match details_ref.identifier {
             Identifier::STREAM_SOUND_INFO => SoundDetails::Stream(StreamSoundInfo::read(data)?),
             Identifier::WAVE_SOUND_INFO => SoundDetails::Wave,
@@ -823,9 +824,9 @@ impl StringBlock {
     /// Unique identifier that tells us if we're reading a String Block.
     pub const MAGIC: [u8; 4] = *b"STRG";
 
-    fn read_string_table<T: DataCursorTrait + EndianRead>(data: &mut T) -> Result<Vec<String>> {
+    fn read_string_table<T: ReadExt + SeekExt>(data: &mut T) -> Result<Vec<String>> {
         // Store relative position
-        let offset = data.position();
+        let offset = data.position()?;
 
         // Read in the reference table
         let references: Vec<SizedReference> = Table::read(data)?;
@@ -836,10 +837,10 @@ impl StringBlock {
             match reference.identifier {
                 Identifier::STRING => {
                     // Go to that position in the string blob
-                    data.set_position(offset + reference.offset as usize);
+                    data.set_position(offset + reference.offset as usize)?;
 
                     // Read the string and store it, includes the trailing \0
-                    let string = data.get_slice(reference.size as usize)?.to_vec();
+                    let string = data.read_slice(reference.size as usize)?.to_vec();
                     strings.push(String::from_utf8(string).map_err(|_| data::Error::InvalidUtf8)?);
                 }
                 _ => InvalidDataSnafu { reason: "Unexpected String Identifier!" }.fail()?,
@@ -851,7 +852,7 @@ impl StringBlock {
 }
 
 impl Read for StringBlock {
-    fn read<T: DataCursorTrait + EndianRead>(data: &mut T) -> Result<Self> {
+    fn read<T: ReadExt + SeekExt>(data: &mut T) -> Result<Self> {
         // Read the header and make sure we're actually reading a String Block
         let header = SectionHeader::read(data)?;
         ensure!(
@@ -860,7 +861,7 @@ impl Read for StringBlock {
         );
 
         // Store the relative position for all offsets
-        let offset = data.position();
+        let offset = data.position()?;
 
         // Read both sections
         let mut sections: [Reference; 2] = Default::default();
@@ -873,7 +874,7 @@ impl Read for StringBlock {
         let mut strings = Self::default();
 
         for section in &mut sections {
-            data.set_position(offset + section.offset as usize);
+            data.set_position(offset + section.offset as usize)?;
             match section.identifier {
                 Identifier::STRING_TABLE => {
                     strings.table = Self::read_string_table(data)?;
@@ -900,11 +901,11 @@ impl InfoBlock {
     /// Unique identifier that tells us if we're reading an Info Block.
     pub const MAGIC: [u8; 4] = *b"INFO";
 
-    fn read<T: DataCursorTrait + EndianRead>(data: &mut T) -> Result<Self> {
+    fn read<T: ReadExt + SeekExt>(data: &mut T) -> Result<Self> {
         let _header = SectionHeader::read(data)?;
 
         // Store relative position
-        let offset = data.position();
+        let offset = data.position()?;
 
         let mut info = Self::default();
 
@@ -915,7 +916,7 @@ impl InfoBlock {
         }
 
         for section in &mut sections {
-            data.set_position(offset + section.offset as usize);
+            data.set_position(offset + section.offset as usize)?;
             match section.identifier {
                 Identifier::SOUND_INFO_SECTION => {
                     // Sound Info
@@ -928,7 +929,7 @@ impl InfoBlock {
                     for reference in &references {
                         match reference.identifier {
                             Identifier::SOUND_INFO => {
-                                data.set_position(offset + (section.offset + reference.offset) as usize);
+                                data.set_position(offset + (section.offset + reference.offset) as usize)?;
                                 let sound_info = SoundInfo::read(data)?;
                                 info.sounds.push(sound_info);
                             }
@@ -980,7 +981,7 @@ impl BFSAR {
 
     #[inline]
     #[allow(dead_code)]
-    fn read_header<T: DataCursorTrait + EndianRead>(data: &mut T) -> Result<BinaryHeader> {
+    fn read_header<T: ReadExt + SeekExt>(data: &mut T) -> Result<BinaryHeader> {
         // Read the header
         let header = BinaryHeader::read(data)?;
         println!("{:?}", header);
@@ -997,7 +998,7 @@ impl BFSAR {
         );
 
         ensure!(
-            data.len() == header.file_size as usize,
+            data.len()? == header.file_size as usize,
             InvalidDataSnafu { reason: "Unexpected file size!" }
         );
 
@@ -1034,11 +1035,12 @@ impl BFSAR {
         }
 
         // Align to a 32-byte boundary
-        data.set_position((data.position() + 31) & !31);
+        let position = data.position()?;
+        data.set_position((position + 31) & !31)?;
 
         // Then read all the section data
         for section in &sections {
-            data.set_position(section.offset as usize);
+            data.set_position(section.offset as usize)?;
 
             match section.identifier {
                 Identifier::STRING_BLOCK => {

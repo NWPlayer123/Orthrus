@@ -16,4 +16,4 @@ bitflags = "2.6"
 
 [features]
 default = ["std"]
-std = []
+std = ["snafu/std"]
