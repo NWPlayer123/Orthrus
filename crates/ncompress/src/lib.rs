@@ -1,7 +1,7 @@
 //! This crate contains modules for [Orthrus](https://crates.io/crates/orthrus) that add support for
 //! Nintendo compression formats that are shared across multiple games or systems.
 
-// Here's all necessary no_std information as a nice prelude
+#![deny(unused_crate_dependencies)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(not(feature = "std"))]

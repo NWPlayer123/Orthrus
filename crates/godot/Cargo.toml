@@ -2,7 +2,16 @@
 name = "orthrus-godot"
 version = "0.1.0"
 edition = "2021"
+description = "Orthrus module supporting the Godot game engine"
 license.workspace = true
 repository.workspace = true
 
 [dependencies]
+orthrus-core = { version = "0.3", path = "../core" }
+orthrus-windows = { version = "0.1", path = "../windows" }
+
+snafu = { version = "0.8", default-features = false, features = ["rust_1_81"] }
+
+[features]
+default = ["std"]
+std = []

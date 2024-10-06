@@ -308,14 +308,14 @@ impl OptionalHeader64 {
     }
 }
 
-struct PortableExecutable<'a> {
+pub struct PortableExecutable<'a> {
     mz_header: &'a MZHeader,
     pe_header: &'a PEHeader,
     optional_header: Option<OptionalHeader<'a>>,
 }
 
 impl<'a> PortableExecutable<'a> {
-    fn new(input: &'a [u8]) -> Option<Self> {
+    pub fn new(input: &'a [u8]) -> Option<Self> {
         let mut offset = 0;
 
         let mz_header = MZHeader::load(input, offset)?;

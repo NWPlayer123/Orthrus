@@ -26,7 +26,7 @@ pub enum DataError {
     /// Thrown if UTF-8 validation fails when trying to convert a slice.
     #[snafu(display("Invalid UTF-8 sequence"))]
     InvalidString { source: alloc::string::FromUtf8Error },
-    /// Thrown when an I/O operation fails on a [`ByteStream`].
+    /// Thrown when an I/O operation fails on a [`DataStream`].
     #[cfg(feature = "std")]
     #[snafu(display("I/O error: {}", source))]
     Io { source: std::io::Error },
@@ -1087,21 +1087,21 @@ impl AsMut<[u8]> for DataCursorMut<'_> {
 /// `Read`, `Write`, and `Seek`. Methods are conditionally available based on
 /// the traits implemented by `T`.
 #[derive(Debug)]
-pub struct ByteStream<T> {
+pub struct DataStream<T> {
     inner: T,
     position: u64,
     endian: Endian,
 }
 
-impl<T> ByteStream<T> {
-    /// Creates a new `ByteStream` with the given inner stream and endianness.
+impl<T> DataStream<T> {
+    /// Creates a new `DataStream` with the given inner stream and endianness.
     #[inline]
     pub fn new(inner: T, endian: Endian) -> Self {
         Self { inner, position: 0, endian }
     }
 }
 
-impl<T> EndianExt for ByteStream<T> {
+impl<T> EndianExt for DataStream<T> {
     #[inline]
     fn endian(&self) -> Endian {
         self.endian
@@ -1113,7 +1113,7 @@ impl<T> EndianExt for ByteStream<T> {
     }
 }
 
-impl<T: Seek> SeekExt for ByteStream<T> {
+impl<T: Seek> SeekExt for DataStream<T> {
     #[inline]
     fn position(&mut self) -> usize {
         self.position as usize
@@ -1146,7 +1146,7 @@ impl<T: Seek> SeekExt for ByteStream<T> {
     }
 }
 
-impl<T: Read> ReadExt for ByteStream<T> {
+impl<T: Read> ReadExt for DataStream<T> {
     #[inline]
     fn read_exact<const N: usize>(&mut self) -> Result<[u8; N], DataError> {
         let mut buffer = [0u8; N];
@@ -1188,7 +1188,7 @@ impl<T: Read> ReadExt for ByteStream<T> {
     }
 }
 
-impl<T: Write> WriteExt for ByteStream<T> {
+impl<T: Write> WriteExt for DataStream<T> {
     #[inline]
     fn write_exact<const N: usize>(&mut self, bytes: &[u8; N]) -> Result<(), DataError> {
         self.inner.write_all(bytes).context(IoSnafu)?;
@@ -1197,7 +1197,7 @@ impl<T: Write> WriteExt for ByteStream<T> {
     }
 }
 
-impl<T> Deref for ByteStream<T> {
+impl<T> Deref for DataStream<T> {
     type Target = T;
 
     #[inline]
@@ -1206,7 +1206,7 @@ impl<T> Deref for ByteStream<T> {
     }
 }
 
-impl<T> DerefMut for ByteStream<T> {
+impl<T> DerefMut for DataStream<T> {
     #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.inner

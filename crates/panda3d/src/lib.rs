@@ -1,7 +1,7 @@
 //! This crate contains modules for [Orthrus](https://crates.io/crates/orthrus) that add support for
 //! the [Panda3D engine](https://github.com/panda3d/panda3d/).
 
-// Here's all necessary no_std information as a nice prelude
+#![deny(unused_crate_dependencies)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(not(feature = "std"))]

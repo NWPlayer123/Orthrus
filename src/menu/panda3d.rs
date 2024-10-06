@@ -3,7 +3,7 @@ use argp::FromArgs;
 use super::create_submodule;
 
 create_submodule!(
-    Panda3D,
+    Panda3d,
     "Support for the Panda3D Engine",
     Multifile(MultifileFlags),
     BAM(BAMFlags)

@@ -1,17 +1,21 @@
 use argp::FromArgs;
+use paste::paste;
 
-mod jsystem;
-pub use jsystem::JSystemModules;
-use jsystem::JSystemOption;
-mod ncompress;
-pub use ncompress::NCompressModules;
-use ncompress::NCompressOption;
-mod nintendoware;
-pub use nintendoware::NintendoWareModules;
-use nintendoware::NintendoWareOption;
-mod panda3d;
-pub use panda3d::Panda3DModules;
-use panda3d::Panda3DOption;
+macro_rules! declare_module {
+    ($($name:ident),+) => {
+        $(
+        paste! {
+            mod $name;
+            #[allow(unused_imports)]
+            pub(crate) use $name::[<$name:camel Modules>];
+            #[allow(unused_imports)]
+            use $name::[<$name:camel Option>];
+        }
+    )+
+};
+}
+
+declare_module!(godot, j_system, n_compress, nintendo_ware, panda3d);
 
 /// Top-level command
 #[derive(FromArgs, PartialEq, Debug)]
@@ -32,9 +36,10 @@ pub struct Orthrus {
 pub enum Modules {
     IdentifyFile(IdentifyOption),
     NintendoCompression(NCompressOption),
-    Panda3D(Panda3DOption),
+    Panda3D(Panda3dOption),
     JSystem(JSystemOption),
     NintendoWare(NintendoWareOption),
+    Godot(GodotOption),
 }
 
 /// Command to try to identify what a given file is.

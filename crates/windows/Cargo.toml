@@ -7,12 +7,12 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-orthrus-core = { version = "0.2", path = "../core" }
+#orthrus-core = { version = "0.3", path = "../core" }
 
-snafu = { version = "0.8", default-features = false, features = ["rust_1_81"] }
-zerocopy = { version = "0.8" }
+#snafu = { version = "0.8", default-features = false, features = ["rust_1_81"] }
+zerocopy = { version = "0.8", features = ["derive"] }
 bitflags = { version = "2.6" }
 
 [features]
 default = ["std"]
-std = ["snafu/std", "orthrus-core/std", "zerocopy/std"]
+std = ["zerocopy/std"]#, "snafu/std", "orthrus-core/std"]

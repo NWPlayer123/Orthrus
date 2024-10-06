@@ -1,3 +1,5 @@
+#![deny(unused_crate_dependencies)]
+
 use mimalloc::MiMalloc;
 
 #[global_allocator]
@@ -13,12 +15,13 @@ use orthrus_jsystem::prelude::*;
 use orthrus_ncompress::prelude::*;
 use orthrus_nintendoware::prelude::*;
 use orthrus_panda3d::prelude::*;
+use orthrus_godot::prelude::*;
 use owo_colors::OwoColorize;
 
 mod identify;
 mod menu;
 use menu::{
-    exactly_one_true, JSystemModules, Modules, NCompressModules, NintendoWareModules, Panda3DModules,
+    exactly_one_true, JSystemModules, Modules, NCompressModules, NintendoWareModules, Panda3dModules, GodotModules
 };
 
 fn color_level(level: Level) -> String {
@@ -135,7 +138,7 @@ fn main() -> Result<()> {
             },
         },
         Modules::Panda3D(module) => match module.nested {
-            Panda3DModules::Multifile(data) => {
+            Panda3dModules::Multifile(data) => {
                 match exactly_one_true(&[data.extract]) {
                     Some(0) => {
                         // Ideally I could log each file path as it's written but I would have
@@ -147,7 +150,7 @@ fn main() -> Result<()> {
                     _ => unreachable!("Oops! Forgot to cover all operations."),
                 }
             }
-            Panda3DModules::BAM(data) => {
+            Panda3dModules::BAM(data) => {
                 BinaryAsset::open(data.input)?;
             }
         },
@@ -161,6 +164,11 @@ fn main() -> Result<()> {
                 Switch::BFSAR::open(data.input)?;
             }
         },
+        Modules::Godot(module) => match module.nested {
+            GodotModules::Godot(data) => {
+                ResourcePack::open(data.input)?;
+            }
+        }
     }
     Ok(())
 }

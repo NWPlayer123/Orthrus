@@ -7,13 +7,13 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-orthrus-core = { version = "0.2", path = "../core" }
+orthrus-core = { version = "0.3", path = "../core" }
 
-snafu = { version = "0.8", default-features = false }
-yaml-peg = { version = "1.0", default-features = false }
+snafu = { version = "0.8", default-features = false, features = ["rust_1_81"] }
+#yaml-peg = { version = "1.0", default-features = false }
 
 bitflags = "2.6"
 
 [features]
 default = ["std"]
-std = ["yaml-peg/std"]
+std = []#"yaml-peg/std"]
