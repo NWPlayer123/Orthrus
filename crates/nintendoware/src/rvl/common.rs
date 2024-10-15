@@ -3,6 +3,8 @@ use crate::error::*;
 use orthrus_core::prelude::*;
 use snafu::prelude::*;
 
+#[derive(Debug)]
+#[allow(dead_code)]
 pub struct FileHeader {
     magic: [u8; 4],
     endian: [u8; 2],
@@ -35,6 +37,8 @@ impl FileHeader {
     }
 }
 
+#[derive(Debug)]
+#[allow(dead_code)]
 pub struct BlockHeader {
     pub magic: [u8; 4],
     pub block_size: u32,

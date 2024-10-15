@@ -54,12 +54,14 @@ impl From<std::io::Error> for Error {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 struct Header {
     pck_version: u32,
     godot_version: (u32, u32, u32),
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 struct FileEntry {
     file_path: String,
@@ -69,6 +71,7 @@ struct FileEntry {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct ResourcePack {
     header: Header,
     entries: Vec<FileEntry>,
@@ -132,7 +135,7 @@ impl ResourcePack {
     }
 
     pub fn extract_from_file<P: AsRef<Path>>(input: P, output: P) -> Result<usize, self::Error> {
-        fn inner(input: &Path, output: &PathBuf) -> Result<usize, self::Error> {
+        fn inner(input: &Path, _output: &PathBuf) -> Result<usize, self::Error> {
             // Use our existing functions to do the bulk of the loading
             let file = BufReader::new(File::open(input)?);
             let mut data = DataStream::new(file, Endian::Little);

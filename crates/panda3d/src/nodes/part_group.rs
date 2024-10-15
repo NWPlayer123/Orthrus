@@ -1,6 +1,7 @@
 use super::prelude::*;
 
 #[derive(Debug, Default)]
+#[allow(dead_code)]
 pub(crate) struct PartGroup {
     pub name: String,
     pub child_refs: Vec<u32>,

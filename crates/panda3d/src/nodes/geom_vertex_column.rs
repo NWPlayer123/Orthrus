@@ -1,6 +1,7 @@
 use super::prelude::*;
 
 #[derive(Debug, Default)]
+#[allow(dead_code)]
 pub(crate) struct GeomVertexColumn {
     pub name_ref: u32,
     pub num_components: u8,

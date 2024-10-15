@@ -32,8 +32,13 @@ use orthrus_core::prelude::*;
 use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
 
+use crate::nodes::color_attrib::ColorType;
+use crate::nodes::cull_face_attrib::CullMode;
+use crate::nodes::depth_write_attrib::DepthMode;
 use crate::nodes::prelude::*;
+use crate::nodes::sampler_state::{FilterType, WrapMode};
 use crate::nodes::transform_state::TransformFlags;
+use crate::nodes::transparency_attrib::TransparencyMode;
 use crate::prelude::*;
 
 //TODO: add node support, prepare collision, finish writing joint stuff, test animations, make it more robust

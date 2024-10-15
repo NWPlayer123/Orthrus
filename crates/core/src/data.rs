@@ -1,9 +1,7 @@
 use core::mem::MaybeUninit;
 use core::ops::{Deref, DerefMut};
-use std::collections::VecDeque;
 use std::fs::File;
-use std::io::{BufReader, Cursor, Empty, Repeat, Stdin};
-use std::net::TcpStream;
+use std::io::{BufReader, Cursor, Empty};
 use std::sync::Arc;
 
 use snafu::prelude::*;

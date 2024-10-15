@@ -169,6 +169,7 @@ struct Header {
 ///
 /// For more details on the Multifile format, see the [module documentation](self#format).
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct Multifile {
     data: DataCursor,
     files: Vec<Subfile>,

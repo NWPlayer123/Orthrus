@@ -1,6 +1,7 @@
 use super::prelude::*;
 
 #[derive(Debug, Default)]
+#[allow(dead_code)]
 pub(crate) struct PartBundleNode {
     pub node: PandaNode,
     pub bundle_refs: Vec<u32>,

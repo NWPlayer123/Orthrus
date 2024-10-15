@@ -1,6 +1,7 @@
 use super::prelude::*;
 
 #[derive(Debug, Default)]
+#[allow(dead_code)]
 pub(crate) struct GeomNode {
     /// ModelNode is a superclass of a PandaNode, so we include its data here
     pub node: PandaNode,

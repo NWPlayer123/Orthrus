@@ -24,7 +24,7 @@ impl BinaryAsset {
 
     #[inline]
     pub fn load<I: Into<Box<[u8]>>>(input: I) -> Result<Self, self::Error> {
-        fn inner(input: Box<[u8]>) -> Result<BinaryAsset, self::Error> {
+        fn inner(_input: Box<[u8]>) -> Result<BinaryAsset, self::Error> {
             Ok(BinaryAsset {})
         }
         inner(input.into())

@@ -1,6 +1,7 @@
 use super::prelude::*;
 
 #[derive(Debug, Default)]
+#[allow(dead_code)]
 pub(crate) struct AnimBundleNode {
     pub node: PandaNode,
     pub anim_bundle_ref: u32,

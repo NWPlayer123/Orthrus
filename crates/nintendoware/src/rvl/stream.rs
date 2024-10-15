@@ -9,6 +9,8 @@ use super::common::{BlockHeader, FileHeader};
 use std::{fs::File, io::BufReader, path::Path};
 
 //TODO: move to common?
+#[derive(Debug)]
+#[allow(dead_code)]
 struct DataRef {
     //TODO: does it really matter to split this up?
     tag: u32,
@@ -22,6 +24,7 @@ impl DataRef {
     }
 }
 
+#[derive(Debug)]
 struct SectionInfo {
     offset: u32,
     size: u32,
@@ -34,6 +37,8 @@ impl SectionInfo {
     }
 }
 
+#[derive(Debug)]
+#[allow(dead_code)]
 struct ExtendedHeader {
     file_header: FileHeader,
     head_block: SectionInfo,
@@ -77,23 +82,26 @@ impl StreamFile {
         let header = Self::read_header(&mut data)?;
         data.set_position(position + u64::from(header.file_header.header_size))?;
 
-        let head_block = head_block::HeadBlock::new(&mut data, &header.head_block)?;
+        let _head_block = head_block::HeadBlock::new(&mut data, &header.head_block)?;
 
         Ok(Self {})
     }
 }
 
 mod head_block {
-    use std::borrow::Cow;
 
     use super::*;
 
+    #[derive(Debug)]
+    #[allow(dead_code)]
     struct Header {
         stream_info: DataRef,
         track_info: DataRef,
         channel_info: DataRef,
     }
 
+    #[derive(Debug)]
+    #[allow(dead_code)]
     struct StreamInfo {
         codec: u8,
         loop_flag: u8,
@@ -163,11 +171,15 @@ mod head_block {
         }
     }
 
+    #[derive(Debug)]
+    #[allow(dead_code)]
     struct TrackTable {
         metadata: Vec<TrackInfoEx>,
     }
 
     // This is the extended variant, anything with track type 0 gets converted to this
+    #[derive(Debug)]
+    #[allow(dead_code)]
     struct TrackInfoEx {
         volume: u8,
         pan: u8,
@@ -219,7 +231,7 @@ mod head_block {
                     .fail()?,
                 });
             }
-            
+
             Ok(Self { metadata })
         }
     }
@@ -270,7 +282,7 @@ mod head_block {
                 position - start_position == stream_info.block_info_offset.into(),
                 InvalidDataSnafu { position, reason: "Unexpected Sub-Block Encountered" }
             );
-            let track_table = TrackTable::new(data, start_position)?;
+            let _track_table = TrackTable::new(data, start_position)?;
 
             Ok(Self {})
         }

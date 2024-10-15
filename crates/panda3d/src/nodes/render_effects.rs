@@ -1,6 +1,7 @@
 use super::prelude::*;
 
 #[derive(Debug, Default)]
+#[allow(dead_code)]
 pub(crate) struct RenderEffects {
     /// References to all Effects
     pub effect_refs: Vec<u32>,

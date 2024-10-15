@@ -84,6 +84,7 @@ struct Metadata {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct Multifile {
     header: Header,
     files: BTreeMap<String, Subfile>,
@@ -174,6 +175,8 @@ impl Multifile {
     pub fn load<T: IntoDataStream>(input: T, offset: u64) -> Result<Self, self::Error> {
         let mut data = input.into_stream(Endian::Little);
         data.set_position(offset)?;
+        let header_size = Self::parse_header_prefix(&mut data)?;
+        data.set_position(header_size)?;
         let metadata = Self::load_metadata(&mut data)?;
 
         // Now, let's actually build our sorted list of files (ideally, this will already be sorted inside
@@ -358,6 +361,7 @@ impl SubfileHeader {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 struct Subfile {
     attributes: Attributes,
     original_length: u32,

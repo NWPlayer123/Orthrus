@@ -116,6 +116,7 @@ struct COFFHeader {
 }
 
 #[derive(TryFromBytes, KnownLayout, Immutable)]
+#[allow(dead_code)]
 #[repr(u16)]
 enum MachineType {
     /// The content of this field is assumed to be applicable to any machine type
@@ -219,6 +220,7 @@ bitflags! {
     }
 }
 
+#[allow(dead_code)]
 impl COFFHeader {
     fn load(input: &[u8], offset: usize) -> Option<&Self> {
         // Check if we have enough bytes to create a header
@@ -239,6 +241,7 @@ impl COFFHeader {
     }
 }
 
+#[allow(dead_code)]
 enum OptionalHeader<'a> {
     Header32(&'a OptionalHeader32),
     Header64(&'a OptionalHeader64),
@@ -303,11 +306,12 @@ impl OptionalHeader32 {
 struct OptionalHeader64 {}
 
 impl OptionalHeader64 {
-    fn load(input: &[u8], offset: usize) -> Option<&Self> {
+    fn load(_input: &[u8], _offset: usize) -> Option<&Self> {
         Some(&OptionalHeader64 {})
     }
 }
 
+#[allow(dead_code)]
 pub struct PortableExecutable<'a> {
     mz_header: &'a MZHeader,
     pe_header: &'a PEHeader,

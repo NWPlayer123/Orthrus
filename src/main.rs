@@ -165,7 +165,7 @@ fn main() -> Result<()> {
                 Switch::BFSAR::open(data.input)?;
             }
             NintendoWareModules::BRSTM(data) => {
-                let stream = Wii::StreamFile::open(data.input)?;
+                let _stream = Wii::StreamFile::open(data.input)?;
             }
         },
         Modules::Godot(module) => match module.nested {
