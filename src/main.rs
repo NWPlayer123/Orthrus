@@ -11,17 +11,18 @@ use std::path::PathBuf;
 use anyhow::Result;
 use env_logger::Builder;
 use log::{Level, LevelFilter};
+use orthrus_godot::prelude::*;
 use orthrus_jsystem::prelude::*;
 use orthrus_ncompress::prelude::*;
 use orthrus_nintendoware::prelude::*;
 use orthrus_panda3d::prelude::*;
-use orthrus_godot::prelude::*;
 use owo_colors::OwoColorize;
 
 mod identify;
 mod menu;
 use menu::{
-    exactly_one_true, JSystemModules, Modules, NCompressModules, NintendoWareModules, Panda3dModules, GodotModules
+    exactly_one_true, GodotModules, JSystemModules, Modules, NCompressModules, NintendoWareModules,
+    Panda3dModules,
 };
 
 fn color_level(level: Level) -> String {
@@ -58,9 +59,9 @@ fn main() -> Result<()> {
                 writeln!(
                     buf,
                     "[{}] {} {}",
-                    orthrus_core::time::current_time(), // Use your custom time function
-                    color_level(record.level()),        // Colored log level
-                    record.args()                       // Log message
+                    orthrus_core::time::current_time().unwrap(), // Use your custom time function
+                    color_level(record.level()),                 // Colored log level
+                    record.args()                                // Log message
                 )
             })
             .filter(None, level_filter(args.verbose))
@@ -163,12 +164,15 @@ fn main() -> Result<()> {
             NintendoWareModules::BFSAR(data) => {
                 Switch::BFSAR::open(data.input)?;
             }
+            NintendoWareModules::BRSTM(data) => {
+                let stream = Wii::StreamFile::open(data.input)?;
+            }
         },
         Modules::Godot(module) => match module.nested {
             GodotModules::Godot(data) => {
                 ResourcePack::open(data.input)?;
             }
-        }
+        },
     }
     Ok(())
 }

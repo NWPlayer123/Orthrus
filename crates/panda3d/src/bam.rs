@@ -207,7 +207,7 @@ impl BinaryAsset {
         bamfile.read_object(&mut datagram)?;
 
         loop {
-            //println!("Reading datagram at {:X}", data.position());
+            //println!("Reading datagram at {:X}", data.position()?);
             match bamfile.objects_left {
                 ObjectsLeft::ObjectCount { mut num_extra_objects } => {
                     if num_extra_objects > 0 {
@@ -265,21 +265,21 @@ impl BinaryAsset {
         //println!("Object ID {}", _object_id);
         /*println!(
             "Initial type data {:#X}, Data size {:#X}\n",
-            data.position(),
-            data.len()
+            data.position()?,
+            data.len()?
         );*/
 
         if type_handle != 0 {
             // Now we need to read the data of the associated type using the "fillin" functions
             // For now I'm combining them into a single function
             let type_name = self.type_registry.get_mut(&type_handle).expect("a").to_owned();
-            //println!("Filling in {} from {:#X}", type_name, data.position());
+            //println!("Filling in {} from {:#X}", type_name, data.position()?);
             self.fillin(data, &type_name)?;
         }
-        if data.position() != data.len()? {
+        if data.position()? != data.len()? {
             println!(
                 "Finished at {:#X}, Data size {:#X}\n",
-                data.position(),
+                data.position()?,
                 data.len()?
             );
         }

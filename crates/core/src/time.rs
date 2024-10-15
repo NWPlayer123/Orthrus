@@ -7,35 +7,13 @@ use time::{OffsetDateTime, UtcOffset};
 #[cfg(not(feature = "std"))]
 use crate::no_std::*;
 
-/// Returns a formatted [String] with the current time.
-///
-/// Note that this may be the local time, or may be based off UTC. If it matters, check whether
-/// [`get_local_offset`] returns an error.
-#[must_use]
-#[inline]
-pub fn current_time() -> String {
-    let time = OffsetDateTime::now_local().unwrap_or_else(|_| OffsetDateTime::now_utc());
-    format!(
-        "{}-{}-{} {}:{}:{}",
-        time.year(),
-        time.month() as u8,
-        time.day(),
-        time.hour(),
-        time.minute(),
-        time.second()
-    )
-}
-
 /// Convert a timestamp into a formatted [`String`].
-///
-/// # Errors
-/// Returns [`ComponentRange`](time::Error::ComponentRange) if unable to convert the timestamp to a
-/// valid date.
+#[cfg(feature = "alloc")]
 #[inline]
 pub fn format_timestamp(timestamp: i64) -> time::Result<String> {
     let time = OffsetDateTime::from_unix_timestamp(timestamp)?;
     Ok(format!(
-        "{}-{}-{} {}:{}:{}",
+        "{:04}-{:02}-{:02} {:02}:{:02}:{:02}",
         time.year(),
         time.month() as u8,
         time.day(),
@@ -45,13 +23,34 @@ pub fn format_timestamp(timestamp: i64) -> time::Result<String> {
     ))
 }
 
-/// Returns the local time zone offset. This is useful for testing if the current system supports
-/// local time, or only UTC is available.
-///
-/// # Errors
-/// Returns [`IndeterminateOffset`](time::Error::IndeterminateOffset) if unable to determine the
-/// current time zone.
+/// Get the current time as a Unix timestamp (seconds since the Unix epoch).
+#[cfg(feature = "std")]
 #[inline]
-pub fn get_local_offset() -> time::Result<UtcOffset> {
-    Ok(UtcOffset::local_offset_at(OffsetDateTime::UNIX_EPOCH)?)
+pub fn current_timestamp() -> time::Result<i64> {
+    Ok(OffsetDateTime::now_local()?.unix_timestamp())
+}
+
+/// Returns a formatted [String] with the current time.
+#[cfg(feature = "std")]
+#[inline]
+pub fn current_time() -> time::Result<String> {
+    let time = OffsetDateTime::now_local()?;
+    Ok(format!(
+        "{:04}-{:02}-{:02} {:02}:{:02}:{:02}",
+        time.year(),
+        time.month() as u8,
+        time.day(),
+        time.hour(),
+        time.minute(),
+        time.second()
+    ))
+}
+
+/// Returns the local time zone offset.
+/// 
+/// This is useful for testing if the current system has a local offset or if only UTC is available.
+#[cfg(feature = "std")]
+#[inline]
+pub fn local_offset() -> time::Result<UtcOffset> {
+    Ok(OffsetDateTime::now_local()?.offset())
 }

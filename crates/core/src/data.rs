@@ -1,5 +1,10 @@
 use core::mem::MaybeUninit;
 use core::ops::{Deref, DerefMut};
+use std::collections::VecDeque;
+use std::fs::File;
+use std::io::{BufReader, Cursor, Empty, Repeat, Stdin};
+use std::net::TcpStream;
+use std::sync::Arc;
 
 use snafu::prelude::*;
 
@@ -34,7 +39,6 @@ pub enum DataError {
 
 /// Represents the endianness of the data being read or written.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[non_exhaustive]
 pub enum Endian {
     Little,
     Big,
@@ -66,28 +70,25 @@ pub trait EndianExt {
 /// Trait for types that support seeking operations.
 pub trait SeekExt {
     /// Returns the current position.
-    fn position(&mut self) -> usize;
+    fn position(&mut self) -> Result<u64, DataError>;
 
     /// Sets the current position.
     ///
     /// # Errors
     /// Returns an error if the position cannot be set.
-    fn set_position(&mut self, position: usize) -> Result<usize, DataError>;
+    fn set_position(&mut self, position: u64) -> Result<u64, DataError>;
 
     /// Returns the total length of the data.
     ///
     /// # Errors
     /// Returns an error if unable to determine the length of the stream.
-    fn len(&mut self) -> Result<usize, DataError>;
+    fn len(&mut self) -> Result<u64, DataError>;
 
     /// Returns `true` if the remaining data is empty.
     ///
     /// # Errors
     /// Returns an error if unable to determine either the length of the stream or the position inside it.
-    #[inline]
-    fn is_empty(&mut self) -> Result<bool, DataError> {
-        Ok(self.len()?.saturating_sub(self.position()) == 0)
-    }
+    fn is_empty(&mut self) -> Result<bool, DataError>;
 }
 
 /// Trait for types that support reading operations.
@@ -508,19 +509,25 @@ impl EndianExt for DataCursor {
 
 impl SeekExt for DataCursor {
     #[inline]
-    fn position(&mut self) -> usize {
-        self.position
+    fn position(&mut self) -> Result<u64, DataError> {
+        Ok(self.position as u64)
     }
 
     #[inline]
-    fn set_position(&mut self, position: usize) -> Result<usize, DataError> {
-        self.position = position.min(self.data.len());
-        Ok(self.position)
+    fn set_position(&mut self, position: u64) -> Result<u64, DataError> {
+        let pos = core::cmp::min(position, self.data.len() as u64);
+        self.position = pos as usize;
+        Ok(pos)
     }
 
     #[inline]
-    fn len(&mut self) -> Result<usize, DataError> {
-        Ok(self.data.len())
+    fn len(&mut self) -> Result<u64, DataError> {
+        Ok(self.data.len() as u64)
+    }
+
+    #[inline]
+    fn is_empty(&mut self) -> Result<bool, DataError> {
+        Ok(self.len()? - self.position()? == 0)
     }
 }
 
@@ -722,19 +729,25 @@ impl EndianExt for DataCursorRef<'_> {
 
 impl SeekExt for DataCursorRef<'_> {
     #[inline]
-    fn position(&mut self) -> usize {
-        self.position
+    fn position(&mut self) -> Result<u64, DataError> {
+        Ok(self.position as u64)
     }
 
     #[inline]
-    fn set_position(&mut self, position: usize) -> Result<usize, DataError> {
-        self.position = position.min(self.data.len());
-        Ok(self.position)
+    fn set_position(&mut self, position: u64) -> Result<u64, DataError> {
+        let pos = core::cmp::min(position, self.data.len() as u64);
+        self.position = pos as usize;
+        Ok(pos)
     }
 
     #[inline]
-    fn len(&mut self) -> Result<usize, DataError> {
-        Ok(self.data.len())
+    fn len(&mut self) -> Result<u64, DataError> {
+        Ok(self.data.len() as u64)
+    }
+
+    #[inline]
+    fn is_empty(&mut self) -> Result<bool, DataError> {
+        Ok(self.len()? - self.position()? == 0)
     }
 }
 
@@ -933,19 +946,25 @@ impl EndianExt for DataCursorMut<'_> {
 
 impl SeekExt for DataCursorMut<'_> {
     #[inline]
-    fn position(&mut self) -> usize {
-        self.position
+    fn position(&mut self) -> Result<u64, DataError> {
+        Ok(self.position as u64)
     }
 
     #[inline]
-    fn set_position(&mut self, position: usize) -> Result<usize, DataError> {
-        self.position = position.min(self.data.len());
-        Ok(self.position)
+    fn set_position(&mut self, position: u64) -> Result<u64, DataError> {
+        let pos = core::cmp::min(position, self.data.len() as u64);
+        self.position = pos as usize;
+        Ok(pos)
     }
 
     #[inline]
-    fn len(&mut self) -> Result<usize, DataError> {
-        Ok(self.data.len())
+    fn len(&mut self) -> Result<u64, DataError> {
+        Ok(self.data.len() as u64)
+    }
+
+    #[inline]
+    fn is_empty(&mut self) -> Result<bool, DataError> {
+        Ok(self.len()? - self.position()? == 0)
     }
 }
 
@@ -1089,7 +1108,6 @@ impl AsMut<[u8]> for DataCursorMut<'_> {
 #[derive(Debug)]
 pub struct DataStream<T> {
     inner: T,
-    position: u64,
     endian: Endian,
 }
 
@@ -1097,7 +1115,7 @@ impl<T> DataStream<T> {
     /// Creates a new `DataStream` with the given inner stream and endianness.
     #[inline]
     pub fn new(inner: T, endian: Endian) -> Self {
-        Self { inner, position: 0, endian }
+        Self { inner, endian }
     }
 }
 
@@ -1115,14 +1133,13 @@ impl<T> EndianExt for DataStream<T> {
 
 impl<T: Seek> SeekExt for DataStream<T> {
     #[inline]
-    fn position(&mut self) -> usize {
-        self.position as usize
+    fn position(&mut self) -> Result<u64, DataError> {
+        self.inner.stream_position().context(IoSnafu)
     }
 
     #[inline]
-    fn set_position(&mut self, position: usize) -> Result<usize, DataError> {
-        self.position = self.inner.seek(SeekFrom::Start(position as u64)).context(IoSnafu)?;
-        Ok(self.position as usize)
+    fn set_position(&mut self, position: u64) -> Result<u64, DataError> {
+        self.inner.seek(SeekFrom::Start(position)).context(IoSnafu)
     }
 
     /// Returns the total length of the data.
@@ -1133,16 +1150,37 @@ impl<T: Seek> SeekExt for DataStream<T> {
     /// # Errors
     /// Returns an error if unable to determine the length of the stream.
     #[inline]
-    fn len(&mut self) -> Result<usize, DataError> {
-        let length = self.inner.seek(SeekFrom::End(0)).context(IoSnafu)?;
+    fn len(&mut self) -> Result<u64, DataError> {
+        let old_pos = self.stream_position().context(IoSnafu)?;
+        let len = self.seek(SeekFrom::End(0)).context(IoSnafu)?;
 
         // Avoid seeking a third time when we were already at the end of the
         // stream. The branch is usually way cheaper than a seek operation.
-        if self.position != length {
-            self.inner.seek(SeekFrom::Start(self.position)).context(IoSnafu)?;
+        if old_pos != len {
+            self.seek(SeekFrom::Start(old_pos)).context(IoSnafu)?;
         }
 
-        Ok(length as usize)
+        Ok(len)
+    }
+
+    /// Returns `true` if the remaining data is empty.
+    ///
+    /// Note that this can be an expensive operation due to seeking.
+    ///
+    /// # Errors
+    /// Returns an error if unable to determine either the length of the stream or the position inside it.
+    #[inline]
+    fn is_empty(&mut self) -> Result<bool, DataError> {
+        let old_pos = self.stream_position().context(IoSnafu)?;
+        let len = self.seek(SeekFrom::End(0)).context(IoSnafu)?;
+
+        // Avoid seeking a third time when we were already at the end of the
+        // stream. The branch is usually way cheaper than a seek operation.
+        if old_pos != len {
+            self.seek(SeekFrom::Start(old_pos)).context(IoSnafu)?;
+        }
+
+        Ok((len - old_pos) == 0)
     }
 }
 
@@ -1151,22 +1189,14 @@ impl<T: Read> ReadExt for DataStream<T> {
     fn read_exact<const N: usize>(&mut self) -> Result<[u8; N], DataError> {
         let mut buffer = [0u8; N];
         self.inner.read_exact(&mut buffer).context(IoSnafu)?;
-        self.position = self.position.saturating_add(N as u64);
         Ok(buffer)
     }
 
     #[inline]
     fn read_length(&mut self, buffer: &mut [u8]) -> Result<usize, DataError> {
         match self.inner.read_exact(buffer) {
-            Ok(()) => {
-                self.position = buffer.len() as u64;
-                Ok(buffer.len())
-            }
-            Err(e) if e.kind() == ErrorKind::UnexpectedEof => {
-                let actually_read = self.inner.read(buffer).context(IoSnafu)?;
-                self.position = self.position.saturating_add(actually_read as u64);
-                Ok(actually_read)
-            }
+            Ok(()) => Ok(buffer.len()),
+            Err(e) if e.kind() == ErrorKind::UnexpectedEof => self.inner.read(buffer).context(IoSnafu),
             Err(e) => Err(DataError::Io { source: e }),
         }
     }
@@ -1175,7 +1205,6 @@ impl<T: Read> ReadExt for DataStream<T> {
     fn read_slice(&mut self, length: usize) -> Result<Cow<[u8]>, DataError> {
         let mut buffer = vec![0u8; length];
         self.inner.read_exact(&mut buffer).context(IoSnafu)?;
-        self.position = self.position.saturating_add(length as u64);
         Ok(Cow::Owned(buffer))
     }
 
@@ -1183,7 +1212,6 @@ impl<T: Read> ReadExt for DataStream<T> {
     fn remaining_slice(&mut self) -> Result<Cow<[u8]>, DataError> {
         let mut buffer = Vec::new();
         self.inner.read_to_end(&mut buffer).context(IoSnafu)?;
-        self.position = self.position.saturating_add(buffer.len() as u64);
         Ok(Cow::Owned(buffer))
     }
 }
@@ -1191,9 +1219,7 @@ impl<T: Read> ReadExt for DataStream<T> {
 impl<T: Write> WriteExt for DataStream<T> {
     #[inline]
     fn write_exact<const N: usize>(&mut self, bytes: &[u8; N]) -> Result<(), DataError> {
-        self.inner.write_all(bytes).context(IoSnafu)?;
-        self.position = self.position.saturating_add(N as u64);
-        Ok(())
+        self.inner.write_all(bytes).context(IoSnafu)
     }
 }
 
@@ -1210,5 +1236,93 @@ impl<T> DerefMut for DataStream<T> {
     #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.inner
+    }
+}
+
+// TODO: these are a placeholder solution until specialization is stabilized
+// https://github.com/rust-lang/rust/issues/31844
+pub trait IntoDataStream {
+    type Reader: ReadExt + SeekExt;
+
+    fn into_stream(self, endian: Endian) -> Self::Reader;
+}
+
+impl IntoDataStream for Box<[u8]> {
+    type Reader = DataCursor;
+
+    fn into_stream(self, endian: Endian) -> Self::Reader {
+        DataCursor::new(self, endian)
+    }
+}
+
+impl<'a> IntoDataStream for &'a [u8] {
+    type Reader = DataCursorRef<'a>;
+
+    fn into_stream(self, endian: Endian) -> Self::Reader {
+        DataCursorRef::new(self, endian)
+    }
+}
+
+impl<'a> IntoDataStream for &'a mut [u8] {
+    type Reader = DataCursorMut<'a>;
+
+    fn into_stream(self, endian: Endian) -> Self::Reader {
+        DataCursorMut::new(self, endian)
+    }
+}
+
+impl<'a> IntoDataStream for &'a File {
+    type Reader = DataStream<&'a File>;
+
+    fn into_stream(self, endian: Endian) -> Self::Reader {
+        DataStream::new(self, endian)
+    }
+}
+
+impl IntoDataStream for File {
+    type Reader = DataStream<File>;
+
+    fn into_stream(self, endian: Endian) -> Self::Reader {
+        DataStream::new(self, endian)
+    }
+}
+
+impl IntoDataStream for Arc<File> {
+    type Reader = DataStream<Arc<File>>;
+
+    fn into_stream(self, endian: Endian) -> Self::Reader {
+        DataStream::new(self, endian)
+    }
+}
+
+impl IntoDataStream for Empty {
+    type Reader = DataStream<Empty>;
+
+    fn into_stream(self, endian: Endian) -> Self::Reader {
+        DataStream::new(self, endian)
+    }
+}
+
+impl<R: Read + Seek> IntoDataStream for Box<R> {
+    type Reader = DataStream<Box<R>>;
+
+    fn into_stream(self, endian: Endian) -> Self::Reader {
+        DataStream::new(self, endian)
+    }
+}
+
+impl<R: Read + Seek> IntoDataStream for BufReader<R> {
+    type Reader = DataStream<BufReader<R>>;
+
+    fn into_stream(self, endian: Endian) -> Self::Reader {
+        DataStream::new(self, endian)
+    }
+}
+
+impl<T: AsRef<[u8]>> IntoDataStream for Cursor<T> {
+    type Reader = DataStream<Cursor<T>>;
+
+    fn into_stream(self, endian: Endian) -> Self::Reader {
+        DataStream::new(self, endian)
     }
 }

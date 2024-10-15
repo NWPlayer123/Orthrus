@@ -133,7 +133,7 @@ impl ResourceArchive {
     #[inline]
     fn read_header<T: ReadExt + SeekExt>(data: &mut T) -> Result<Header> {
         //Store the starting position since all offsets are relative
-        let start_pos = data.position();
+        let start_pos = data.position()?;
 
         //Read the magic and make sure we're actually parsing a Resource Archive
         let magic = data.read_slice(4)?;
@@ -153,7 +153,7 @@ impl ResourceArchive {
         let aram_preload_size = data.read_u32()?;
 
         //We have 4 bytes of padding we ignore here.
-        data.set_position(data_offset as usize)?;
+        data.set_position(data_offset.into())?;
 
         Ok(Header {
             file_size,
@@ -168,7 +168,7 @@ impl ResourceArchive {
     #[inline]
     fn read_data_header<T: ReadExt + SeekExt>(data: &mut T) -> Result<DataHeader> {
         //Store the starting position since all offsets are relative
-        let start_pos = data.position();
+        let start_pos = data.position()?;
 
         //Read data
         let node_count = data.read_u32()?;
@@ -190,7 +190,7 @@ impl ResourceArchive {
         let sync_file_id = data.read_u8()? != 0;
 
         //We're at 0x1A, align to 0x20
-        data.set_position(node_offset as usize)?;
+        data.set_position(node_offset.into())?;
 
         Ok(DataHeader {
             node_count,

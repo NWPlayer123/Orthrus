@@ -648,7 +648,7 @@ impl BinaryAsset {
                     assert!(internal_name.name == "index");
 
                     let mut data = DataCursorRef::new(&array_data.buffer, Endian::Little);
-                    let mut indices = Vec::with_capacity(data.len().unwrap() / 2);
+                    let mut indices = Vec::with_capacity(data.len().unwrap() as usize / 2);
                     for _ in 0..indices.capacity() {
                         indices.push(data.read_u16().unwrap());
                     }
@@ -679,7 +679,7 @@ impl BinaryAsset {
             PandaObject::GeomVertexArrayFormat(node) => node,
             _ => panic!("Something has gone horribly wrong!"),
         };
-        let num_primitives = array_data.buffer.len() / array_format.stride as usize;
+        let num_primitives: u64 = array_data.buffer.len() as u64 / u64::from(array_format.stride);
         let mut data = DataCursorRef::new(&array_data.buffer, Endian::Little);
         for column in &array_format.columns {
             // Use the InternalName as a lookup for what to do with each property
@@ -697,9 +697,9 @@ impl BinaryAsset {
                     assert!(column.contents == Contents::Point);
 
                     // Then, build an array with the expected data
-                    let mut vertex_data = Vec::with_capacity(num_primitives);
+                    let mut vertex_data = Vec::with_capacity(num_primitives as usize);
                     for n in 0..num_primitives {
-                        data.set_position(column.start as usize + (array_format.stride as usize * n))
+                        data.set_position(u64::from(column.start) + (u64::from(array_format.stride) * n))
                             .unwrap();
 
                         vertex_data.push([
@@ -718,9 +718,9 @@ impl BinaryAsset {
                     assert!(column.contents == Contents::Vector || column.contents == Contents::Normal);
 
                     // Then, build an array with the expected data
-                    let mut normal_data = Vec::with_capacity(num_primitives);
+                    let mut normal_data = Vec::with_capacity(num_primitives as usize);
                     for n in 0..num_primitives {
-                        data.set_position(column.start as usize + (array_format.stride as usize * n))
+                        data.set_position(u64::from(column.start) + (u64::from(array_format.stride) * n))
                             .unwrap();
 
                         normal_data.push([
@@ -739,9 +739,9 @@ impl BinaryAsset {
                     assert!(column.contents == Contents::Vector);
 
                     // Then, build an array with the expected data
-                    let mut tangent_data = Vec::with_capacity(num_primitives);
+                    let mut tangent_data = Vec::with_capacity(num_primitives as usize);
                     for n in 0..num_primitives {
-                        data.set_position(column.start as usize + (array_format.stride as usize * n))
+                        data.set_position(u64::from(column.start) + (u64::from(array_format.stride) * n))
                             .unwrap();
 
                         // TODO: calculate handedness using the binormal column? For now, just set it to +1.0
@@ -785,9 +785,9 @@ impl BinaryAsset {
                     assert!(column.contents == Contents::TexCoord);
 
                     // Then, build an array with the expected data
-                    let mut texcoord_data = Vec::with_capacity(num_primitives);
+                    let mut texcoord_data = Vec::with_capacity(num_primitives as usize);
                     for n in 0..num_primitives {
-                        data.set_position(column.start as usize + (array_format.stride as usize * n))
+                        data.set_position(u64::from(column.start) + (u64::from(array_format.stride) * n))
                             .unwrap();
 
                         // Panda3D stores flipped Y values to support OpenGL, so we do 1.0 - value.
@@ -803,9 +803,9 @@ impl BinaryAsset {
                         assert!(column.contents == Contents::Color);
 
                         // Then, build an array with the expected data
-                        let mut color_data = Vec::with_capacity(num_primitives);
+                        let mut color_data = Vec::with_capacity(num_primitives as usize);
                         for n in 0..num_primitives {
-                            data.set_position(column.start as usize + (array_format.stride as usize * n))
+                            data.set_position(u64::from(column.start) + (u64::from(array_format.stride) * n))
                                 .unwrap();
 
                             let color = data.read_u32().unwrap();
@@ -926,19 +926,19 @@ impl BinaryAsset {
                         }
 
                         // Now, let's actually build ATTRIBUTE_JOINT_WEIGHT and ATTRIBUTE_JOINT_INDEX
-                        let mut blend_lookup = vec![[0u16, 0u16, 0u16, 0u16]; num_primitives];
-                        let mut blend_table = vec![[0f32, 0f32, 0f32, 0f32]; num_primitives];
+                        let mut blend_lookup = vec![[0u16, 0u16, 0u16, 0u16]; num_primitives as usize];
+                        let mut blend_table = vec![[0f32, 0f32, 0f32, 0f32]; num_primitives as usize];
                         for n in 0..num_primitives {
                             // First, verify we're good to read the lookup table
                             assert!(column.numeric_type == NumericType::U16);
                             assert!(column.contents == Contents::Index);
-                            data.set_position(column.start as usize + (array_format.stride as usize * n))
+                            data.set_position(u64::from(column.start) + (u64::from(array_format.stride) * n))
                                 .unwrap();
 
                             // Then, let's write the blend data
                             let lookup_id = data.read_u16().unwrap();
-                            blend_lookup[n] = transforms[lookup_id as usize].0;
-                            blend_table[n] = transforms[lookup_id as usize].1;
+                            blend_lookup[n as usize] = transforms[lookup_id as usize].0;
+                            blend_table[n as usize] = transforms[lookup_id as usize].1;
                         }
 
                         // In order to correctly render, the SkinnedMesh needs to be on this specific entity,

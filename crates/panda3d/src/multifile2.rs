@@ -1,14 +1,24 @@
 #[cfg(feature = "std")]
-use std::collections::BTreeMap;
-#[cfg(feature = "std")]
-use std::path::{Path, PathBuf};
+use std::{
+    collections::BTreeMap,
+    fs::File,
+    io::{BufReader, Write},
+    path::{Path, PathBuf},
+    time::{Duration, SystemTime},
+};
+
+#[cfg(not(feature = "std"))]
+use crate::no_std::*;
 
 use bitflags::bitflags;
 use orthrus_core::prelude::*;
 use snafu::prelude::*;
 
+/// Error conditions when working with Multifile archives.
 #[derive(Debug, Snafu)]
+#[non_exhaustive]
 pub enum Error {
+    #[cfg(feature = "std")]
     #[snafu(display("Filesystem Error {}", source))]
     FileError { source: std::io::Error },
 
@@ -29,12 +39,15 @@ impl From<DataError> for Error {
     #[inline]
     fn from(error: DataError) -> Self {
         match error {
+            #[cfg(feature = "std")]
+            DataError::Io { source } => Self::FileError { source },
             DataError::EndOfFile => Self::EndOfFile,
             _ => todo!(),
         }
     }
 }
 
+#[cfg(feature = "std")]
 impl From<std::io::Error> for Error {
     #[inline]
     fn from(error: std::io::Error) -> Self {
@@ -56,15 +69,23 @@ impl core::fmt::Display for Version {
 }
 
 #[derive(Debug)]
-pub struct MultifileHeader {
+pub struct Header {
     version: Version,
     scale_factor: u32,
     timestamp: u32,
 }
 
-#[expect(dead_code)]
+/// This is used internally to reduce allocations due to the full Multifile allocating additional space for
+/// each file's data.
+#[derive(Debug)]
+struct Metadata {
+    header: Header,
+    files: Vec<SubfileHeader>,
+}
+
+#[derive(Debug)]
 pub struct Multifile {
-    header: MultifileHeader,
+    header: Header,
     files: BTreeMap<String, Subfile>,
 }
 
@@ -74,8 +95,45 @@ impl Multifile {
     /// Unique identifier that tells us if we're reading a Multifile archive.
     pub const MAGIC: [u8; 6] = *b"pmf\0\n\r";
 
+    /// Helper function that searches for the start of the actual Multifile, skipping any header prefix, which
+    /// allow for comment lines starting with '#'. Returns the size of the header prefix.
     #[inline]
-    fn read_header(data: &mut DataCursor) -> Result<MultifileHeader, self::Error> {
+    fn parse_header_prefix<T: ReadExt + SeekExt>(data: &mut T) -> Result<u64, self::Error> {
+        let mut pos = 0;
+
+        loop {
+            // This checks the initial byte of the line, if at any point we error, just return 0;
+            match data.read_u8()? {
+                b'#' => {
+                    pos += 1;
+                    // If we are in a comment line, search for a '\n'
+                    loop {
+                        let byte = data.read_u8()?;
+                        pos += 1;
+                        if byte == b'\n' {
+                            break;
+                        }
+                    }
+                    // Once we find the end of a line, skip any whitespace at the start of the next line
+                    loop {
+                        let byte = data.read_u8()?;
+                        if !matches!(byte, b' ' | b'\r') {
+                            let position = data.position()?;
+                            data.set_position(position - 1)?;
+                            break;
+                        }
+                        pos += 1;
+                    }
+                }
+                _ => break,
+            }
+        }
+        Ok(pos)
+    }
+
+    /// Returns the data from a `Multifile` header.
+    #[inline]
+    fn read_header<T: ReadExt>(data: &mut T) -> Result<Header, self::Error> {
         let magic = data.read_slice(6)?;
         ensure!(*magic == Self::MAGIC, InvalidMagicSnafu);
 
@@ -92,142 +150,160 @@ impl Multifile {
             false => 0,
         };
 
-        Ok(MultifileHeader { version, scale_factor, timestamp })
+        Ok(Header { version, scale_factor, timestamp })
     }
 
+    /// Returns the number of [`Subfile`]s currently stored in the Multifile.
+    #[inline]
+    pub fn count(&mut self) -> usize {
+        self.files.len()
+    }
+
+    /// Opens a file on disk, loads its contents, and parses it into a new `Multifile` instance. The instance
+    /// can then be used for further operations.
     #[inline]
     #[cfg(feature = "std")]
-    pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, self::Error> {
-        fn inner(path: &Path) -> Result<Multifile, self::Error> {
-            let data = std::fs::read(path)?;
-            Multifile::load(data)
-        }
-        inner(path.as_ref())
+    pub fn open<P: AsRef<Path>>(path: P, offset: u64) -> Result<Self, self::Error> {
+        let data = BufReader::new(File::open(path)?);
+        Multifile::load(data, offset)
     }
 
+    /// Loads the data from a given input and parses it into a new `Multifile` instance. The instance can then
+    /// be used for further operations.
     #[inline]
-    pub fn load<I: Into<Box<[u8]>>>(input: I) -> Result<Self, self::Error> {
-        fn inner(input: Box<[u8]>) -> Result<Multifile, self::Error> {
-            let mut data = DataCursor::new(input, Endian::Little);
-            let header = Multifile::read_header(&mut data)?;
+    pub fn load<T: IntoDataStream>(input: T, offset: u64) -> Result<Self, self::Error> {
+        let mut data = input.into_stream(Endian::Little);
+        data.set_position(offset)?;
+        let metadata = Self::load_metadata(&mut data)?;
 
-            // We operate on the assumption of an "optimized" Multifile, with all Subfile headers at the
-            // start, followed by the actual data. Accumulate all headers, and then parse the data into a
-            // BTreeMap to optimize cache efficiency, even if we're technically "in-memory".
-            let mut headers = Vec::new();
-
-            let mut next_index = data.read_u32()? * header.scale_factor;
-            while next_index != 0 {
-                let subfile = SubfileHeader::load(&mut data, header.version)?;
-                headers.push(subfile);
-
-                data.set_position(next_index as usize)?;
-                next_index = data.read_u32()? * header.scale_factor;
+        // Now, let's actually build our sorted list of files (ideally, this will already be sorted inside
+        // the Multifile)
+        let mut files = BTreeMap::new();
+        for mut header in metadata.files {
+            // First, let's verify that our optional parameters are valid
+            if header.timestamp == 0 {
+                header.timestamp = metadata.header.timestamp;
+            }
+            if header.original_length == 0 {
+                header.original_length = header.length;
             }
 
-            // Now, let's actually build our sorted list of files (ideally, this will already be sorted inside
-            // the Multifile)
-            let mut files = BTreeMap::new();
-            for mut subfile_header in headers {
-                // First, let's verify that our optional parameters are valid
-                // TODO: if we're on version 1.0, grab the current timestamp as a placeholder?
-                if subfile_header.timestamp == 0 {
-                    subfile_header.timestamp = header.timestamp;
-                }
-                if subfile_header.original_length == 0 {
-                    subfile_header.original_length = subfile_header.length;
-                }
-
-                let subfile = Subfile::load(&mut data, &subfile_header)?;
-                files.insert(subfile_header.filename, subfile);
-            }
-
-            Ok(Multifile { header, files })
+            let subfile = Subfile::load(&mut data, &header)?;
+            files.insert(header.filename, subfile);
         }
-        inner(input.into())
+
+        Ok(Multifile { header: metadata.header, files })
     }
 
+    /// Loads the entire `Multifile` metadata and returns it as an instance. Used for sharing a ReadExt +
+    /// SeekExt stream across multiple operations.
+    ///
+    /// This assumes that the input data is already at the start of a Multifile, i.e. we've already skipped
+    /// any potential header prefix or offset.
+    fn load_metadata<T: ReadExt + SeekExt>(data: &mut T) -> Result<Metadata, self::Error> {
+        let header = Multifile::read_header(data)?;
+
+        // This is designed to work with an "optimized" Multifile. This means that all Subfile metadata is at
+        // the beginning of the file, with the actual file data following, so that seeking is minimized. Here,
+        // we accumulate all metadata, and then parse it into a BTreeMap to optimize cache efficiency.
+        let mut files = Vec::new();
+
+        let mut next_index = data.read_u32()? * header.scale_factor;
+        while next_index != 0 {
+            let subfile = SubfileHeader::load(data, header.version)?;
+            files.push(subfile);
+
+            data.set_position(next_index.into())?;
+            next_index = data.read_u32()? * header.scale_factor;
+        }
+
+        Ok(Metadata { header, files })
+    }
+
+    /// Extracts all non-special Subfiles to the specified output directory.
     #[inline]
     #[cfg(feature = "std")]
     pub fn extract_all<P: AsRef<Path>>(&mut self, output: P) -> Result<usize, self::Error> {
-        fn inner(multifile: &mut Multifile, output: &PathBuf) -> Result<usize, self::Error> {
-            let mut saved_files = 0;
-            for subfile in &multifile.files {
-                if !subfile
-                    .1
-                    .attributes
-                    .intersects(Attributes::Signature | Attributes::Compressed | Attributes::Encrypted)
-                {
-                    let path = output.join(subfile.0);
+        let output = PathBuf::from(output.as_ref());
+        let mut saved_files = 0;
+        for subfile in &self.files {
+            if !subfile
+                .1
+                .attributes
+                .intersects(Attributes::Signature | Attributes::Compressed | Attributes::Encrypted)
+            {
+                let path = output.join(subfile.0);
 
-                    if let Some(dir) = path.parent() {
-                        std::fs::create_dir_all(dir)?;
-                    }
-
-                    std::fs::write(path, &subfile.1.data)?;
-                    saved_files += 1;
+                if let Some(dir) = path.parent() {
+                    std::fs::create_dir_all(dir)?;
                 }
+
+                let mut file = File::create(path)?;
+                file.write_all(&subfile.1.data)?;
+                if subfile.1.timestamp != 0 {
+                    let timestamp = Duration::from_secs(subfile.1.timestamp.into());
+                    if let Some(modified) = SystemTime::UNIX_EPOCH.checked_add(timestamp) {
+                        file.set_modified(modified)?;
+                    }
+                }
+
+                saved_files += 1;
             }
-            Ok(saved_files)
         }
-        inner(self, &PathBuf::from(output.as_ref()))
+        Ok(saved_files)
     }
 
     #[inline]
     #[cfg(feature = "std")]
     pub fn extract_from_file<P: AsRef<Path>>(input: P, output: P) -> Result<usize, self::Error> {
-        fn inner(input: &Path, output: &PathBuf) -> Result<usize, self::Error> {
-            let input = std::fs::read(input)?;
-            let mut data = DataCursor::new(input, Endian::Little);
-            let header = Multifile::read_header(&mut data)?;
+        let input = BufReader::new(File::open(input.as_ref())?);
+        let mut data = DataStream::new(input, Endian::Little);
+        let output = PathBuf::from(output.as_ref());
 
-            // We operate on the assumption of an "optimized" Multifile, with all Subfile headers at the
-            // start, followed by the actual data. Accumulate all headers, and then extract file data to
-            // optimize cache efficiency, even if we're technically "in-memory".
-            let mut headers = Vec::new();
+        // Load all metadata (hopefully at the beginning of the file so our BufReader isn't getting thrashed)
+        let metadata = Self::load_metadata(&mut data)?;
 
-            let mut next_index = data.read_u32()? * header.scale_factor;
-            while next_index != 0 {
-                let subfile = SubfileHeader::load(&mut data, header.version)?;
-                headers.push(subfile);
+        // Now, let's actually extract to the filesystem
+        let mut saved_files = 0;
+        for mut header in metadata.files {
+            // First, let's verify that our optional parameters are valid
+            // TODO: if we're on version 1.0, grab the current timestamp as a placeholder?
+            // TODO: We also should probably set the timestamp in the filesystem
+            if metadata.header.version.minor == 0 {}
 
-                data.set_position(next_index as usize)?;
-                next_index = data.read_u32()? * header.scale_factor;
+            if header.timestamp == 0 {
+                header.timestamp = metadata.header.timestamp;
+            }
+            if header.original_length == 0 {
+                header.original_length = header.length;
             }
 
-            // Now, let's actually extract to the filesystem
-            let mut saved_files = 0;
-            for mut subfile_header in headers {
-                // First, let's verify that our optional parameters are valid
-                // TODO: if we're on version 1.0, grab the current timestamp as a placeholder?
-                // TODO: We also should probably set the timestamp in the filesystem
-                if subfile_header.timestamp == 0 {
-                    subfile_header.timestamp = header.timestamp;
-                }
-                if subfile_header.original_length == 0 {
-                    subfile_header.original_length = subfile_header.length;
+            if !header
+                .attributes
+                .intersects(Attributes::Signature | Attributes::Compressed | Attributes::Encrypted)
+            {
+                let path = output.join(header.filename);
+
+                if let Some(dir) = path.parent() {
+                    std::fs::create_dir_all(dir)?;
                 }
 
-                if !subfile_header
-                    .attributes
-                    .intersects(Attributes::Signature | Attributes::Compressed | Attributes::Encrypted)
-                {
-                    let path = output.join(subfile_header.filename);
+                data.set_position(header.offset.into())?;
 
-                    if let Some(dir) = path.parent() {
-                        std::fs::create_dir_all(dir)?;
+                let mut file = File::create(path)?;
+                file.write_all(&data.read_slice(header.length as usize)?)?;
+                if header.timestamp != 0 {
+                    let timestamp = Duration::from_secs(header.timestamp.into());
+                    if let Some(modified) = SystemTime::UNIX_EPOCH.checked_add(timestamp) {
+                        file.set_modified(modified)?;
                     }
-
-                    data.set_position(subfile_header.offset as usize)?;
-
-                    std::fs::write(path, data.read_slice(subfile_header.length as usize)?)?;
-                    saved_files += 1;
                 }
-            }
 
-            Ok(saved_files)
+                saved_files += 1;
+            }
         }
-        inner(input.as_ref(), &PathBuf::from(output.as_ref()))
+
+        Ok(saved_files)
     }
 }
 
@@ -256,7 +332,7 @@ struct SubfileHeader {
 
 impl SubfileHeader {
     #[inline]
-    fn load(data: &mut DataCursor, version: Version) -> Result<Self, self::Error> {
+    fn load<T: ReadExt>(data: &mut T, version: Version) -> Result<Self, self::Error> {
         let offset = data.read_u32()?;
         let length = data.read_u32()?;
         let attributes = Attributes::from_bits_truncate(data.read_u16()?);
@@ -281,7 +357,7 @@ impl SubfileHeader {
     }
 }
 
-#[expect(dead_code)]
+#[derive(Debug)]
 struct Subfile {
     attributes: Attributes,
     original_length: u32,
@@ -291,8 +367,8 @@ struct Subfile {
 
 impl Subfile {
     #[inline]
-    fn load(data: &mut DataCursor, header: &SubfileHeader) -> Result<Self, self::Error> {
-        data.set_position(header.offset as usize)?;
+    fn load<T: ReadExt + SeekExt>(data: &mut T, header: &SubfileHeader) -> Result<Self, self::Error> {
+        data.set_position(header.offset.into())?;
         Ok(Subfile {
             attributes: header.attributes,
             original_length: header.original_length,

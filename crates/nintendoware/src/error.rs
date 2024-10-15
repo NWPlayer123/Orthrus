@@ -18,9 +18,12 @@ pub enum Error {
     /// Thrown if the header contains a magic number other than what's expected.
     #[snafu(display("Invalid Magic! Expected {:?}.", expected))]
     InvalidMagic { expected: [u8; 4] },
+    /// Thrown if the header contains an invalid endian.
+    #[snafu(display("Invalid Endian {:?}!", endian))]
+    InvalidEndian { endian: [u8; 2] },
     /// Thrown when encountering unexpected values.
-    #[snafu(display("Unexpected value encountered! Reason: {}", reason))]
-    InvalidData { reason: &'static str },
+    #[snafu(display("Unexpected value encountered at position {:#X}! Reason: {}", position, reason))]
+    InvalidData { position: u64, reason: &'static str },
     /// Thrown if UTF-8 validation fails when converting a string.
     #[snafu(display("Invalid UTF-8 String!"))]
     InvalidUtf8,

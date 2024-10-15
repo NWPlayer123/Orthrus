@@ -7,7 +7,8 @@
 
 #[doc(inline)]
 pub use crate::data::{
-    DataStream, DataCursor, DataCursorMut, DataCursorRef, Endian, EndianExt, ReadExt, SeekExt, WriteExt, DataError
+    DataCursor, DataCursorMut, DataCursorRef, DataError, DataStream, Endian, EndianExt, IntoDataStream,
+    ReadExt, SeekExt, WriteExt,
 };
 #[doc(inline)]
 pub use crate::identify::{FileIdentifier, FileInfo, IdentifyFn};
@@ -22,7 +23,7 @@ pub mod util {
 #[cfg(feature = "time")]
 pub mod time {
     #[doc(inline)]
-    pub use crate::time::{current_time, format_timestamp, get_local_offset};
+    pub use crate::time::{current_time, current_timestamp, format_timestamp, local_offset};
 }
 
 /// Includes [`cert::read_certificate`], which allows for reading X.509 certificates.

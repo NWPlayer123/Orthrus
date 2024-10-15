@@ -251,7 +251,7 @@ impl Multifile {
     /// new to be supported, or [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds.
     #[cfg(feature = "std")]
     #[inline]
-    pub fn open<P: AsRef<Path>>(input: P, offset: usize) -> Result<Self> {
+    pub fn open<P: AsRef<Path>>(input: P, offset: u64) -> Result<Self> {
         let data = std::fs::read(input)?;
         Self::load(data, offset)
     }
@@ -264,10 +264,10 @@ impl Multifile {
     /// Multifile, [`UnknownVersion`](Error::UnknownVersion) if the Multifile version is too
     /// new to be supported, or [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds.
     #[inline]
-    pub fn load<I: Into<Box<[u8]>>>(input: I, offset: usize) -> Result<Self> {
+    pub fn load<I: Into<Box<[u8]>>>(input: I, offset: u64) -> Result<Self> {
         let mut data = DataCursor::new(input, Endian::Little);
         data.set_position(offset)?;
-        data.set_position(Self::parse_header_prefix(&data))?;
+        data.set_position(Self::parse_header_prefix(&data) as u64)?;
 
         let header = Self::read_header(&mut data)?;
         let mut multifile = Self {
@@ -288,7 +288,7 @@ impl Multifile {
 
             multifile.files.push(subfile);
 
-            multifile.data.set_position(next_index as usize)?;
+            multifile.data.set_position(next_index.into())?;
             next_index = multifile.data.read_u32()? * header.scale_factor;
         }
 
@@ -310,7 +310,7 @@ impl Multifile {
         let mut saved_files = 0;
         for subfile in &mut self.files {
             if !subfile.flags.intersects(Flags::Signature | Flags::Compressed | Flags::Encrypted) {
-                self.data.set_position(subfile.offset as usize)?;
+                self.data.set_position(subfile.offset.into())?;
                 subfile.write_file(&*self.data.read_slice(subfile.length as usize)?, &output)?;
                 saved_files += 1;
             }
@@ -328,7 +328,7 @@ impl Multifile {
     /// failing to create a file to write to (see [`write`](std::fs::write)).
     #[cfg(feature = "std")]
     #[inline]
-    pub fn extract_from_path<P: AsRef<Path>>(input: P, output: P, offset: usize) -> Result<()> {
+    pub fn extract_from_path<P: AsRef<Path>>(input: P, output: P, offset: u64) -> Result<()> {
         let data = std::fs::read(input)?;
         Self::extract_from(&data, output, offset)?;
         Ok(())
@@ -344,11 +344,11 @@ impl Multifile {
     /// [`write`](std::fs::write)).
     #[cfg(feature = "std")]
     #[inline]
-    pub fn extract_from<P: AsRef<Path>>(input: &[u8], output: P, offset: usize) -> Result<()> {
+    pub fn extract_from<P: AsRef<Path>>(input: &[u8], output: P, offset: u64) -> Result<()> {
         //Use a DataCursorRef internally because it makes reading structured data a lot easier
         let mut data = DataCursorRef::new(input, Endian::Little);
         data.set_position(offset)?;
-        data.set_position(Self::parse_header_prefix(&data))?;
+        data.set_position(Self::parse_header_prefix(&data) as u64)?;
 
         let header = Self::read_header(&mut data)?;
 
@@ -361,7 +361,7 @@ impl Multifile {
                 subfile.timestamp = header.timestamp;
             }
 
-            data.set_position(subfile.offset as usize)?;
+            data.set_position(subfile.offset.into())?;
             if !subfile.flags.contains(Flags::Signature) {
                 subfile.write_file(&*data.read_slice(subfile.length as usize)?, &output)?;
             } /* else if cfg!(signature) {
@@ -370,7 +370,7 @@ impl Multifile {
                   Self::check_signatures(data.get_slice(subfile.length as usize)?)?;
               }*/
 
-            data.set_position(next_index as usize)?;
+            data.set_position(next_index.into())?;
             next_index = data.read_u32()? * header.scale_factor;
         }
 
@@ -392,7 +392,7 @@ impl Multifile {
         file_data.set_position(4 + signature_size as usize);
         let cert_count = file_data.read_u32()?;
         let mut cert_blob =
-            DataCursor::new(vec![0u8; file_data.len() - file_data.position()], Endian::Little);
+            DataCursor::new(vec![0u8; file_data.len() - file_data.position()?], Endian::Little);
         file_data.read_length(&mut cert_blob)?;
 
         for _ in 0..cert_count {
