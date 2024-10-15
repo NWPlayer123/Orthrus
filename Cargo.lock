@@ -146,7 +146,7 @@ dependencies = [
 [[package]]
 name = "argp"
 version = "0.3.0"
-source = "git+https://github.com/jirutka/argp.git#12cb9c62b1f3f8cdb02527355953d9d44ef5c711"
+source = "git+https://github.com/jirutka/argp.git?rev=12cb9c62b1f3f8cdb02527355953d9d44ef5c711#12cb9c62b1f3f8cdb02527355953d9d44ef5c711"
 dependencies = [
  "argp_derive",
 ]
@@ -154,7 +154,7 @@ dependencies = [
 [[package]]
 name = "argp_derive"
 version = "0.3.0"
-source = "git+https://github.com/jirutka/argp.git#12cb9c62b1f3f8cdb02527355953d9d44ef5c711"
+source = "git+https://github.com/jirutka/argp.git?rev=12cb9c62b1f3f8cdb02527355953d9d44ef5c711#12cb9c62b1f3f8cdb02527355953d9d44ef5c711"
 dependencies = [
  "proc-macro2",
  "pulldown-cmark",

@@ -15,7 +15,10 @@ Panda3D BAM, LZ77/Okumura compression, ASH0/ASR0 compression, BFSTM/BWAV, GUI/Re
 
 ## License
 
-Licensed under either of
+This software is licensed under multiple licenses:
+
+### Non-Commercial Use
+For non-commercial use, this software is licensed under either of:
 
  * Apache License, Version 2.0
    ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
@@ -23,6 +26,17 @@ Licensed under either of
    ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
 
 at your option.
+
+### Commercial Use Restrictions
+Any commercial use of this software, including but not limited to:
+
+ * Using the software to provide commercial services
+ * Incorporating the software into a commercial product
+ * Any use of the software that generates revenue
+
+requires explicit written permission. Please contact me at nikki@aetheria.dev to discuss commercial licensing terms.
+
+Use of this software in a commercial context without explicit permission is strictly prohibited.
 
 ## Contribution
 

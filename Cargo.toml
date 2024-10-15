@@ -23,7 +23,7 @@ orthrus-panda3d = { version = "0.1", path = "crates/panda3d", features = ["ident
 orthrus-ncompress = { version = "0.2", path = "crates/ncompress" }
 orthrus-nintendoware = { version = "0.1", path = "crates/nintendoware" }
 
-argp = { version = "0.3", default-features = false, git = "https://github.com/jirutka/argp.git" }
+argp = { version = "0.3", default-features = false, git = "https://github.com/jirutka/argp.git", rev="12cb9c62b1f3f8cdb02527355953d9d44ef5c711" }
 env_logger = { version = "0.11", default-features = false }
 log = "0.4"
 owo-colors = "4.1"
