@@ -6,7 +6,7 @@ edition = "2021"
 description = "A new way to modify games."
 readme = "README.md"
 repository = "https://github.com/NWPlayer123/Orthrus"
-license = "MIT OR Apache-2.0"
+license = "MPL-2.0"
 keywords = ["modding", "gamedev"]
 
 [profile.release]
@@ -39,5 +39,5 @@ members = ["crates/*"]
 # repo will get very large in the future, with different people focusing on features in a specific
 # module
 [workspace.package]
-license = "MIT OR Apache-2.0"
+license = "MPL-2.0"
 repository = "https://github.com/NWPlayer123/Orthrus"
