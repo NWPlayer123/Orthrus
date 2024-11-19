@@ -1,3 +1,15 @@
+//! Adds support for the Audio Stream format used by NintendoWare for Revolution (NW4R).
+//! 
+//! # Revisions
+//! **Version 0.1** Used for prerelease games (see Trauma Center: Second Opinion) **Version 1.0** Used by the
+//! majority of NW4R games
+//! 
+//! # Format
+//! The BRSTM format, much like the rest of the NintendoWare binary formats, consists of a [shared
+//! header](super#shared-header), along with a number of "blocks" specific to each format.
+//! 
+//! 
+
 use crate::error::*;
 
 use orthrus_core::prelude::*;
@@ -83,6 +95,8 @@ impl StreamFile {
         data.set_position(position + u64::from(header.file_header.header_size))?;
 
         let _head_block = head_block::HeadBlock::new(&mut data, &header.head_block)?;
+
+        //ADPC only if ADPCM codec
 
         Ok(Self {})
     }
@@ -236,7 +250,36 @@ mod head_block {
         }
     }
 
-    pub(super) struct HeadBlock {}
+    struct ChannelInfo {}
+
+    impl ChannelInfo {
+        fn new<T: ReadExt>(data: &mut T) -> Result<Self> {
+            Ok(Self {})
+        }
+    }
+
+    struct ChannelTable {
+        channels: Vec<ChannelInfo>,
+    }
+
+    impl ChannelTable {
+        fn new<T: ReadExt + SeekExt>(data: &mut T, start_position: u64) -> Result<Self> {
+            let channel_count = data.read_u8()?;
+            data.read_exact::<3>()?; //padding
+            let mut channels = Vec::with_capacity(channel_count.into());
+            for _ in 0..channel_count {
+                channels.push(ChannelInfo::new(data)?);
+            }
+            Ok(Self { channels })
+        }
+    }
+
+    #[allow(dead_code)]
+    pub(super) struct HeadBlock {
+        stream_info: StreamInfo,
+        track_table: TrackTable,
+        channel_table: ChannelTable,
+    }
 
     impl HeadBlock {
         /// Unique identifier that tells us we're reading a HEAD section.
@@ -276,15 +319,23 @@ mod head_block {
             );
             let stream_info = StreamInfo::new(data)?;
 
-            // Start of the Track Info sub-block
+            // Start of the Track Table sub-block
             let position = data.position()?;
             ensure!(
-                position - start_position == stream_info.block_info_offset.into(),
+                position - start_position == header.track_info.value.into(),
                 InvalidDataSnafu { position, reason: "Unexpected Sub-Block Encountered" }
             );
-            let _track_table = TrackTable::new(data, start_position)?;
+            let track_table = TrackTable::new(data, start_position)?;
 
-            Ok(Self {})
+            // Start of the Channel Table sub-block
+            let position = data.position()?;
+            ensure!(
+                position - start_position == header.channel_info.value.into(),
+                InvalidDataSnafu { position, reason: "Unexpected Sub-Block Encountered" }
+            );
+            let channel_table = ChannelTable::new(data, start_position)?;
+
+            Ok(Self { stream_info, track_table, channel_table })
         }
     }
 }
