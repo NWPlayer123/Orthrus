@@ -7,7 +7,7 @@
 
 #[doc(inline)]
 pub use crate::data::{
-    DataCursor, DataCursorMut, DataCursorRef, DataError, DataStream, Endian, EndianExt, IntoDataStream,
+    DataCursor, DataCursorMut, DataCursorRef, DataError, DataStream, Endian, IntoDataStream,
     ReadExt, SeekExt, WriteExt,
 };
 #[doc(inline)]
