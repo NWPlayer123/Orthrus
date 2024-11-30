@@ -1,31 +1,20 @@
 use std::path::PathBuf;
 
-use bevy_animation::prelude::*;
-use bevy_animation::{AnimationTarget, AnimationTargetId};
-use bevy_app::prelude::*;
-use bevy_asset::io::Reader;
-use bevy_asset::prelude::*;
-use bevy_asset::{AssetLoader, AsyncReadExt, LoadContext};
-use bevy_color::prelude::*;
-use bevy_core::prelude::*;
-use bevy_ecs::prelude::*;
-use bevy_hierarchy::prelude::*;
-use bevy_log::prelude::*;
-use bevy_math::prelude::*;
-use bevy_pbr::prelude::*;
-use bevy_pbr::{ExtendedMaterial, MaterialExtension};
-use bevy_reflect::prelude::*;
-use bevy_render::mesh::skinning::{SkinnedMesh, SkinnedMeshInverseBindposes};
-use bevy_render::mesh::{Indices, MeshVertexBufferLayoutRef, PrimitiveTopology};
-use bevy_render::prelude::*;
-use bevy_render::render_asset::RenderAssetUsages;
-use bevy_render::render_resource::*;
-use bevy_render::texture::{
+use bevy::animation::{AnimationTarget, AnimationTargetId};
+use bevy::asset::io::Reader;
+use bevy::asset::{AssetLoader, AsyncReadExt, LoadContext};
+use bevy::pbr::{ExtendedMaterial, MaterialExtension, MaterialExtensionKey, MaterialExtensionPipeline};
+use bevy::prelude::*;
+use bevy::render::mesh::skinning::{SkinnedMesh, SkinnedMeshInverseBindposes};
+use bevy::render::mesh::{Indices, MeshVertexBufferLayoutRef, PrimitiveTopology};
+use bevy::render::render_asset::RenderAssetUsages;
+use bevy::render::render_resource::{
+    AsBindGroup, Face, RenderPipelineDescriptor, SpecializedMeshPipelineError,
+};
+use bevy::render::texture::{
     ImageAddressMode, ImageFilterMode, ImageLoaderSettings, ImageSampler, ImageSamplerDescriptor,
 };
-use bevy_scene::prelude::*;
-use bevy_tasks::prelude::*;
-use bevy_transform::prelude::*;
+use bevy::tasks::block_on;
 use bitflags::bitflags;
 use hashbrown::HashMap;
 use orthrus_core::prelude::*;
@@ -1557,7 +1546,7 @@ impl AssetLoader for BamLoader {
 pub struct Panda3DPlugin;
 
 impl Plugin for Panda3DPlugin {
-    fn build(&self, app: &mut bevy_app::App) {
+    fn build(&self, app: &mut App) {
         //load_internal_asset!(app, SHADER_HANDLE, "shader.wgsl", Shader::from_wgsl);
         app.add_plugins(MaterialPlugin::<
             ExtendedMaterial<StandardMaterial, Panda3DExtension>,
@@ -1584,8 +1573,8 @@ impl Default for Panda3DExtension {
 
 impl MaterialExtension for Panda3DExtension {
     fn specialize(
-        _pipeline: &bevy_pbr::MaterialExtensionPipeline, descriptor: &mut RenderPipelineDescriptor,
-        _layout: &MeshVertexBufferLayoutRef, key: bevy_pbr::MaterialExtensionKey<Self>,
+        _pipeline: &MaterialExtensionPipeline, descriptor: &mut RenderPipelineDescriptor,
+        _layout: &MeshVertexBufferLayoutRef, key: MaterialExtensionKey<Self>,
     ) -> Result<(), SpecializedMeshPipelineError> {
         if let Some(depth_stencil) = descriptor.depth_stencil.as_mut() {
             match key.bind_group_data.contains(Panda3DExtensionKey::DEPTH_WRITE_ENABLED) {
