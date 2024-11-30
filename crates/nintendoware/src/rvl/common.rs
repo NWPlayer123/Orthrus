@@ -1,7 +1,7 @@
-use crate::error::*;
-
 use orthrus_core::prelude::*;
 use snafu::prelude::*;
+
+use crate::error::*;
 
 #[derive(Debug)]
 #[allow(dead_code)]

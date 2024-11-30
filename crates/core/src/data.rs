@@ -1,11 +1,11 @@
 //! Endian-aware manipulation for data streams.
-//! 
+//!
 //! This crate contains several types that allow you to read and write data with a specific endianness.
 //! * [`DataCursor`] is for data where it owns the byte slice directly, such as in-memory files.
 //! * [`DataCursorRef`] is for borrowed data and allows for reading.
 //! * [`DataCursorMut`] is for borrowed mutable data and allows both reading and writing.
 //! * [`DataStream`] allows for any stream that supports [`Read`]/[`Write`]/[`Seek`].
-//! 
+//!
 //! Additionally, this provides several traits to allow for a more modular integration.
 //! * [`IntoDataStream`] allows you to convert into the above types in a generic way.
 //! * [`ReadExt`] provides for endian-aware reading.
@@ -1254,7 +1254,7 @@ impl<T> DerefMut for DataStream<T> {
 // TODO: these are a placeholder solution until specialization is stabilized
 // https://github.com/rust-lang/rust/issues/31844
 /// Trait to convert data types into an endian-aware stream.
-/// 
+///
 /// # Example
 /// ```
 /// fn parse_data<T: IntoDataStream>(input: T) {

@@ -7,12 +7,12 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-#[cfg(not(feature = "std"))]
-use crate::no_std::*;
-
 use bitflags::bitflags;
 use orthrus_core::prelude::*;
 use snafu::prelude::*;
+
+#[cfg(not(feature = "std"))]
+use crate::no_std::*;
 
 /// Error conditions when working with Multifile archives.
 #[derive(Debug, Snafu)]

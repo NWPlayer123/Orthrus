@@ -22,7 +22,11 @@ pub enum Error {
     #[snafu(display("Invalid Endian {:?}!", endian))]
     InvalidEndian { endian: [u8; 2] },
     /// Thrown when encountering unexpected values.
-    #[snafu(display("Unexpected value encountered at position {:#X}! Reason: {}", position, reason))]
+    #[snafu(display(
+        "Unexpected value encountered at position {:#X}! Reason: {}",
+        position,
+        reason
+    ))]
     InvalidData { position: u64, reason: &'static str },
     /// Thrown if UTF-8 validation fails when converting a string.
     #[snafu(display("Invalid UTF-8 String!"))]

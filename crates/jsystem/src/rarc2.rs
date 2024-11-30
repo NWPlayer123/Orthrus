@@ -1,10 +1,10 @@
-use bitflags::bitflags;
-use orthrus_core::prelude::*;
-use snafu::prelude::*;
-
 use std::ffi::CString;
 #[cfg(feature = "std")]
 use std::{fs::File, io::BufReader, path::Path};
+
+use bitflags::bitflags;
+use orthrus_core::prelude::*;
+use snafu::prelude::*;
 
 /// Error conditions when working with Resource Archives.
 #[derive(Debug, Snafu)]
@@ -305,8 +305,12 @@ impl ResourceArchive {
             let end = string_table[directory.string_offset as usize..]
                 .iter()
                 .position(|&b| b == 0)
-                .map(|pos| pos + directory.string_offset as usize).unwrap();
-            println!("{:?}:", CString::new(&string_table[directory.string_offset as usize..end]).unwrap());
+                .map(|pos| pos + directory.string_offset as usize)
+                .unwrap();
+            println!(
+                "{:?}:",
+                CString::new(&string_table[directory.string_offset as usize..end]).unwrap()
+            );
             println!("{directory:?}");
         }
         println!();
@@ -314,8 +318,12 @@ impl ResourceArchive {
             let end = string_table[file.string_offset as usize..]
                 .iter()
                 .position(|&b| b == 0)
-                .map(|pos| pos + file.string_offset as usize).unwrap();
-            println!("{:?}:", CString::new(&string_table[file.string_offset as usize..end]).unwrap());
+                .map(|pos| pos + file.string_offset as usize)
+                .unwrap();
+            println!(
+                "{:?}:",
+                CString::new(&string_table[file.string_offset as usize..end]).unwrap()
+            );
             println!("{file:?}");
         }
         Ok(Self {})

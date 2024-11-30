@@ -1,24 +1,22 @@
 //! Adds support for the Audio Stream format used by NintendoWare for Revolution (NW4R).
-//! 
+//!
 //! # Revisions
 //! **Version 0.1** Used for prerelease games (see Trauma Center: Second Opinion) **Version 1.0** Used by the
 //! majority of NW4R games
-//! 
+//!
 //! # Format
 //! The BRSTM format, much like the rest of the NintendoWare binary formats, consists of a [shared
 //! header](super#shared-header), along with a number of "blocks" specific to each format.
-//! 
-//! 
+//!
 
-use crate::error::*;
+#[cfg(feature = "std")]
+use std::{fs::File, io::BufReader, path::Path};
 
 use orthrus_core::prelude::*;
 use snafu::prelude::*;
 
 use super::common::{BlockHeader, FileHeader};
-
-#[cfg(feature = "std")]
-use std::{fs::File, io::BufReader, path::Path};
+use crate::error::*;
 
 //TODO: move to common?
 #[derive(Debug)]
@@ -61,12 +59,12 @@ struct ExtendedHeader {
 pub struct StreamFile {}
 
 impl StreamFile {
-    /// Unique identifier that tells us if we're reading a BRSTM file.
-    pub const MAGIC: [u8; 4] = *b"RSTM";
     /// Identifier for the ADPC section.
     pub const ADPC_MAGIC: [u8; 4] = *b"ADPC";
     /// Identifier for the DATA section.
     pub const DATA_MAGIC: [u8; 4] = *b"DATA";
+    /// Unique identifier that tells us if we're reading a BRSTM file.
+    pub const MAGIC: [u8; 4] = *b"RSTM";
 
     #[inline]
     fn read_header<T: ReadExt>(data: &mut T) -> Result<ExtendedHeader> {

@@ -11,7 +11,6 @@ pub mod Wii {
     pub use crate::rvl::stream::StreamFile;
 }
 
-
 #[expect(non_snake_case)]
 pub mod Switch {
     #[doc(inline)]

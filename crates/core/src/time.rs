@@ -47,7 +47,7 @@ pub fn current_time() -> time::Result<String> {
 }
 
 /// Returns the local time zone offset.
-/// 
+///
 /// This is useful for testing if the current system has a local offset or if only UTC is available.
 #[cfg(feature = "std")]
 #[inline]
