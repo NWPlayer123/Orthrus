@@ -63,6 +63,7 @@ jobs:
       - name: Check Dependencies
         uses: EmbarkStudios/cargo-deny-action@v1
         with:
+          rust-version: "1.83.0"
           command: check ${{ matrix.checks }}
           log-level: warn
           arguments: --all-features
