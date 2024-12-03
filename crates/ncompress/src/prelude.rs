@@ -3,7 +3,7 @@
 //! For example, you can refer to [`Yaz0`], but you have to use [`yaz0::Error`].
 //!
 //! The contents of this module can be used by including the following in any module:
-//! ```
+//! ```ignore
 //! use orthrus_ncompress::prelude::*;
 //! ```
 

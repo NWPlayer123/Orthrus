@@ -390,16 +390,19 @@ impl Multifile {
     pub fn check_signatures(input: &[u8]) -> Result<()> {
         let mut file_data = DataCursor::new(input, Endian::Little);
         let signature_size = file_data.read_u32()?;
-        file_data.set_position(4 + signature_size as usize);
+        file_data.set_position(4 + u64::from(signature_size))?;
         let cert_count = file_data.read_u32()?;
-        let mut cert_blob =
-            DataCursor::new(vec![0u8; file_data.len() - file_data.position()?], Endian::Little);
+        let mut cert_blob = DataCursor::new(
+            vec![0u8; (file_data.len()? - file_data.position()?) as usize],
+            Endian::Little,
+        );
         file_data.read_length(&mut cert_blob)?;
 
         for _ in 0..cert_count {
-            let (_, remaining) = cert::read_certificate(cert_blob.remaining_slice()).unwrap();
+            let (_, remaining) = cert::read_certificate(&cert_blob.remaining_slice()?).unwrap();
             //println!("Certificate {n}:\n{certificate:?}");
-            cert_blob.set_position(cert_blob.len() - remaining);
+            let length = cert_blob.len()?;
+            cert_blob.set_position(length - remaining as u64)?;
         }
         Ok(())
     }

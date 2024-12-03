@@ -49,7 +49,7 @@ impl<'a> Datagram<'a> {
     pub(crate) fn read_float(&mut self) -> Result<f32, DataError> {
         match self.float_type {
             true => Ok(self.cursor.read_f64()? as f32),
-            false => self.cursor.read_f32()
+            false => self.cursor.read_f32(),
         }
     }
 

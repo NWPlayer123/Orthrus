@@ -3,7 +3,7 @@
 //! For example, you can refer to [`Multifile`], but you have to use [`multifile::Error`].
 //!
 //! The contents of this module can be used by including the following in any module:
-//! ```
+//! ```ignore
 //! use orthrus_panda3d::prelude::*;
 //! ```
 

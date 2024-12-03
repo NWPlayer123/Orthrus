@@ -465,17 +465,21 @@ impl DataCursor {
 
     /// Copies data within the `DataCursor` from one range to another position.
     ///
+    /// Due to the way that Yaz0 and Yay0 compression work, if this function is used to copy overlapping
+    /// sections, the initial value will repeat itself. If you don't need this behavior, consider using a more
+    /// normal memcpy.
+    ///
     /// # Example
     /// ```
     /// # use orthrus_core::prelude::*;
     /// let mut cursor = DataCursor::new(vec![1, 2, 3, 4, 5].into_boxed_slice(), Endian::Little);
     /// cursor.copy_within(1..4, 2).unwrap();
-    /// assert_eq!(&cursor.into_inner()[..], &[1, 2, 2, 3, 4]);
+    /// assert_eq!(&cursor.into_inner()[..], &[1, 2, 2, 2, 2]);
     /// ```
     ///
     /// # Errors
-    /// Returns [`EndOfFile`](Error::EndOfFile) if either the source range or the destination
-    /// range would be out of bounds.
+    /// Returns [`EndOfFile`](Error::EndOfFile) if either the source range or the destination range would be
+    /// out of bounds.
     #[inline]
     pub fn copy_within(&mut self, src: core::ops::Range<usize>, dest: usize) -> Result<(), DataError> {
         let length = src.end.saturating_sub(src.start);
@@ -901,18 +905,22 @@ impl<'a> DataCursorMut<'a> {
 
     /// Copies data within the `DataCursorMut` from one range to another position.
     ///
+    /// Due to the way that Yaz0 and Yay0 compression work, if this function is used to copy overlapping
+    /// sections, the initial value will repeat itself. If you don't need this behavior, consider using a more
+    /// normal memcpy.
+    ///
     /// # Example
     /// ```
     /// # use orthrus_core::prelude::*;
     /// let mut data = [1, 2, 3, 4, 5];
     /// let mut cursor = DataCursorMut::new(&mut data, Endian::Little);
     /// cursor.copy_within(1..4, 2).unwrap();
-    /// assert_eq!(&cursor.into_inner()[..], &[1, 2, 2, 3, 4]);
+    /// assert_eq!(&cursor.into_inner()[..], &[1, 2, 2, 2, 2]);
     /// ```
     ///
     /// # Errors
-    /// Returns [`EndOfFile`](Error::EndOfFile) if either the source range or the destination
-    /// range would be out of bounds.
+    /// Returns [`EndOfFile`](Error::EndOfFile) if either the source range or the destination range would be
+    /// out of bounds.
     #[inline]
     pub fn copy_within(&mut self, src: core::ops::Range<usize>, dest: usize) -> Result<(), DataError> {
         let length = src.end.saturating_sub(src.start);
@@ -1257,6 +1265,7 @@ impl<T> DerefMut for DataStream<T> {
 ///
 /// # Example
 /// ```
+/// # use orthrus_core::prelude::*;
 /// fn parse_data<T: IntoDataStream>(input: T) {
 ///     let mut data = input.into_stream(Endian::Little);
 /// }
@@ -1291,7 +1300,7 @@ impl<'a> IntoDataStream for &'a mut [u8] {
     }
 }
 
-impl<'a> IntoDataStream for &'a File {
+impl IntoDataStream for &File {
     type Reader = DataStream<Self>;
 
     fn into_stream(self, endian: Endian) -> Self::Reader {

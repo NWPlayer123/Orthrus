@@ -1,9 +1,8 @@
 #[cfg(feature = "std")]
 use std::path::Path;
 
-use snafu::prelude::*;
-
 use orthrus_core::prelude::*;
+use snafu::prelude::*;
 
 use crate::common::Version;
 
@@ -43,7 +42,7 @@ impl BinaryAsset {
     pub const MAGIC: [u8; 6] = *b"pbj\0\n\r";
     /// Earliest supported revision of the BAM format. For more info, see [here](self#revisions).
     pub const MINIMUM_VERSION: Version = Version { major: 6, minor: 14 };
-    
+
     #[cfg(feature = "std")]
     #[inline]
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, self::Error> {

@@ -17,7 +17,7 @@ bevy_transform = { version = "0.15", default-features = false }
 bevy_math = { version = "0.15", default-features = false, features = [
     "approx",
 ] }
-der = { version = "0.7", optional = true }
+#der = { version = "0.7", optional = true }
 
 # Bevy-Specific Assets
 #bevy_mod_billboard = "0.7"
@@ -44,6 +44,6 @@ features = [
 [features]
 default = ["std"]
 std = ["snafu/std"]
-signature = ["der", "orthrus-core/certificate"]
+signature = ["orthrus-core/certificate"]
 bevy = ["bevy_internal", "serde"]
 identify = []
