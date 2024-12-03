@@ -1,22 +1,42 @@
+use core::ops::{Deref, DerefMut};
+
 use super::prelude::*;
 
 #[derive(Debug, Default)]
-#[expect(dead_code)]
+#[allow(dead_code)]
 pub(crate) struct Character {
-    pub node: PartBundleNode,
-    pub temp_part_refs: Vec<u32>,
+    pub inner: PartBundleNode,
+    temp_part_refs: Vec<u32>,
 }
 
-impl Character {
+impl Node for Character {
     #[inline]
-    pub fn create(loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
-        let node = PartBundleNode::create(loader, data)?;
+    fn create(loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
+        let inner = PartBundleNode::create(loader, data)?;
+
+        // For compatibility only, no longer used and handled by PartBundleNode
         let temp_num_parts = data.read_u16()?;
         let mut temp_part_refs = Vec::with_capacity(temp_num_parts as usize);
         for _ in 0..temp_num_parts {
-            //TODO: we should relegate this to PartBundleNode, this is compatibility
             temp_part_refs.push(loader.read_pointer(data)?.unwrap());
         }
-        Ok(Self { node, temp_part_refs })
+
+        Ok(Self { inner, temp_part_refs })
+    }
+}
+
+impl Deref for Character {
+    type Target = PartBundleNode;
+
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl DerefMut for Character {
+    #[inline]
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
     }
 }

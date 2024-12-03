@@ -1,14 +1,31 @@
+use core::ops::{Deref, DerefMut};
+
 use super::prelude::*;
 
 #[derive(Debug, Default)]
-#[allow(dead_code)]
 pub(crate) struct JointVertexTransform {
     pub joint_ref: u32,
 }
 
-impl JointVertexTransform {
+impl Node for JointVertexTransform {
     #[inline]
-    pub fn create(loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
+    fn create(loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
         Ok(Self { joint_ref: loader.read_pointer(data)?.unwrap() })
+    }
+}
+
+impl Deref for JointVertexTransform {
+    type Target = u32;
+
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        &self.joint_ref
+    }
+}
+
+impl DerefMut for JointVertexTransform {
+    #[inline]
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.joint_ref
     }
 }

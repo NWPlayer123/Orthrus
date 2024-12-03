@@ -2,7 +2,7 @@ use super::prelude::*;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Default, FromPrimitive)]
 #[repr(u8)]
-enum Mode {
+pub(crate) enum Mode {
     //fixed-function pipeline
     #[default]
     Modulate,
@@ -34,7 +34,7 @@ enum Mode {
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Default, FromPrimitive)]
 #[repr(u8)]
-enum CombineMode {
+pub(crate) enum CombineMode {
     #[default]
     Undefined,
     Replace,
@@ -49,7 +49,7 @@ enum CombineMode {
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Default, FromPrimitive)]
 #[repr(u8)]
-enum CombineSource {
+pub(crate) enum CombineSource {
     #[default]
     Undefined,
     Texture,
@@ -62,7 +62,7 @@ enum CombineSource {
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Default, FromPrimitive)]
 #[repr(u8)]
-enum CombineOperand {
+pub(crate) enum CombineOperand {
     #[default]
     Undefined,
     SourceColor,
@@ -72,18 +72,18 @@ enum CombineOperand {
 }
 
 #[derive(Debug, Default)]
-#[expect(dead_code)]
-struct CombineConfig {
-    mode: CombineMode,
-    num_operands: u8,
-    sources: [CombineSource; 3],
-    operands: [CombineOperand; 3],
+#[allow(dead_code)]
+pub(crate) struct CombineConfig {
+    pub mode: CombineMode,
+    pub num_operands: u8,
+    pub sources: [CombineSource; 3],
+    pub operands: [CombineOperand; 3],
 }
 
 //TODO: make the flag check functions const, need const PartialEq which is only in nightly rn
 impl CombineConfig {
     #[inline]
-    pub fn create(_loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
+    fn create(_loader: &mut BinaryAsset, data: &mut Datagram<'_>) -> Result<Self, bam::Error> {
         let mode = CombineMode::from(data.read_u8()?);
         let num_operands = data.read_u8()?;
         let source0 = CombineSource::from(data.read_u8()?);
@@ -123,34 +123,56 @@ impl CombineConfig {
 }
 
 #[derive(Debug)]
-#[expect(dead_code)]
+#[allow(dead_code)]
 pub(crate) struct TextureStage {
     pub name: String,
-    sort: i32,
-    priority: i32,
+    pub sort: i32,
+    pub priority: i32,
 
     /// Reference to the InternalName for this node, used for UV calculations
-    texcoord_name_ref: Option<u32>,
+    pub texcoord_name_ref: Option<u32>,
 
-    mode: Mode,
-    color: Vec4,
-    rgb_scale: u8,
-    alpha_scale: u8,
+    pub mode: Mode,
+    pub color: Vec4,
+    pub rgb_scale: u8,
+    pub alpha_scale: u8,
     /// Allows for caching and being reused as the TextureStage for multiple stages
-    saved_result: bool,
-    tex_view_offset: i32,
+    pub saved_result: bool,
+    pub tex_view_offset: i32,
 
-    combine_rgb: CombineConfig,
-    combine_alpha: CombineConfig,
-    involves_color_scale: bool,
-    uses_color: bool,
-    uses_primary_color: bool,
-    uses_last_saved_result: bool,
+    pub combine_rgb: CombineConfig,
+    pub combine_alpha: CombineConfig,
+    pub involves_color_scale: bool,
+    pub uses_color: bool,
+    pub uses_primary_color: bool,
+    pub uses_last_saved_result: bool,
 }
 
 impl TextureStage {
     #[inline]
-    pub fn create(loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
+    fn update_color_flags(&mut self) {
+        self.involves_color_scale = self.mode == Mode::BlendColorScale
+            || (self.mode == Mode::Combine
+                && (self.combine_rgb.involves_color_scale()
+                    || self.combine_alpha.involves_color_scale()));
+
+        self.uses_color = self.mode == Mode::Blend
+            || self.mode == Mode::BlendColorScale
+            || (self.mode == Mode::Combine
+                && (self.combine_rgb.uses_color() || self.combine_alpha.uses_color()));
+
+        self.uses_primary_color = self.mode == Mode::Combine
+            && (self.combine_rgb.uses_primary_color() || self.combine_alpha.uses_primary_color());
+
+        self.uses_last_saved_result = self.mode == Mode::Combine
+            && (self.combine_rgb.uses_last_saved_result()
+                || self.combine_alpha.uses_last_saved_result());
+    }
+}
+
+impl Node for TextureStage {
+    #[inline]
+    fn create(loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
         //Check if we're just using the default, otherwise load in all the config data
         if data.read_bool()? {
             return Ok(Self::default());
@@ -195,24 +217,6 @@ impl TextureStage {
         stage.update_color_flags();
 
         Ok(stage)
-    }
-
-    #[inline]
-    fn update_color_flags(&mut self) {
-        self.involves_color_scale = self.mode == Mode::BlendColorScale
-            || (self.mode == Mode::Combine
-                && (self.combine_rgb.involves_color_scale() || self.combine_alpha.involves_color_scale()));
-
-        self.uses_color = self.mode == Mode::Blend
-            || self.mode == Mode::BlendColorScale
-            || (self.mode == Mode::Combine
-                && (self.combine_rgb.uses_color() || self.combine_alpha.uses_color()));
-
-        self.uses_primary_color = self.mode == Mode::Combine
-            && (self.combine_rgb.uses_primary_color() || self.combine_alpha.uses_primary_color());
-
-        self.uses_last_saved_result = self.mode == Mode::Combine
-            && (self.combine_rgb.uses_last_saved_result() || self.combine_alpha.uses_last_saved_result());
     }
 }
 

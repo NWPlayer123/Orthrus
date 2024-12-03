@@ -43,6 +43,7 @@ pub(crate) enum FilterType {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub(crate) struct SamplerState {
     pub wrap_u: WrapMode,
     pub wrap_v: WrapMode,
@@ -63,25 +64,34 @@ pub(crate) struct SamplerState {
 impl SamplerState {
     #[inline]
     pub fn create(loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
-        let mut state = Self::default();
-        state.wrap_u = WrapMode::from(data.read_u8()?);
-        state.wrap_v = WrapMode::from(data.read_u8()?);
-        state.wrap_w = WrapMode::from(data.read_u8()?);
+        let wrap_u = WrapMode::from(data.read_u8()?);
+        let wrap_v = WrapMode::from(data.read_u8()?);
+        let wrap_w = WrapMode::from(data.read_u8()?);
 
-        state.min_filter = FilterType::from(data.read_u8()?);
-        state.mag_filter = FilterType::from(data.read_u8()?);
+        let min_filter = FilterType::from(data.read_u8()?);
+        let mag_filter = FilterType::from(data.read_u8()?);
 
-        state.aniso_degree = data.read_i16()?;
+        let aniso_degree = data.read_i16()?;
 
-        state.border_color = Vec4::read(data)?;
+        let border_color = Vec4::read(data)?;
 
-        if loader.get_minor_version() >= 36 {
-            state.min_lod = data.read_float()?;
-            state.max_lod = data.read_float()?;
-            state.lod_bias = data.read_float()?;
-        }
+        let (min_lod, max_lod, lod_bias) = match loader.get_minor_version() >= 36 {
+            true => (data.read_float()?, data.read_float()?, data.read_float()?),
+            false => (-1000.0, 1000.0, 0.0),
+        };
 
-        Ok(state)
+        Ok(Self {
+            wrap_u,
+            wrap_v,
+            wrap_w,
+            min_filter,
+            mag_filter,
+            aniso_degree,
+            border_color,
+            min_lod,
+            max_lod,
+            lod_bias,
+        })
     }
 }
 

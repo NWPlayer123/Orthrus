@@ -1,19 +1,22 @@
+use core::ops::{Deref, DerefMut};
+
 use super::prelude::*;
 
 #[derive(Debug, Default)]
-#[expect(dead_code)]
+#[allow(dead_code)]
 pub(crate) struct CharacterJoint {
-    pub matrix: MovingPartMatrix,
+    pub inner: MovingPartMatrix,
     pub character_ref: Option<u32>,
     pub net_node_refs: Vec<u32>,
     pub local_node_refs: Vec<u32>,
     pub initial_net_transform_inverse: Mat4,
 }
 
-impl CharacterJoint {
+impl Node for CharacterJoint {
     #[inline]
-    pub fn create(loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
-        let matrix = MovingPartMatrix::create(loader, data)?;
+    fn create(loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
+        let inner = MovingPartMatrix::create(loader, data)?;
+
         let character_ref = match loader.get_minor_version() >= 4 {
             true => loader.read_pointer(data)?,
             false => None,
@@ -34,11 +37,27 @@ impl CharacterJoint {
         let initial_net_transform_inverse = Mat4::read(data)?;
 
         Ok(Self {
-            matrix,
+            inner,
             character_ref,
             net_node_refs,
             local_node_refs,
             initial_net_transform_inverse,
         })
+    }
+}
+
+impl Deref for CharacterJoint {
+    type Target = MovingPartMatrix;
+
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl DerefMut for CharacterJoint {
+    #[inline]
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
     }
 }

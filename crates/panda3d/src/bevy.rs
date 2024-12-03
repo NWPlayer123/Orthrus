@@ -1,20 +1,23 @@
 use std::path::PathBuf;
 
-use bevy::animation::{AnimationTarget, AnimationTargetId};
-use bevy::asset::io::Reader;
-use bevy::asset::{AssetLoader, AsyncReadExt, LoadContext};
-use bevy::pbr::{ExtendedMaterial, MaterialExtension, MaterialExtensionKey, MaterialExtensionPipeline};
-use bevy::prelude::*;
-use bevy::render::mesh::skinning::{SkinnedMesh, SkinnedMeshInverseBindposes};
-use bevy::render::mesh::{Indices, MeshVertexBufferLayoutRef, PrimitiveTopology};
-use bevy::render::render_asset::RenderAssetUsages;
-use bevy::render::render_resource::{
-    AsBindGroup, Face, RenderPipelineDescriptor, SpecializedMeshPipelineError,
-};
-use bevy::render::texture::{
+use bevy_internal::animation::{AnimationTarget, AnimationTargetId};
+use bevy_internal::asset::io::Reader;
+use bevy_internal::asset::{AssetLoader, AsyncReadExt, LoadContext};
+use bevy_internal::image::{
     ImageAddressMode, ImageFilterMode, ImageLoaderSettings, ImageSampler, ImageSamplerDescriptor,
 };
-use bevy::tasks::block_on;
+use bevy_internal::math::Vec3;
+use bevy_internal::pbr::{
+    ExtendedMaterial, MaterialExtension, MaterialExtensionKey, MaterialExtensionPipeline,
+};
+use bevy_internal::prelude::*;
+use bevy_internal::render::mesh::skinning::{SkinnedMesh, SkinnedMeshInverseBindposes};
+use bevy_internal::render::mesh::{Indices, MeshVertexBufferLayoutRef, PrimitiveTopology};
+use bevy_internal::render::render_asset::RenderAssetUsages;
+use bevy_internal::render::render_resource::{
+    AsBindGroup, Face, RenderPipelineDescriptor, SpecializedMeshPipelineError,
+};
+use bevy_internal::tasks::block_on;
 use bitflags::bitflags;
 use hashbrown::HashMap;
 use orthrus_core::prelude::*;
@@ -435,8 +438,8 @@ impl BinaryAsset {
         assets.meshes.push(mesh.clone());
 
         world.entity_mut(entity).insert(MaterialMeshBundle::<Panda3DMaterial> {
-            mesh,
-            material,
+            mesh: Mesh3d(mesh),
+            material: MeshMaterial3d(material),
             ..Default::default()
         });
         Ok(())

@@ -12,10 +12,10 @@ const WINDOW_MASK: usize = WINDOW_SIZE - 1;
 const MIN_MATCH: usize = 3;
 const NULL: u16 = 0xFFFF;
 
-const H_SHIFT: usize = (HASH_BITS + MIN_MATCH - 1) / MIN_MATCH;
+const H_SHIFT: usize = HASH_BITS.div_ceil(MIN_MATCH);
 
 /// Updates a hash value with the given input byte
-fn update_hash(hash: usize, byte: u8) -> usize {
+const fn update_hash(hash: usize, byte: u8) -> usize {
     ((hash << H_SHIFT) ^ (byte as usize)) & HASH_MASK
 }
 

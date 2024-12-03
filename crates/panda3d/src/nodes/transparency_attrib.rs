@@ -1,3 +1,5 @@
+use core::ops::{Deref, DerefMut};
+
 use super::prelude::*;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Default, FromPrimitive)]
@@ -21,14 +23,29 @@ pub(crate) enum TransparencyMode {
 }
 
 #[derive(Debug, Default)]
-#[allow(dead_code)]
 pub(crate) struct TransparencyAttrib {
     pub mode: TransparencyMode,
 }
 
-impl TransparencyAttrib {
+impl Node for TransparencyAttrib {
     #[inline]
-    pub fn create(_loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
+    fn create(_loader: &mut BinaryAsset, data: &mut Datagram<'_>) -> Result<Self, bam::Error> {
         Ok(Self { mode: TransparencyMode::from(data.read_u8()?) })
+    }
+}
+
+impl Deref for TransparencyAttrib {
+    type Target = TransparencyMode;
+
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        &self.mode
+    }
+}
+
+impl DerefMut for TransparencyAttrib {
+    #[inline]
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.mode
     }
 }

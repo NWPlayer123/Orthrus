@@ -18,7 +18,7 @@ macro_rules! declare_module {
 declare_module!(godot, j_system, n_compress, nintendo_ware, panda3d);
 
 /// Top-level command
-#[derive(FromArgs, PartialEq, Debug)]
+#[derive(FromArgs, PartialEq, Eq, Debug)]
 #[argp(description = "A new way to modify games.")]
 pub struct Orthrus {
     #[argp(option, short = 'v', global, default = "0")]
@@ -30,7 +30,7 @@ pub struct Orthrus {
 }
 
 /// These are all the "modules" that Orthrus supports via command line.
-#[derive(FromArgs, PartialEq, Debug)]
+#[derive(FromArgs, PartialEq, Eq, Debug)]
 #[argp(subcommand)]
 #[non_exhaustive]
 pub enum Modules {
@@ -43,7 +43,7 @@ pub enum Modules {
 }
 
 /// Command to try to identify what a given file is.
-#[derive(FromArgs, PartialEq, Debug)]
+#[derive(FromArgs, PartialEq, Eq, Debug)]
 #[argp(subcommand, name = "info")]
 #[argp(description = "Identify a file and print relevant information")]
 pub struct IdentifyOption {
@@ -83,7 +83,7 @@ macro_rules! create_submodule {
         use paste::paste;
         paste! {
             // This is the command for the `$module_str` module.
-            #[derive(FromArgs, PartialEq, Debug)]
+            #[derive(FromArgs, PartialEq, Eq, Debug)]
             #[argp(subcommand, name = $module_name:lower)]
             #[argp(description = $module_description)]
             pub struct [<$module_name Option>] {
@@ -92,8 +92,9 @@ macro_rules! create_submodule {
             }
 
             // These are all supported files within `$module_str`.
-            #[derive(FromArgs, PartialEq, Debug)]
+            #[derive(FromArgs, PartialEq, Eq, Debug)]
             #[argp(subcommand)]
+            #[allow(clippy::upper_case_acronyms)]
             #[non_exhaustive]
             pub enum [<$module_name Modules>] {
                 $( $submodule_name($submodule_type) ),*

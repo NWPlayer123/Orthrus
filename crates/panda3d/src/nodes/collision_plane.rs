@@ -1,17 +1,35 @@
+use core::ops::{Deref, DerefMut};
+
 use super::prelude::*;
 
 #[derive(Debug, Default)]
-#[expect(dead_code)]
+#[allow(dead_code)]
 pub(crate) struct CollisionPlane {
-    solid: CollisionSolid,
-    plane: Vec4,
+    pub inner: CollisionSolid,
+    pub plane: Vec4,
 }
 
 impl CollisionPlane {
     #[inline]
     pub fn create(loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
-        let solid = CollisionSolid::create(loader, data)?;
+        let inner = CollisionSolid::create(loader, data)?;
         let plane = Vec4::read(data)?;
-        Ok(Self { solid, plane })
+        Ok(Self { inner, plane })
+    }
+}
+
+impl Deref for CollisionPlane {
+    type Target = CollisionSolid;
+
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl DerefMut for CollisionPlane {
+    #[inline]
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
     }
 }

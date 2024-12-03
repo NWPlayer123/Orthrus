@@ -1,7 +1,7 @@
 use super::prelude::*;
 
 #[derive(Debug, Default)]
-#[expect(dead_code)]
+#[allow(dead_code)]
 pub(crate) struct PandaNode {
     pub name: String,
 
@@ -27,9 +27,9 @@ pub(crate) struct PandaNode {
     pub stashed_refs: Vec<(u32, i32)>,
 }
 
-impl PandaNode {
+impl Node for PandaNode {
     #[inline]
-    pub fn create(loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
+    fn create(loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
         // Main fillin
         let name = data.read_string()?;
 
@@ -58,7 +58,7 @@ impl PandaNode {
             } else {
                 draw_mask &= !(1 << 31);
                 draw_control_mask = !draw_mask;
-                draw_show_mask = draw_mask
+                draw_show_mask = draw_mask;
             }
         }
 
@@ -75,7 +75,7 @@ impl PandaNode {
             tag_data.insert(data.read_string()?, data.read_string()?);
         }
 
-        // These are processed as fillin_up_list/fillin_down_list
+        // These are processed as fillin_up_list/fillin_down_list/fillin_down_list
         let num_parents = data.read_u16()?;
         let mut parent_refs = Vec::with_capacity(num_parents as usize);
         for _ in 0..num_parents {

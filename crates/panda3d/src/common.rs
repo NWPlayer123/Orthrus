@@ -19,6 +19,8 @@ impl core::fmt::Display for Version {
     }
 }
 
+// TODO: just make this a generic and enforce f32/f64 depending on the BAM file using a sealed trait like we
+// do in Ferrox
 pub(crate) struct Datagram<'a> {
     cursor: DataCursorRef<'a>,
     float_type: bool,
@@ -32,9 +34,9 @@ impl<'a> Datagram<'a> {
         let length = data.read_u32()? as usize;
         let data = match data.read_slice(length)? {
             Cow::Borrowed(data) => data,
-            _ => todo!(),
+            Cow::Owned(_) => todo!(),
         };
-        Ok(Self { cursor: DataCursorRef::new(&data, endian), float_type })
+        Ok(Self { cursor: DataCursorRef::new(data, endian), float_type })
     }
 
     pub(crate) fn read_string(&mut self) -> Result<String, DataError> {
@@ -45,10 +47,9 @@ impl<'a> Datagram<'a> {
     }
 
     pub(crate) fn read_float(&mut self) -> Result<f32, DataError> {
-        if self.float_type == true {
-            Ok(self.cursor.read_f64()? as f32)
-        } else {
-            self.cursor.read_f32()
+        match self.float_type {
+            true => Ok(self.cursor.read_f64()? as f32),
+            false => self.cursor.read_f32()
         }
     }
 
@@ -66,7 +67,7 @@ impl<'a> Deref for Datagram<'a> {
     }
 }
 
-impl<'a> DerefMut for Datagram<'a> {
+impl DerefMut for Datagram<'_> {
     #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.cursor

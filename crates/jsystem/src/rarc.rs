@@ -53,7 +53,7 @@ impl From<DataError> for Error {
 }
 
 bitflags! {
-    #[derive(Debug, PartialEq, Default)]
+    #[derive(Debug, PartialEq, Eq, Default)]
     pub struct Flags: u8 {
         /// This is a file, not a directory.
         const File = 1 << 0;

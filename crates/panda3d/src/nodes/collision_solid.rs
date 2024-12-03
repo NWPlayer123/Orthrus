@@ -13,6 +13,7 @@ bitflags! {
 }
 
 #[derive(Debug, Default)]
+#[allow(dead_code)]
 pub(crate) struct CollisionSolid {
     pub flags: Flags,
     pub effective_normal: Vec3,
@@ -20,16 +21,16 @@ pub(crate) struct CollisionSolid {
 
 impl CollisionSolid {
     #[inline]
-    pub fn create(_loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
-        let mut solid = Self::default();
+    pub fn create(_loader: &mut BinaryAsset, data: &mut Datagram<'_>) -> Result<Self, bam::Error> {
+        let mut flags = Flags::from_bits_truncate(data.read_u8()?);
 
-        solid.flags = Flags::from_bits_truncate(data.read_u8()?);
-        if solid.flags.contains(Flags::EffectiveNormal) {
-            solid.effective_normal = Vec3::read(data)?;
-        }
+        let effective_normal = match flags.contains(Flags::EffectiveNormal) {
+            true => Vec3::read(data)?,
+            false => Vec3::default(),
+        };
 
-        solid.flags |= Flags::VisibleGeometryStale | Flags::InternalBoundsStale;
+        flags |= Flags::VisibleGeometryStale | Flags::InternalBoundsStale;
 
-        Ok(solid)
+        Ok(Self { flags, effective_normal })
     }
 }

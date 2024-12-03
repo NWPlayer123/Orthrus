@@ -80,7 +80,7 @@ pub enum Error {
     /// **This should not be seen in normal use.**
     #[snafu(display("Invalid Size Encountered!"))]
     InvalidSize,
-    /// Thrown if the file is larger than u32::MAX since the header cannot store it.
+    /// Thrown if the file is larger than `u32::MAX` since the header cannot store it.
     #[snafu(display("File too large to fit into u32::MAX!"))]
     FileTooBig,
     /// Thrown if the header contains a magic number other than "Yaz0".

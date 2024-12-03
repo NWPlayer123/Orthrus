@@ -17,6 +17,7 @@
 #[cfg(feature = "std")]
 use std::path::Path;
 
+use bevy_tasks::block_on;
 use hashbrown::HashMap;
 use num_enum::FromPrimitive;
 use orthrus_core::prelude::*;
@@ -158,6 +159,7 @@ impl BinaryAsset {
     /// Earliest supported revision of the BAM format. For more info, see [here](self#revisions).
     pub const MINIMUM_VERSION: Version = Version { major: 6, minor: 14 };
 
+    #[must_use]
     pub fn get_minor_version(&self) -> u16 {
         self.header.version.minor
     }
@@ -238,24 +240,21 @@ impl BinaryAsset {
     fn read_object(&mut self, data: &mut Datagram) -> Result<(), self::Error> {
         // If we're reading a file 6.21 or newer, control flow codes are in the data stream, so
         // match against the enum variant
-        match self.objects_left {
-            ObjectsLeft::NestingLevel { ref mut nesting_level } => {
-                let object_code = ObjectCode::from(data.read_u8()?);
-                match object_code {
-                    ObjectCode::Push => {
-                        *nesting_level += 1;
-                    }
-                    ObjectCode::Pop => {
-                        *nesting_level -= 1;
-                        return Ok(());
-                    }
-                    ObjectCode::Adjunct => {}
-                    _ => {
-                        todo!("Remove and FileData are unimplemented, need a test case, pls message me.")
-                    }
+        if let ObjectsLeft::NestingLevel { ref mut nesting_level } = self.objects_left {
+            let object_code = ObjectCode::from(data.read_u8()?);
+            match object_code {
+                ObjectCode::Push => {
+                    *nesting_level += 1;
+                }
+                ObjectCode::Pop => {
+                    *nesting_level -= 1;
+                    return Ok(());
+                }
+                ObjectCode::Adjunct => {}
+                _ => {
+                    todo!("Remove and FileData are unimplemented, need a test case, pls message me.")
                 }
             }
-            _ => (),
         }
 
         // Check the type handle, see if we need to register any new types
@@ -274,7 +273,7 @@ impl BinaryAsset {
             // For now I'm combining them into a single function
             let type_name = self.type_registry.get_mut(&type_handle).expect("a").to_owned();
             //println!("Filling in {} from {:#X}", type_name, data.position()?);
-            self.fillin(data, &type_name)?;
+            block_on(self.fillin(data, &type_name))?;
         }
         if data.position()? != data.len()? {
             println!(
@@ -341,11 +340,8 @@ impl BinaryAsset {
         //println!("Object ID ptrto {}", object_id);
         if object_id != 0 {
             // objects_left will only be ObjectCount on pre-6.21 so this should be safe
-            match self.objects_left {
-                ObjectsLeft::ObjectCount { ref mut num_extra_objects } => {
-                    *num_extra_objects -= 1;
-                }
-                _ => (),
+            if let ObjectsLeft::ObjectCount { ref mut num_extra_objects } = self.objects_left {
+                *num_extra_objects -= 1;
             }
             return Ok(Some(object_id));
         }
@@ -353,7 +349,7 @@ impl BinaryAsset {
     }
 
     //should really be using make_from_bam as an entrypoint
-    fn fillin(&mut self, data: &mut Datagram, type_name: &str) -> Result<(), self::Error> {
+    async fn fillin(&mut self, data: &mut Datagram<'_>, type_name: &str) -> Result<(), self::Error> {
         let node = match type_name {
             "AnimBundle" => PandaObject::AnimBundle(AnimBundle::create(self, data)?),
             "AnimBundleNode" => PandaObject::AnimBundleNode(AnimBundleNode::create(self, data)?),

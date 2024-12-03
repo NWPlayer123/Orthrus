@@ -1,18 +1,20 @@
+use core::ops::{Deref, DerefMut};
+
 use super::prelude::*;
 
 #[derive(Debug, Default)]
 #[allow(dead_code)]
 pub(crate) struct GeomNode {
-    /// ModelNode is a superclass of a PandaNode, so we include its data here
-    pub node: PandaNode,
+    /// ModelNode is a superclass of PandaNode, so we include its data here
+    pub inner: PandaNode,
     /// Each piece of Geom data and its associated RenderState
     pub geom_refs: Vec<(u32, u32)>,
 }
 
-impl GeomNode {
+impl Node for GeomNode {
     #[inline]
-    pub fn create(loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
-        let node = PandaNode::create(loader, data)?;
+    fn create(loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
+        let inner = PandaNode::create(loader, data)?;
 
         //Cycler data
         let num_geoms = data.read_u16()?;
@@ -22,6 +24,23 @@ impl GeomNode {
             let render_ref = loader.read_pointer(data)?.unwrap(); //RenderState
             geom_refs.push((geom_ref, render_ref));
         }
-        Ok(Self { node, geom_refs })
+
+        Ok(Self { inner, geom_refs })
+    }
+}
+
+impl Deref for GeomNode {
+    type Target = PandaNode;
+
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl DerefMut for GeomNode {
+    #[inline]
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
     }
 }

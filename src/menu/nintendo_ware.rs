@@ -9,7 +9,7 @@ create_submodule!(
     BFSAR(BFSARFlags)
 );
 
-#[derive(FromArgs, PartialEq, Debug)]
+#[derive(FromArgs, PartialEq, Eq, Debug)]
 #[argp(subcommand, name = "brstm")]
 #[argp(description = "Binary File Stream")]
 pub struct BRSTMFlags {
@@ -26,7 +26,7 @@ pub struct BRSTMFlags {
     pub output: Option<String>,
 }
 
-#[derive(FromArgs, PartialEq, Debug)]
+#[derive(FromArgs, PartialEq, Eq, Debug)]
 #[argp(subcommand, name = "bfsar")]
 #[argp(description = "Binary File Sound Archive")]
 pub struct BFSARFlags {

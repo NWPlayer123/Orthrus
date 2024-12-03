@@ -1,7 +1,7 @@
 use super::prelude::*;
 
 #[derive(Debug, Default)]
-#[expect(dead_code)]
+#[allow(dead_code)]
 pub(crate) struct GeomVertexArrayFormat {
     pub stride: u16,
     pub total_bytes: u16,
@@ -11,9 +11,9 @@ pub(crate) struct GeomVertexArrayFormat {
     pub columns: Vec<GeomVertexColumn>,
 }
 
-impl GeomVertexArrayFormat {
+impl Node for GeomVertexArrayFormat {
     #[inline]
-    pub fn create(loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
+    fn create(loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
         let stride = data.read_u16()?;
         let total_bytes = data.read_u16()?;
         let pad_to = data.read_u8()?;
@@ -21,8 +21,8 @@ impl GeomVertexArrayFormat {
             true => data.read_u16()?,
             false => 0,
         };
-        let num_columns = data.read_u16()?;
 
+        let num_columns = data.read_u16()?;
         let mut columns = Vec::with_capacity(num_columns as usize);
         for _ in 0..num_columns {
             columns.push(GeomVertexColumn::create(loader, data)?);

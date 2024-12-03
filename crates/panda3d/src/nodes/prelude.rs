@@ -35,7 +35,7 @@ pub(crate) use super::cull_bin_attrib::CullBinAttrib;
 pub(crate) use super::cull_face_attrib::CullFaceAttrib;
 pub(crate) use super::decal_effect::DecalEffect;
 pub(crate) use super::depth_write_attrib::DepthWriteAttrib;
-pub(crate) use super::dispatch::PandaObject;
+pub(crate) use super::dispatch::{Node, PandaObject};
 pub(crate) use super::geom::Geom;
 pub(crate) use super::geom_enums::*;
 pub(crate) use super::geom_node::GeomNode;

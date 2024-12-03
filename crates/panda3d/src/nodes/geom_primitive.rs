@@ -1,7 +1,7 @@
 use super::prelude::*;
 
 #[derive(Debug, Default)]
-#[expect(dead_code)]
+#[allow(dead_code)]
 pub(crate) struct GeomPrimitive {
     pub shade_model: ShadeModel,
     pub first_vertex: i32,
@@ -14,9 +14,9 @@ pub(crate) struct GeomPrimitive {
     pub ends_ref: Option<u32>,
 }
 
-impl GeomPrimitive {
+impl Node for GeomPrimitive {
     #[inline]
-    pub fn create(loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
+    fn create(loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
         //cycler data
         let shade_model = ShadeModel::from(data.read_u8()?);
         let first_vertex = data.read_i32()?;

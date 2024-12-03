@@ -9,7 +9,7 @@ create_submodule!(
     BAM(BAMFlags)
 );
 
-#[derive(FromArgs, PartialEq, Debug)]
+#[derive(FromArgs, PartialEq, Eq, Debug)]
 #[argp(subcommand, name = "multifile")]
 #[argp(description = "Panda3D Multifile Archive")]
 pub struct MultifileFlags {
@@ -26,7 +26,7 @@ pub struct MultifileFlags {
     pub output: Option<String>,
 }
 
-#[derive(FromArgs, PartialEq, Debug)]
+#[derive(FromArgs, PartialEq, Eq, Debug)]
 #[argp(subcommand, name = "bam")]
 #[argp(description = "Panda3D Binary Model")]
 pub struct BAMFlags {

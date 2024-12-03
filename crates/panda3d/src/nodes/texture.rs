@@ -5,7 +5,7 @@ use super::sampler_state::SamplerState;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Default, FromPrimitive)]
 #[repr(u8)]
-pub enum TextureType {
+pub(crate) enum TextureType {
     Texture1D,
     #[default]
     Texture2D,
@@ -19,7 +19,8 @@ pub enum TextureType {
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Default, FromPrimitive)]
 #[repr(u8)]
-enum CompressionMode {
+#[allow(clippy::upper_case_acronyms)]
+pub(crate) enum CompressionMode {
     // Generic compression modes. You should usually choose one of these.
     #[default]
     Default,
@@ -56,7 +57,7 @@ enum CompressionMode {
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Default, FromPrimitive)]
 #[repr(u8)]
-enum QualityLevel {
+pub(crate) enum QualityLevel {
     #[default]
     Default,
     Fastest,
@@ -66,7 +67,8 @@ enum QualityLevel {
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Default, FromPrimitive)]
 #[repr(u8)]
-enum Format {
+#[allow(clippy::upper_case_acronyms)]
+pub(crate) enum Format {
     DepthStencil = 1,
     ColorIndex,
     Red,
@@ -138,7 +140,7 @@ enum Format {
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Default, FromPrimitive)]
 #[repr(u8)]
-enum ComponentType {
+pub(crate) enum ComponentType {
     #[default]
     UnsignedByte,
     UnsignedShort,
@@ -151,7 +153,7 @@ enum ComponentType {
 }
 
 #[derive(Debug, Default)]
-#[expect(dead_code)]
+#[allow(dead_code)]
 pub(crate) struct Texture {
     pub name: String,
     pub filename: String,
@@ -169,88 +171,42 @@ pub(crate) struct Texture {
 #[derive(Debug, Default)]
 pub(crate) struct TextureBody {
     pub default_sampler: SamplerState,
-    format: Format,
-    compression: CompressionMode,
-    usage_hint: UsageHint,
-    quality_level: QualityLevel,
-    auto_texture_scale: AutoTextureScale,
-    num_components: u8,
-    orig_file_x_size: u32,
-    orig_file_y_size: u32,
-    simple_x_size: u32,
-    simple_y_size: u32,
+    pub format: Format,
+    pub compression: CompressionMode,
+    pub usage_hint: UsageHint,
+    pub quality_level: QualityLevel,
+    pub auto_texture_scale: AutoTextureScale,
+    pub num_components: u8,
+    pub orig_file_x_size: u32,
+    pub orig_file_y_size: u32,
+    pub simple_x_size: u32,
+    pub simple_y_size: u32,
     /// Timestamp of when the image was last modified
-    simple_image_date_generated: i32,
-    image: Vec<u8>,
-    clear_color: Option<Vec4>,
+    pub simple_image_date_generated: i32,
+    pub image: Vec<u8>,
+    pub clear_color: Option<Vec4>,
 }
 
 #[derive(Debug, Default)]
-#[expect(dead_code)]
+#[allow(dead_code)]
 pub(crate) struct TextureData {
-    size: UVec3,
-    pad_size: UVec3,
-    num_views: u32,
-    component_type: ComponentType,
-    component_width: u8,
-    ram_image_compression: CompressionMode,
-    ram_image_count: u8,
+    pub size: UVec3,
+    pub pad_size: UVec3,
+    pub num_views: u32,
+    pub component_type: ComponentType,
+    pub component_width: u8,
+    pub ram_image_compression: CompressionMode,
+    pub ram_image_count: u8,
     /// Page Size + Image Data
-    ram_images: Vec<(u32, Vec<u8>)>,
+    pub ram_images: Vec<(u32, Vec<u8>)>,
 }
 
-//TODO: Textures can be cached via a TexturePool
 impl Texture {
     #[inline]
-    pub fn create(loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
-        let name = data.read_string()?;
-        let filename = data.read_string()?;
-        let alpha_filename = data.read_string()?;
-
-        let color_num_channels = data.read_u8()?;
-        let alpha_num_channels = data.read_u8()?;
-        let has_rawdata = data.read_bool()?;
-        let mut texture_type = TextureType::from(data.read_u8()?);
-        if loader.get_minor_version() < 25 {
-            // As of Panda3D 1.8.0/BAM v6.25, Texture2DArray was added as a TextureType, so we need to account
-            // for the shift
-            if texture_type == TextureType::Texture2DArray {
-                texture_type = TextureType::CubeMap;
-            }
-        }
-
-        let has_read_mipmaps = match loader.get_minor_version() >= 32 {
-            true => data.read_bool()?,
-            false => false,
-        };
-
-        let mut texture = Self {
-            name,
-            filename,
-            alpha_filename,
-            color_num_channels,
-            alpha_num_channels,
-            has_rawdata,
-            texture_type,
-            has_read_mipmaps,
-            ..Default::default()
-        };
-
-        texture.body = texture.fillin_body(loader, data)?;
-
-        if has_rawdata == true {
-            //The texture data is included in this BAM file so we need to actually load it
-            texture.data = Some(texture.fillin_data(loader, data)?);
-        } else {
-            //Otherwise, the raw image data isn't stored, so we need to load the relevant image from VFS
-            //texture.data = std::fs::read(), remove the Option<>
-        }
-
-        Ok(texture)
-    }
-
-    #[inline]
-    fn fillin_body(&self, loader: &mut BinaryAsset, data: &mut Datagram) -> Result<TextureBody, bam::Error> {
+    #[allow(clippy::field_reassign_with_default)]
+    fn fillin_body(
+        loader: &mut BinaryAsset, data: &mut Datagram<'_>, texture_type: TextureType,
+    ) -> Result<TextureBody, bam::Error> {
         let mut body = TextureBody::default();
 
         body.default_sampler = SamplerState::create(loader, data)?;
@@ -266,7 +222,7 @@ impl Texture {
         body.format = Format::from(data.read_u8()?);
         body.num_components = data.read_u8()?;
 
-        if self.texture_type == TextureType::BufferTexture {
+        if texture_type == TextureType::BufferTexture {
             body.usage_hint = UsageHint::from(data.read_u8()?);
         }
 
@@ -288,6 +244,7 @@ impl Texture {
             body.simple_x_size = data.read_u32()?;
             body.simple_y_size = data.read_u32()?;
             body.simple_image_date_generated = data.read_i32()?;
+
             let size = data.read_u32()?;
             body.image = vec![0u8; size as usize];
             data.read_length(&mut body.image)?;
@@ -296,11 +253,12 @@ impl Texture {
         if loader.get_minor_version() >= 45 && data.read_bool()? {
             body.clear_color = Some(Vec4::read(data)?);
         }
+
         Ok(body)
     }
 
     #[inline]
-    fn fillin_data(&self, loader: &mut BinaryAsset, data: &mut Datagram) -> Result<TextureData, bam::Error> {
+    fn fillin_data(loader: &mut BinaryAsset, data: &mut Datagram<'_>) -> Result<TextureData, bam::Error> {
         let size = UVec3::read(data)?;
 
         let pad_size = match loader.get_minor_version() >= 30 {
@@ -331,9 +289,9 @@ impl Texture {
                 false => todo!("I have no BAM files this old - contact me"),
             };
             let size = data.read_u32()?;
-            let mut allocation = vec![0; size as usize];
-            allocation.copy_from_slice(&data.read_slice(size as usize)?);
-            ram_images.push((page_size, allocation));
+            let mut image = vec![0u8; size as usize];
+            image.copy_from_slice(&data.read_slice(size as usize)?);
+            ram_images.push((page_size, image));
         }
 
         Ok(TextureData {
@@ -347,9 +305,55 @@ impl Texture {
             ram_images,
         })
     }
+}
 
-    #[expect(dead_code)]
-    pub fn has_simple_ram_image(&self) -> bool {
-        !self.body.image.is_empty()
+//TODO: Textures can be cached via a TexturePool
+impl Node for Texture {
+    #[inline]
+    fn create(loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
+        let name = data.read_string()?;
+        let filename = data.read_string()?;
+        let alpha_filename = data.read_string()?;
+
+        let color_num_channels = data.read_u8()?;
+        let alpha_num_channels = data.read_u8()?;
+        let has_rawdata = data.read_bool()?;
+        let mut texture_type = TextureType::from(data.read_u8()?);
+        if loader.get_minor_version() < 25 {
+            // As of Panda3D 1.8.0/BAM v6.25, Texture2DArray was added as a TextureType, so we need to account
+            // for the shift
+            if texture_type == TextureType::Texture2DArray {
+                texture_type = TextureType::CubeMap;
+            }
+        }
+
+        let has_read_mipmaps = match loader.get_minor_version() >= 32 {
+            true => data.read_bool()?,
+            false => false,
+        };
+
+        let body = Texture::fillin_body(loader, data, texture_type)?;
+
+        let data = match has_rawdata {
+            true => Some(Texture::fillin_data(loader, data)?),
+            false => {
+                //Otherwise, the raw image data isn't stored, so we need to load the relevant image from VFS
+                //texture.data = std::fs::read(), remove the Option<>
+                None
+            }
+        };
+
+        Ok(Self {
+            name,
+            filename,
+            alpha_filename,
+            color_num_channels,
+            alpha_num_channels,
+            has_rawdata,
+            texture_type,
+            body,
+            data,
+            has_read_mipmaps,
+        })
     }
 }

@@ -5,8 +5,8 @@
 //!
 //! # Revisions
 //! * **Version 1.0**: Initial Multifile Support
-//! * **Version 1.1**: Added support for timestamps both for the Multifile as a whole, and
-//! individual Subfiles. Subfiles with a timestamp of zero will use the Multifile timestamp.
+//! * **Version 1.1**: Added support for timestamps both for the Multifile as a whole, and individual
+//!   Subfiles. Subfiles with a timestamp of zero will use the Multifile timestamp.
 //!
 //! # Format
 //! The Multifile format is designed as a header, and then a number of [`Subfile`]s connected via a
@@ -312,7 +312,7 @@ impl Multifile {
         for subfile in &mut self.files {
             if !subfile.flags.intersects(Flags::Signature | Flags::Compressed | Flags::Encrypted) {
                 self.data.set_position(subfile.offset.into())?;
-                subfile.write_file(&*self.data.read_slice(subfile.length as usize)?, &output)?;
+                subfile.write_file(&self.data.read_slice(subfile.length as usize)?, &output)?;
                 saved_files += 1;
             }
         }
@@ -364,7 +364,7 @@ impl Multifile {
 
             data.set_position(subfile.offset.into())?;
             if !subfile.flags.contains(Flags::Signature) {
-                subfile.write_file(&*data.read_slice(subfile.length as usize)?, &output)?;
+                subfile.write_file(&data.read_slice(subfile.length as usize)?, &output)?;
             } /* else if cfg!(signature) {
                   println!("{:?}", subfile);
                   data.set_position(subfile.offset as usize);

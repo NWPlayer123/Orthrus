@@ -1,16 +1,17 @@
 use super::geom_enums::AnimationType;
 use super::prelude::*;
 
-#[derive(Default, Debug)]
-#[expect(dead_code)]
+#[derive(Debug, Default)]
+#[allow(dead_code)]
 pub(crate) struct GeomVertexAnimationSpec {
-    animation_type: AnimationType,
-    num_transforms: u16,
-    indexed_transforms: bool,
+    pub animation_type: AnimationType,
+    pub num_transforms: u16,
+    pub indexed_transforms: bool,
 }
 
 impl GeomVertexAnimationSpec {
-    pub fn create(_loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
+    #[inline]
+    pub fn create(_loader: &mut BinaryAsset, data: &mut Datagram<'_>) -> Result<Self, bam::Error> {
         let animation_type = AnimationType::from(data.read_u8()?);
         let num_transforms = data.read_u16()?;
         let indexed_transforms = data.read_bool()?;

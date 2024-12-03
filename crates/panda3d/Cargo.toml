@@ -12,7 +12,9 @@ orthrus-core = { version = "0.3", path = "../core" }
 snafu = { version = "0.8", default-features = false, features = ["rust_1_81"] }
 num_enum = { version = "0.7", default-features = false }
 approx = { version = "0.5", default-features = false }
-bevy_math = { version = "0.14", default-features = false, features = [
+bevy_tasks = "0.15"
+bevy_transform = { version = "0.15", default-features = false }
+bevy_math = { version = "0.15", default-features = false, features = [
     "approx",
 ] }
 der = { version = "0.7", optional = true }
@@ -20,20 +22,28 @@ der = { version = "0.7", optional = true }
 # Bevy-Specific Assets
 #bevy_mod_billboard = "0.7"
 serde = { version = "1.0", optional = true, features = ["derive"] }
-smallvec = { version = "1.13", optional = true }
+#smallvec = { version = "1.13", optional = true }
 
 hashbrown = "0.15"
 bitflags = "2.6"
 
-[dependencies.bevy]
-version = "0.14"
+[dependencies.bevy_internal]
+version = "0.15"
 optional = true
 default-features = false
-features = ["bevy_animation", "bevy_pbr", "bevy_render", "bevy_scene"]
+features = [
+    "bevy_animation",
+    "bevy_asset",
+    "bevy_color",
+    "bevy_image",
+    "bevy_pbr",
+    "bevy_render",
+    "bevy_scene",
+]
 
 [features]
 default = ["std"]
 std = ["snafu/std"]
 signature = ["der", "orthrus-core/certificate"]
-bevy = ["dep:bevy", "serde", "smallvec"]
+bevy = ["bevy_internal", "serde"]
 identify = []

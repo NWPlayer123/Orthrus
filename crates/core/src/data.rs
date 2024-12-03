@@ -61,11 +61,11 @@ impl Default for Endian {
     fn default() -> Self {
         #[cfg(target_endian = "little")]
         {
-            Endian::Little
+            Self::Little
         }
         #[cfg(target_endian = "big")]
         {
-            Endian::Big
+            Self::Big
         }
     }
 }
@@ -704,14 +704,14 @@ impl<'a> DataCursorRef<'a> {
     /// Creates a new `DataCursorRef` with the given data and endianness.
     #[inline]
     #[must_use]
-    pub fn new(data: &'a [u8], endian: Endian) -> Self {
+    pub const fn new(data: &'a [u8], endian: Endian) -> Self {
         Self { data, position: 0, endian }
     }
 
     /// Consumes the `DataCursorRef` and returns the underlying data.
     #[inline]
     #[must_use]
-    pub fn into_inner(self) -> &'a [u8] {
+    pub const fn into_inner(self) -> &'a [u8] {
         self.data
     }
 
@@ -1126,7 +1126,7 @@ pub struct DataStream<T> {
 impl<T> DataStream<T> {
     /// Creates a new `DataStream` with the given inner stream and endianness.
     #[inline]
-    pub fn new(inner: T, endian: Endian) -> Self {
+    pub const fn new(inner: T, endian: Endian) -> Self {
         Self { inner, endian }
     }
 }
@@ -1292,7 +1292,7 @@ impl<'a> IntoDataStream for &'a mut [u8] {
 }
 
 impl<'a> IntoDataStream for &'a File {
-    type Reader = DataStream<&'a File>;
+    type Reader = DataStream<Self>;
 
     fn into_stream(self, endian: Endian) -> Self::Reader {
         DataStream::new(self, endian)
@@ -1300,7 +1300,7 @@ impl<'a> IntoDataStream for &'a File {
 }
 
 impl IntoDataStream for File {
-    type Reader = DataStream<File>;
+    type Reader = DataStream<Self>;
 
     fn into_stream(self, endian: Endian) -> Self::Reader {
         DataStream::new(self, endian)
@@ -1308,7 +1308,7 @@ impl IntoDataStream for File {
 }
 
 impl IntoDataStream for Arc<File> {
-    type Reader = DataStream<Arc<File>>;
+    type Reader = DataStream<Self>;
 
     fn into_stream(self, endian: Endian) -> Self::Reader {
         DataStream::new(self, endian)
@@ -1316,7 +1316,7 @@ impl IntoDataStream for Arc<File> {
 }
 
 impl IntoDataStream for Empty {
-    type Reader = DataStream<Empty>;
+    type Reader = DataStream<Self>;
 
     fn into_stream(self, endian: Endian) -> Self::Reader {
         DataStream::new(self, endian)
@@ -1324,7 +1324,7 @@ impl IntoDataStream for Empty {
 }
 
 impl<R: Read + Seek> IntoDataStream for Box<R> {
-    type Reader = DataStream<Box<R>>;
+    type Reader = DataStream<Self>;
 
     fn into_stream(self, endian: Endian) -> Self::Reader {
         DataStream::new(self, endian)
@@ -1332,7 +1332,7 @@ impl<R: Read + Seek> IntoDataStream for Box<R> {
 }
 
 impl<R: Read + Seek> IntoDataStream for BufReader<R> {
-    type Reader = DataStream<BufReader<R>>;
+    type Reader = DataStream<Self>;
 
     fn into_stream(self, endian: Endian) -> Self::Reader {
         DataStream::new(self, endian)
@@ -1340,7 +1340,7 @@ impl<R: Read + Seek> IntoDataStream for BufReader<R> {
 }
 
 impl<T: AsRef<[u8]>> IntoDataStream for Cursor<T> {
-    type Reader = DataStream<Cursor<T>>;
+    type Reader = DataStream<Self>;
 
     fn into_stream(self, endian: Endian) -> Self::Reader {
         DataStream::new(self, endian)

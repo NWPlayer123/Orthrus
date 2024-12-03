@@ -1,3 +1,5 @@
+use core::ops::{Deref, DerefMut};
+
 use super::prelude::*;
 
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq, FromPrimitive)]
@@ -9,14 +11,29 @@ pub(crate) enum DepthMode {
 }
 
 #[derive(Debug, Default)]
-#[allow(dead_code)]
 pub(crate) struct DepthWriteAttrib {
     pub mode: DepthMode,
 }
 
-impl DepthWriteAttrib {
+impl Node for DepthWriteAttrib {
     #[inline]
-    pub fn create(_loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
+    fn create(_loader: &mut BinaryAsset, data: &mut Datagram<'_>) -> Result<Self, bam::Error> {
         Ok(Self { mode: DepthMode::from(data.read_u8()?) })
+    }
+}
+
+impl Deref for DepthWriteAttrib {
+    type Target = DepthMode;
+
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        &self.mode
+    }
+}
+
+impl DerefMut for DepthWriteAttrib {
+    #[inline]
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.mode
     }
 }

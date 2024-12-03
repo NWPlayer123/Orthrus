@@ -102,33 +102,29 @@ impl Multifile {
     fn parse_header_prefix<T: ReadExt + SeekExt>(data: &mut T) -> Result<u64, self::Error> {
         let mut pos = 0;
 
-        loop {
-            // This checks the initial byte of the line, if at any point we error, just return 0;
-            match data.read_u8()? {
-                b'#' => {
-                    pos += 1;
-                    // If we are in a comment line, search for a '\n'
-                    loop {
-                        let byte = data.read_u8()?;
-                        pos += 1;
-                        if byte == b'\n' {
-                            break;
-                        }
-                    }
-                    // Once we find the end of a line, skip any whitespace at the start of the next line
-                    loop {
-                        let byte = data.read_u8()?;
-                        if !matches!(byte, b' ' | b'\r') {
-                            let position = data.position()?;
-                            data.set_position(position - 1)?;
-                            break;
-                        }
-                        pos += 1;
-                    }
+        // Check the initial byte of the line, keep looking til we find one without a comment.
+        while let b'#' = data.read_u8()? {
+            pos += 1;
+            // If we are in a comment line, search for a '\n'
+            loop {
+                let byte = data.read_u8()?;
+                pos += 1;
+                if byte == b'\n' {
+                    break;
                 }
-                _ => break,
+            }
+            // Once we find the end of a line, skip any whitespace at the start of the next line
+            loop {
+                let byte = data.read_u8()?;
+                if !matches!(byte, b' ' | b'\r') {
+                    let position = data.position()?;
+                    data.set_position(position - 1)?;
+                    break;
+                }
+                pos += 1;
             }
         }
+
         Ok(pos)
     }
 
@@ -272,7 +268,7 @@ impl Multifile {
             // First, let's verify that our optional parameters are valid
             // TODO: if we're on version 1.0, grab the current timestamp as a placeholder?
             // TODO: We also should probably set the timestamp in the filesystem
-            if metadata.header.version.minor == 0 {}
+            //if metadata.header.version.minor == 0 {}
 
             if header.timestamp == 0 {
                 header.timestamp = metadata.header.timestamp;

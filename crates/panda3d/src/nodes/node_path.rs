@@ -1,22 +1,20 @@
 use super::prelude::*;
 
 #[derive(Debug, Default)]
+#[allow(dead_code)]
 pub(crate) struct NodePath {
-    path_refs: Vec<u32>,
+    pub path_refs: Vec<u32>,
 }
 
 impl NodePath {
     #[inline]
     pub fn create(loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
-        let mut path = Self::default();
+        let mut path_refs = Vec::new();
 
-        loop {
-            match loader.read_pointer(data)? {
-                Some(value) => path.path_refs.push(value),
-                None => break,
-            }
+        while let Some(value) = loader.read_pointer(data)? {
+            path_refs.push(value);
         }
 
-        Ok(path)
+        Ok(Self { path_refs })
     }
 }

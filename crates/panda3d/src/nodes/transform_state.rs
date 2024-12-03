@@ -1,8 +1,8 @@
 use super::prelude::*;
 
 bitflags! {
-    #[repr(transparent)]
     #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+    #[repr(transparent)]
     pub(crate) struct TransformFlags: u32 {
         const Identity = 0x00001;
         const Singular = 0x00002;
@@ -40,7 +40,27 @@ pub(crate) struct TransformState {
 
 impl TransformState {
     #[inline]
-    pub fn create(_loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
+    fn check_uniform_scale(&mut self) {
+        const EPSILON: f32 = 1.0e-6;
+        if relative_eq!(self.scale.x, self.scale.y, epsilon = EPSILON)
+            && relative_eq!(self.scale.x, self.scale.z, epsilon = EPSILON)
+        {
+            self.flags |= TransformFlags::UniformScale;
+            if relative_eq!(self.scale.x, 1.0, epsilon = EPSILON) {
+                self.flags |= TransformFlags::IdentityScale;
+            }
+        }
+
+        if !relative_eq!(self.shear, Vec3::ZERO, epsilon = EPSILON) {
+            self.flags |= TransformFlags::NonZeroShear;
+        }
+    }
+}
+
+impl Node for TransformState {
+    #[inline]
+    #[allow(clippy::field_reassign_with_default)]
+    fn create(_loader: &mut BinaryAsset, data: &mut Datagram<'_>) -> Result<Self, bam::Error> {
         let mut state = Self::default();
 
         state.flags = TransformFlags::from_bits_truncate(data.read_u32()?);
@@ -65,23 +85,6 @@ impl TransformState {
         }
 
         Ok(state)
-    }
-
-    #[inline]
-    fn check_uniform_scale(&mut self) {
-        const EPSILON: f32 = 1.0e-6;
-        if relative_eq!(self.scale.x, self.scale.y, epsilon = EPSILON)
-            && relative_eq!(self.scale.x, self.scale.z, epsilon = EPSILON)
-        {
-            self.flags |= TransformFlags::UniformScale;
-            if relative_eq!(self.scale.x, 1.0, epsilon = EPSILON) {
-                self.flags |= TransformFlags::IdentityScale;
-            }
-        }
-
-        if relative_eq!(self.shear, Vec3::ZERO, epsilon = EPSILON) == false {
-            self.flags |= TransformFlags::NonZeroShear;
-        }
     }
 }
 

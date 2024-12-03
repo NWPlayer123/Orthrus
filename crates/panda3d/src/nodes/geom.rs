@@ -1,7 +1,7 @@
 use super::prelude::*;
 
 #[derive(Debug, Default)]
-#[expect(dead_code)]
+#[allow(dead_code)]
 pub(crate) struct Geom {
     /// Reference to the associated GeomVertexData
     pub data_ref: u32,
@@ -13,9 +13,9 @@ pub(crate) struct Geom {
     pub bounds_type: BoundsType,
 }
 
-impl Geom {
+impl Node for Geom {
     #[inline]
-    pub fn create(loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
+    fn create(loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
         let data_ref = loader.read_pointer(data)?.unwrap();
 
         let num_primitives = data.read_u16()?;
@@ -27,9 +27,8 @@ impl Geom {
         let primitive_type = PrimitiveType::from(data.read_u8()?);
         let shade_model = ShadeModel::from(data.read_u8()?);
 
-        //TODO: if this ever gets removed, we should re-derive this bitfield using
-        // reset_geom_rendering()
-        let geom_rendering = GeomRendering::from_bits_truncate(data.read_u16()? as u32);
+        //TODO: if this ever gets removed, we should re-derive this bitfield using reset_geom_rendering()
+        let geom_rendering = GeomRendering::from_bits_truncate(data.read_u16()?.into());
 
         let bounds_type = match loader.get_minor_version() >= 19 {
             true => BoundsType::from(data.read_u8()?),

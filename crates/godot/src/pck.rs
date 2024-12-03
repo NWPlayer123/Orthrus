@@ -2,7 +2,7 @@
 use std::{
     fs::File,
     io::{prelude::*, BufReader},
-    path::{Path, PathBuf},
+    path::Path,
 };
 
 /// Adds support for the Resource Pack (PCK) format used by the Godot game engine.
@@ -135,7 +135,7 @@ impl ResourcePack {
     }
 
     pub fn extract_from_file<P: AsRef<Path>>(input: P, output: P) -> Result<usize, self::Error> {
-        fn inner(input: &Path, _output: &PathBuf) -> Result<usize, self::Error> {
+        fn inner(input: &Path, _output: &Path) -> Result<usize, self::Error> {
             // Use our existing functions to do the bulk of the loading
             let file = BufReader::new(File::open(input)?);
             let mut data = DataStream::new(file, Endian::Little);
@@ -144,11 +144,11 @@ impl ResourcePack {
             // In order to optimize seeking, we need to sort by file offset
             metadata.entries.sort_by_key(|entry| entry.file_offset);
             for entry in metadata.entries {
-                data.set_position(entry.file_offset.into())?;
+                data.set_position(entry.file_offset)?;
             }
             Ok(0)
         }
-        inner(input.as_ref(), &PathBuf::from(output.as_ref()))
+        inner(input.as_ref(), output.as_ref())
     }
 
     fn read_entry<T: ReadExt>(data: &mut T) -> Result<FileEntry, self::Error> {

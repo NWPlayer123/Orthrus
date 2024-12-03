@@ -17,8 +17,10 @@ pub mod multifile;
 pub mod subfile;
 
 pub mod bam;
+//#[cfg(feature = "bevy")]
+//pub mod bevy;
 #[cfg(feature = "bevy")]
-pub mod bevy;
+pub mod bevy2;
 
 pub mod common;
 pub mod prelude;
@@ -26,6 +28,5 @@ pub mod prelude;
 mod nodes;
 
 pub mod bam2;
-mod nodes2;
 
 pub mod multifile2;

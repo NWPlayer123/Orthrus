@@ -1,7 +1,13 @@
 use super::prelude::*;
 
+pub trait Node: std::fmt::Debug + Send + Sync {
+    fn create(loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error>
+    where
+        Self: Sized;
+}
+
 #[derive(Debug)]
-#[expect(dead_code)]
+#[allow(dead_code)]
 pub(crate) enum PandaObject {
     AnimBundle(AnimBundle),
     AnimBundleNode(AnimBundleNode),

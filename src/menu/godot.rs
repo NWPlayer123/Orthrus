@@ -8,7 +8,7 @@ create_submodule!(
     Godot(GodotFlags)
 );
 
-#[derive(FromArgs, PartialEq, Debug)]
+#[derive(FromArgs, PartialEq, Eq, Debug)]
 #[argp(subcommand, name = "pck")]
 #[argp(description = "Godot Resource Pack")]
 pub struct GodotFlags {

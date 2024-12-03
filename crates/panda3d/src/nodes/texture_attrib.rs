@@ -1,7 +1,7 @@
 use super::prelude::*;
 
 #[derive(Debug, Default)]
-#[expect(dead_code)]
+#[allow(dead_code)]
 pub(crate) struct StageNode {
     pub sampler: Option<SamplerState>,
     /// Reference to the associated TextureStage data
@@ -10,12 +10,11 @@ pub(crate) struct StageNode {
     pub texture_ref: u32,
     pub priority: i32,
     pub implicit_sort: u16,
-    pub texcoord_index: i32,
 }
 
 impl StageNode {
     #[inline]
-    pub fn create(loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
+    fn create(loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
         let texture_stage_ref = loader.read_pointer(data)?.unwrap();
         let texture_ref = loader.read_pointer(data)?.unwrap();
 
@@ -29,29 +28,20 @@ impl StageNode {
             false => 0,
         };
 
-        let sampler: Option<SamplerState>;
-        if loader.get_minor_version() >= 36 {
-            sampler = match data.read_bool()? {
+        let sampler = match loader.get_minor_version() >= 36 {
+            true => match data.read_bool()? {
                 true => Some(SamplerState::create(loader, data)?),
                 false => None,
-            };
-        } else {
-            sampler = None;
-        }
+            },
+            false => None,
+        };
 
-        Ok(Self {
-            sampler,
-            texture_stage_ref,
-            texture_ref,
-            priority,
-            implicit_sort,
-            texcoord_index: 0,
-        })
+        Ok(Self { sampler, texture_stage_ref, texture_ref, priority, implicit_sort })
     }
 }
 
 #[derive(Debug, Default)]
-#[expect(dead_code)]
+#[allow(dead_code)]
 pub(crate) struct TextureAttrib {
     pub off_all_stages: bool,
     /// References to associated TextureStage data
@@ -59,9 +49,9 @@ pub(crate) struct TextureAttrib {
     pub on_stages: Vec<StageNode>,
 }
 
-impl TextureAttrib {
+impl Node for TextureAttrib {
     #[inline]
-    pub fn create(loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
+    fn create(loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
         let off_all_stages = data.read_bool()?;
 
         let num_off_stages = data.read_u16()?;

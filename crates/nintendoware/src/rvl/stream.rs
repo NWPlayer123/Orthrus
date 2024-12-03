@@ -7,7 +7,6 @@
 //! # Format
 //! The BRSTM format, much like the rest of the NintendoWare binary formats, consists of a [shared
 //! header](super#shared-header), along with a number of "blocks" specific to each format.
-//!
 
 #[cfg(feature = "std")]
 use std::{fs::File, io::BufReader, path::Path};
@@ -251,17 +250,18 @@ mod head_block {
     struct ChannelInfo {}
 
     impl ChannelInfo {
-        fn new<T: ReadExt>(data: &mut T) -> Result<Self> {
+        fn new<T: ReadExt>(_data: &mut T) -> Result<Self> {
             Ok(Self {})
         }
     }
 
+    #[allow(dead_code)]
     struct ChannelTable {
         channels: Vec<ChannelInfo>,
     }
 
     impl ChannelTable {
-        fn new<T: ReadExt + SeekExt>(data: &mut T, start_position: u64) -> Result<Self> {
+        fn new<T: ReadExt + SeekExt>(data: &mut T, _start_position: u64) -> Result<Self> {
             let channel_count = data.read_u8()?;
             data.read_exact::<3>()?; //padding
             let mut channels = Vec::with_capacity(channel_count.into());

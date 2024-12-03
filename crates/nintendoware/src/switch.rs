@@ -50,26 +50,27 @@ impl Identifier {
 
 //-------------------------------------------------------------------------------------------------
 
+// TODO: merge with Endian in orthrus_core::data
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ByteOrderMark(u16);
 
 #[expect(non_upper_case_globals)]
 impl ByteOrderMark {
-    pub const Big: ByteOrderMark = ByteOrderMark(0xFEFF);
-    pub const Little: ByteOrderMark = ByteOrderMark(0xFFFE);
+    pub const Big: Self = Self(0xFEFF);
+    pub const Little: Self = Self(0xFFFE);
 }
 
 impl Default for ByteOrderMark {
     #[cfg(target_endian = "little")]
     #[inline]
     fn default() -> Self {
-        ByteOrderMark::Little
+        Self::Little
     }
 
     #[cfg(target_endian = "big")]
     #[inline]
     fn default() -> Self {
-        ByteOrderMark::Big
+        Self::Big
     }
 }
 
@@ -84,13 +85,12 @@ pub struct Version {
 
 impl Read for Version {
     fn read<T: ReadExt>(data: &mut T) -> Result<Self> {
-        let mut version = Self::default();
-        version.major = data.read_u8()?;
-        version.minor = data.read_u8()?;
-        version.patch = data.read_u8()?;
+        let major = data.read_u8()?;
+        let minor = data.read_u8()?;
+        let patch = data.read_u8()?;
         //This should always be zero, but I'm not going to enforce an assert here
         let _align = data.read_u8()?;
-        Ok(version)
+        Ok(Self { major, minor, patch })
     }
 }
 
@@ -275,12 +275,10 @@ impl PatriciaTree {
             let pos = (node.search_index >> 3) as usize;
             let bit = (node.search_index & 7) as usize;
 
-            let node_index;
-            if (bytes[pos] & (1 << (7 - bit))) == 1 {
-                node_index = node.right_index as usize;
-            } else {
-                node_index = node.left_index as usize;
-            }
+            let node_index = match bytes[pos] & (1 << (7 - bit)) {
+                1 => node.right_index as usize,
+                _ => node.left_index as usize,
+            };
             node = self.nodes.get(node_index).ok_or(Error::NodeNotFound)?;
         }
 
@@ -290,15 +288,13 @@ impl PatriciaTree {
 
 impl Read for PatriciaTree {
     fn read<T: ReadExt + SeekExt>(data: &mut T) -> Result<Self> {
-        let mut tree = Self::default();
-
         // First, get the root index
-        tree.root_index = data.read_u32()?;
+        let root_index = data.read_u32()?;
 
         // Then, we can load in the node table
-        tree.nodes = Table::read(data)?;
+        let nodes = Table::read(data)?;
 
-        Ok(tree)
+        Ok(Self { root_index, nodes })
     }
 }
 
@@ -357,26 +353,25 @@ impl Read for StreamTrackInfo {
         // Save our relative position
         let offset = data.position()?;
 
-        let mut info = Self::default();
-        info.volume = data.read_u8()?;
-        info.pan = data.read_u8()?;
-        info.span = data.read_u8()?;
-        info.flags = data.read_u8()?;
+        let volume = data.read_u8()?;
+        let pan = data.read_u8()?;
+        let span = data.read_u8()?;
+        let flags = data.read_u8()?;
 
         let global_channel_ref = Reference::read(data)?;
         let send_value_ref = Reference::read(data)?;
 
-        info.lpf_freq = data.read_u8()?;
-        info.biquad_type = data.read_u8()?;
-        info.biquad_value = data.read_u8()?;
+        let lpf_freq = data.read_u8()?;
+        let biquad_type = data.read_u8()?;
+        let biquad_value = data.read_u8()?;
         data.read_u8()?;
 
         data.set_position(offset + u64::from(global_channel_ref.offset))?;
         // This is a raw type so I just do this manually instead of calling Table::read
         let index_count = data.read_u32()?;
-        info.global_channel_indices = Vec::with_capacity(index_count as usize);
+        let mut global_channel_indices = Vec::with_capacity(index_count as usize);
         for _ in 0..index_count {
-            info.global_channel_indices.push(data.read_u8()?);
+            global_channel_indices.push(data.read_u8()?);
         }
 
         // Now we need to align, and theoretically that's where send_value is
@@ -384,9 +379,19 @@ impl Read for StreamTrackInfo {
         data.set_position((position + 3) & !3)?;
 
         data.set_position(offset + u64::from(send_value_ref.offset))?;
-        info.send_value = SendValue::read(data)?;
+        let send_value = SendValue::read(data)?;
 
-        Ok(info)
+        Ok(Self {
+            volume,
+            pan,
+            span,
+            flags,
+            lpf_freq,
+            biquad_type,
+            biquad_value,
+            global_channel_indices,
+            send_value,
+        })
     }
 }
 
@@ -406,19 +411,17 @@ impl Read for StreamSoundInfo {
         // Save relative position
         let offset = data.position()?;
 
-        let mut info = Self::default();
-
-        info.valid_tracks = data.read_u16()?;
-        info.channel_count = data.read_u16()?;
+        let valid_tracks = data.read_u16()?;
+        let channel_count = data.read_u16()?;
 
         // Reference to TrackInfoTable
         let track_info_ref = Reference::read(data)?;
-        info.pitch = data.read_f32()?;
+        let pitch = data.read_f32()?;
 
         let send_value_ref = Reference::read(data)?;
         let extension_ref = Reference::read(data)?;
 
-        info.prefetch_id = data.read_u32()?;
+        let prefetch_id = data.read_u32()?;
 
         // Get the TrackInfo, which is a reference table to a bunch of StreamTrackInfos
         let track_table: Vec<Reference> = Table::read(data)?;
@@ -439,15 +442,21 @@ impl Read for StreamSoundInfo {
             }
         }
 
-        info.tracks = tracks;
-
         data.set_position(offset + u64::from(send_value_ref.offset))?;
-        info.send_value = SendValue::read(data)?;
+        let send_value = SendValue::read(data)?;
 
         data.set_position(offset + u64::from(extension_ref.offset))?;
-        info.extension = StreamSoundExtension::read(data)?;
+        let extension = StreamSoundExtension::read(data)?;
 
-        Ok(info)
+        Ok(Self {
+            valid_tracks,
+            channel_count,
+            pitch,
+            prefetch_id,
+            tracks,
+            send_value,
+            extension,
+        })
     }
 }
 
@@ -545,16 +554,13 @@ struct Sound3DInfo {
 
 impl Read for Sound3DInfo {
     fn read<T: ReadExt>(data: &mut T) -> Result<Self> {
-        let mut info = Self::default();
-
-        info.flags = Sound3DFlags::from_bits_truncate(data.read_u32()?);
-        info.decay_ratio = data.read_f32()?;
-        info.decay_curve = data.read_u8()?;
-        info.doppler_factor = data.read_u8()?;
+        let flags = Sound3DFlags::from_bits_truncate(data.read_u32()?);
+        let decay_ratio = data.read_f32()?;
+        let decay_curve = data.read_u8()?;
+        let doppler_factor = data.read_u8()?;
         data.read_u16()?;
-        info.options = data.read_u32()?;
-
-        Ok(info)
+        let options = data.read_u32()?;
+        Ok(Self { flags, decay_ratio, decay_curve, doppler_factor, options })
     }
 }
 
@@ -817,7 +823,7 @@ impl StringBlock {
         let references: Vec<SizedReference> = Table::read(data)?;
 
         // Then we can process all strings, pre-allocate since we know the count ahead of time
-        let mut strings = Vec::with_capacity(references.len() as usize);
+        let mut strings = Vec::with_capacity(references.len());
         for reference in &references {
             match reference.identifier {
                 Identifier::STRING => {
@@ -1011,26 +1017,23 @@ impl BFSAR {
 
     #[cfg(feature = "std")]
     #[inline]
-    pub fn open<P: AsRef<Path>>(input: P) -> Result<()> {
+    pub fn open<P: AsRef<Path>>(input: P) -> Result<Self> {
         let data = std::fs::read(input)?;
         Self::load(data)
     }
 
     #[inline]
-    pub fn load<I: Into<Box<[u8]>>>(input: I) -> Result<()> {
+    pub fn load<I: Into<Box<[u8]>>>(input: I) -> Result<Self> {
         // Initialize the data
         let mut data = DataCursor::new(input, Endian::Big);
 
-        // Start creating our return struct
-        let mut archive = Self::default();
-
         // Read the file header
-        archive.header = Self::read_header(&mut data)?;
+        let header = Self::read_header(&mut data)?;
 
         // Read the references to all sections
         let mut sections: [SizedReference; 3] = Default::default();
-        for n in 0..sections.len() {
-            sections[n] = SizedReference::read(&mut data)?;
+        for section in &mut sections {
+            *section = SizedReference::read(&mut data)?;
         }
 
         // Align to a 32-byte boundary
@@ -1038,15 +1041,17 @@ impl BFSAR {
         data.set_position((position + 31) & !31)?;
 
         // Then read all the section data
+        let mut strings = StringBlock::default();
+        let mut info = InfoBlock::default();
         for section in &sections {
             data.set_position(section.offset.into())?;
 
             match section.identifier {
                 Identifier::STRING_BLOCK => {
-                    archive.strings = StringBlock::read(&mut data)?;
+                    strings = StringBlock::read(&mut data)?;
                 }
                 Identifier::INFO_BLOCK => {
-                    archive.info = InfoBlock::read(&mut data)?;
+                    info = InfoBlock::read(&mut data)?;
                 }
                 Identifier::FILE_BLOCK => {}
                 _ => InvalidDataSnafu { position: data.position()?, reason: "Unexpected BFSAR Section!" }
@@ -1054,22 +1059,19 @@ impl BFSAR {
             }
         }
 
-        for info in archive.info.sounds {
-            match info.details {
-                SoundDetails::Stream(ref stream) => {
-                    let filename = &archive.strings.table[info.string_id as usize];
-                    println!(
-                        "    [\"{}\", {}, {}, {}],",
-                        &filename[..filename.len() - 1],
-                        stream.extension.loop_start_frame,
-                        stream.extension.loop_end_frame,
-                        stream.extension.temp_position
-                    );
-                }
-                _ => (),
+        for info in &info.sounds {
+            if let SoundDetails::Stream(ref stream) = info.details {
+                let filename = &strings.table[info.string_id as usize];
+                println!(
+                    "    [\"{}\", {}, {}, {}],",
+                    &filename[..filename.len() - 1],
+                    stream.extension.loop_start_frame,
+                    stream.extension.loop_end_frame,
+                    stream.extension.temp_position
+                );
             }
         }
 
-        Ok(())
+        Ok(Self { header, strings, info, files: FileBlock::default() })
     }
 }

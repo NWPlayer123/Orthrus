@@ -9,7 +9,7 @@ create_submodule!(
     Yaz0(Yaz0Flags)
 );
 
-#[derive(FromArgs, PartialEq, Debug)]
+#[derive(FromArgs, PartialEq, Eq, Debug)]
 #[argp(subcommand, name = "yay0")]
 #[argp(description = "Nintendo Yay0-compressed data")]
 pub struct Yay0Flags {
@@ -31,7 +31,7 @@ pub struct Yay0Flags {
     pub output: Option<String>,
 }
 
-#[derive(FromArgs, PartialEq, Debug)]
+#[derive(FromArgs, PartialEq, Eq, Debug)]
 #[argp(subcommand, name = "yaz0")]
 #[argp(description = "Nintendo Yaz0-compressed data")]
 pub struct Yaz0Flags {

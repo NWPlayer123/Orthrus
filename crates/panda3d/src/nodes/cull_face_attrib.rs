@@ -11,15 +11,15 @@ pub(crate) enum CullMode {
 }
 
 #[derive(Debug, Default)]
-#[expect(dead_code)]
+#[allow(dead_code)]
 pub(crate) struct CullFaceAttrib {
     pub mode: CullMode,
     pub reverse: bool,
 }
 
-impl CullFaceAttrib {
+impl Node for CullFaceAttrib {
     #[inline]
-    pub fn create(_loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
+    fn create(_loader: &mut BinaryAsset, data: &mut Datagram<'_>) -> Result<Self, bam::Error> {
         let mode = CullMode::from(data.read_u8()?);
         let reverse = data.read_bool()?;
         Ok(Self { mode, reverse })

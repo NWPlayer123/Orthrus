@@ -1,15 +1,17 @@
+use core::ops::{Deref, DerefMut};
+
 use super::prelude::*;
 
 #[derive(Debug, Default)]
-#[expect(dead_code)]
+#[allow(dead_code)]
 pub(crate) struct Switch {
-    start: f32,
-    end: f32,
+    pub start: f32,
+    pub end: f32,
 }
 
 impl Switch {
     #[inline]
-    pub fn create(_loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
+    fn create(_loader: &mut BinaryAsset, data: &mut Datagram<'_>) -> Result<Self, bam::Error> {
         let start = data.read_float()?;
         let end = data.read_float()?;
         Ok(Switch { start, end })
@@ -17,18 +19,18 @@ impl Switch {
 }
 
 #[derive(Debug, Default)]
-#[expect(dead_code)]
+#[allow(dead_code)]
 pub(crate) struct LODNode {
-    node: PandaNode,
-    center: Vec3,
-    switch_vector: Vec<Switch>,
-    lod_scale: f32,
+    pub inner: PandaNode,
+    pub center: Vec3,
+    pub switch_vector: Vec<Switch>,
+    pub lod_scale: f32,
 }
 
-impl LODNode {
+impl Node for LODNode {
     #[inline]
-    pub fn create(loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
-        let node = PandaNode::create(loader, data)?;
+    fn create(loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
+        let inner = PandaNode::create(loader, data)?;
 
         //Cycler data
         let center = Vec3::read(data)?;
@@ -41,6 +43,22 @@ impl LODNode {
 
         let lod_scale = 1.0;
 
-        Ok(Self { node, center, switch_vector, lod_scale })
+        Ok(Self { inner, center, switch_vector, lod_scale })
+    }
+}
+
+impl Deref for LODNode {
+    type Target = PandaNode;
+
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl DerefMut for LODNode {
+    #[inline]
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
     }
 }

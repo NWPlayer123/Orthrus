@@ -22,8 +22,8 @@ impl FileInfo {
     /// Creates a new instance to return information about a file.
     #[must_use]
     #[inline]
-    pub fn new(info: String, payload: Option<Box<[u8]>>) -> Self {
-        FileInfo { info, payload }
+    pub const fn new(info: String, payload: Option<Box<[u8]>>) -> Self {
+        Self { info, payload }
     }
 }
 

@@ -54,7 +54,7 @@ struct MZHeader {
     e_res: [U16<LittleEndian>; 4],
     /// OEM identifier
     e_oemid: U16<LittleEndian>,
-    /// OEM information (specific to e_oemid)
+    /// OEM information (specific to `e_oemid`)
     e_oeminfo: U16<LittleEndian>,
     /// Reserved Words 2
     e_res2: [U16<LittleEndian>; 10],
@@ -97,7 +97,7 @@ impl PEHeader {
         // If we do, we can infallibly unwrap since we're Unaligned
         let header = Self::ref_from_bytes(&input[offset..]).unwrap();
         match header.magic.get() {
-            0x50450000 => Some(header),
+            0x5045_0000 => Some(header),
             _ => None,
         }
     }
@@ -116,7 +116,7 @@ struct COFFHeader {
 }
 
 #[derive(TryFromBytes, KnownLayout, Immutable)]
-#[allow(dead_code)]
+#[allow(dead_code, clippy::upper_case_acronyms)]
 #[repr(u16)]
 enum MachineType {
     /// The content of this field is assumed to be applicable to any machine type
@@ -319,6 +319,7 @@ pub struct PortableExecutable<'a> {
 }
 
 impl<'a> PortableExecutable<'a> {
+    #[must_use]
     pub fn new(input: &'a [u8]) -> Option<Self> {
         let mut offset = 0;
 

@@ -8,7 +8,7 @@ create_submodule!(
     RARC(RARCFlags)
 );
 
-#[derive(FromArgs, PartialEq, Debug)]
+#[derive(FromArgs, PartialEq, Eq, Debug)]
 #[argp(subcommand, name = "rarc")]
 #[argp(description = "JSystem Resource Archive")]
 pub struct RARCFlags {

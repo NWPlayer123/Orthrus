@@ -1,17 +1,20 @@
+use core::ops::{Deref, DerefMut};
+
 use super::prelude::*;
 
 #[derive(Debug, Default)]
-#[expect(dead_code)]
+#[allow(dead_code)]
 pub(crate) struct CollisionPolygon {
-    plane: CollisionPlane,
-    points: Vec<(Vec2, Vec2)>,
-    to_2d_matrix: Mat4,
+    pub inner: CollisionPlane,
+    // (Point, Vector) pair
+    pub points: Vec<(Vec2, Vec2)>,
+    pub to_2d_matrix: Mat4,
 }
 
-impl CollisionPolygon {
+impl Node for CollisionPolygon {
     #[inline]
-    pub fn create(loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
-        let plane = CollisionPlane::create(loader, data)?;
+    fn create(loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
+        let inner = CollisionPlane::create(loader, data)?;
 
         let point_count = data.read_u16()?;
         let mut points = Vec::with_capacity(point_count as usize);
@@ -20,10 +23,28 @@ impl CollisionPolygon {
         }
 
         let to_2d_matrix = Mat4::read(data)?;
+
         if loader.get_minor_version() < 13 {
-            panic!("I don't have any BAM files this old, message me");
+            unimplemented!("I don't have any BAM files this old, message me - error in CollisionPolygon");
             //TODO: need to wind vertices the other way
         }
-        Ok(Self { plane, points, to_2d_matrix })
+
+        Ok(Self { inner, points, to_2d_matrix })
+    }
+}
+
+impl Deref for CollisionPolygon {
+    type Target = CollisionPlane;
+
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl DerefMut for CollisionPolygon {
+    #[inline]
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
     }
 }

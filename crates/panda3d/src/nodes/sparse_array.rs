@@ -1,15 +1,15 @@
 use super::prelude::*;
 
 #[derive(Debug, Default)]
-#[expect(dead_code)]
+#[allow(dead_code)]
 pub(crate) struct SparseArray {
-    subranges: Vec<(i32, i32)>,
-    inverse: bool,
+    pub subranges: Vec<(i32, i32)>,
+    pub inverse: bool,
 }
 
 impl SparseArray {
     #[inline]
-    pub fn create(_loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
+    pub fn create(_loader: &mut BinaryAsset, data: &mut Datagram<'_>) -> Result<Self, bam::Error> {
         let num_subranges = data.read_u32()?;
         let mut subranges = Vec::with_capacity(num_subranges as usize);
         for _ in 0..num_subranges {

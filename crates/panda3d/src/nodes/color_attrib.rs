@@ -16,17 +16,7 @@ pub(crate) struct ColorAttrib {
 }
 
 impl ColorAttrib {
-    pub fn create(_loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
-        let color_type = ColorType::from(data.read_u8()?);
-        //TODO: create custom color type?
-        let color = Vec4::read(data)?;
-
-        let mut attrib = Self { color_type, color };
-        attrib.quantize_color();
-
-        Ok(attrib)
-    }
-
+    #[inline]
     fn quantize_color(&mut self) {
         match self.color_type {
             ColorType::Vertex => {
@@ -40,5 +30,20 @@ impl ColorAttrib {
                 self.color = Vec4::ONE;
             }
         }
+    }
+}
+
+impl Node for ColorAttrib {
+    #[inline]
+    fn create(_loader: &mut BinaryAsset, data: &mut Datagram<'_>) -> Result<Self, bam::Error> {
+        let color_type = ColorType::from(data.read_u8()?);
+
+        //TODO: create custom color type?
+        let color = Vec4::read(data)?;
+
+        let mut attrib = Self { color_type, color };
+        attrib.quantize_color();
+
+        Ok(attrib)
     }
 }

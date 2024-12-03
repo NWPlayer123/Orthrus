@@ -1,19 +1,37 @@
+use core::ops::{Deref, DerefMut};
+
 use super::prelude::*;
 
 #[derive(Debug, Default)]
-#[expect(dead_code)]
+#[allow(dead_code)]
 pub(crate) struct CollisionSphere {
-    solid: CollisionSolid,
-    center: Vec3,
-    radius: f32,
+    pub inner: CollisionSolid,
+    pub center: Vec3,
+    pub radius: f32,
 }
 
-impl CollisionSphere {
+impl Node for CollisionSphere {
     #[inline]
-    pub fn create(loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
-        let solid = CollisionSolid::create(loader, data)?;
+    fn create(loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
+        let inner = CollisionSolid::create(loader, data)?;
         let center = Vec3::read(data)?;
         let radius = data.read_float()?;
-        Ok(Self { solid, center, radius })
+        Ok(Self { inner, center, radius })
+    }
+}
+
+impl Deref for CollisionSphere {
+    type Target = CollisionSolid;
+
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl DerefMut for CollisionSphere {
+    #[inline]
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
     }
 }

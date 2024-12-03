@@ -1,14 +1,31 @@
+use core::ops::{Deref, DerefMut};
+
 use super::prelude::*;
 
 #[derive(Debug, Default)]
-#[allow(dead_code)]
 pub(crate) struct InternalName {
     pub name: String,
 }
 
-impl InternalName {
+impl Node for InternalName {
     #[inline]
-    pub fn create(_loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
+    fn create(_loader: &mut BinaryAsset, data: &mut Datagram<'_>) -> Result<Self, bam::Error> {
         Ok(Self { name: data.read_string()? })
+    }
+}
+
+impl Deref for InternalName {
+    type Target = String;
+
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        &self.name
+    }
+}
+
+impl DerefMut for InternalName {
+    #[inline]
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.name
     }
 }

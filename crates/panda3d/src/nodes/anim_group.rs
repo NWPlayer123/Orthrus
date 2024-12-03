@@ -1,16 +1,16 @@
 use super::prelude::*;
 
 #[derive(Debug, Default)]
-#[expect(dead_code)]
+#[allow(dead_code)]
 pub(crate) struct AnimGroup {
     pub name: String,
     pub root_ref: u32,
     pub child_refs: Vec<u32>,
 }
 
-impl AnimGroup {
+impl Node for AnimGroup {
     #[inline]
-    pub fn create(loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
+    fn create(loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
         let name = data.read_string()?;
         let root_ref = loader.read_pointer(data)?.unwrap();
         let num_children = data.read_u16()?;
