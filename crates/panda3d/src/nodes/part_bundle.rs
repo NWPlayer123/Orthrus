@@ -23,9 +23,9 @@ pub(crate) struct PartBundle {
     pub root_transform: Mat4,
 }
 
-impl PartBundle {
+impl Node for PartBundle {
     #[inline]
-    pub fn create(loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
+    fn create(loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
         let inner = PartGroup::create(loader, data)?;
 
         let anim_preload_ref = match loader.get_minor_version() >= 17 {

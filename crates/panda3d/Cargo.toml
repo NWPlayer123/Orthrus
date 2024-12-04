@@ -17,6 +17,7 @@ bevy_transform = { version = "0.15", default-features = false }
 bevy_math = { version = "0.15", default-features = false, features = [
     "approx",
 ] }
+downcast-rs = { version = "1.2", default-features = false }
 #der = { version = "0.7", optional = true }
 
 # Bevy-Specific Assets

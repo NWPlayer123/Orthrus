@@ -833,7 +833,9 @@ impl StringBlock {
                     // Read the string and store it, includes the trailing \0
                     let string = data.read_slice(reference.size as usize)?.to_vec();
                     strings.push(
-                        String::from_utf8(string).map_err(|source| DataError::InvalidString { source })?,
+                        String::from_utf8(string).map_err(|source| DataError::InvalidString {
+                            source: Utf8ErrorSource::String { source },
+                        })?,
                     );
                 }
                 _ => InvalidDataSnafu { position: data.position()?, reason: "Unexpected String Identifier!" }

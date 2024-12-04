@@ -30,6 +30,14 @@ use std::{
     path::Path,
 };
 
+#[derive(Debug, Snafu)]
+pub enum Utf8ErrorSource {
+    #[snafu(display("Invalid UTF-8 sequence"))]
+    Slice { source: core::str::Utf8Error },
+    #[snafu(display("Invalid UTF-8 sequence"))]
+    String { source: alloc::string::FromUtf8Error },
+}
+
 /// Error conditions for when reading/writing data.
 #[derive(Debug, Snafu)]
 #[non_exhaustive]
@@ -37,16 +45,29 @@ pub enum DataError {
     /// Thrown if reading/writing tries to go out of bounds.
     #[snafu(display("Tried to read out-of-bounds"))]
     EndOfFile,
-    /// Thrown if UTF-8 validation fails when trying to convert a slice.
-    #[snafu(display("Invalid UTF-8 sequence"))]
-    InvalidStr { source: core::str::Utf8Error },
-    /// Thrown if UTF-8 validation fails when trying to convert a slice.
-    #[snafu(display("Invalid UTF-8 sequence"))]
-    InvalidString { source: alloc::string::FromUtf8Error },
+
+    /// Thrown if UTF-8 validation fails when trying to convert a string.
+    #[snafu(display("{source}"))]
+    InvalidString { source: Utf8ErrorSource },
+
     /// Thrown when an I/O operation fails on a [`DataStream`].
     #[cfg(feature = "std")]
-    #[snafu(display("I/O error: {}", source))]
+    #[snafu(display("I/O error: {source}"))]
     Io { source: std::io::Error },
+}
+
+impl From<core::str::Utf8Error> for DataError {
+    #[inline]
+    fn from(source: core::str::Utf8Error) -> Self {
+        DataError::InvalidString { source: Utf8ErrorSource::Slice { source } }
+    }
+}
+
+impl From<alloc::string::FromUtf8Error> for DataError {
+    #[inline]
+    fn from(source: alloc::string::FromUtf8Error) -> Self {
+        DataError::InvalidString { source: Utf8ErrorSource::String { source } }
+    }
 }
 
 /// Represents the endianness of the data being read or written.
@@ -167,8 +188,8 @@ pub trait ReadExt: EndianExt {
     fn read_string(&mut self, length: usize) -> Result<Cow<str>, DataError> {
         let slice = self.read_slice(length)?;
         match slice {
-            Cow::Borrowed(bytes) => core::str::from_utf8(bytes).map(Cow::Borrowed).context(InvalidStrSnafu),
-            Cow::Owned(bytes) => String::from_utf8(bytes).map(Cow::Owned).context(InvalidStringSnafu),
+            Cow::Borrowed(bytes) => Ok(Cow::Borrowed(core::str::from_utf8(bytes)?)),
+            Cow::Owned(bytes) => Ok(Cow::Owned(String::from_utf8(bytes)?)),
         }
     }
 

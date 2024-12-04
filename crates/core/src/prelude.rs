@@ -8,7 +8,7 @@
 #[doc(inline)]
 pub use crate::data::{
     DataCursor, DataCursorMut, DataCursorRef, DataError, DataStream, Endian, IntoDataStream, ReadExt,
-    SeekExt, WriteExt,
+    SeekExt, Utf8ErrorSource, WriteExt,
 };
 #[doc(inline)]
 pub use crate::identify::{FileIdentifier, FileInfo, IdentifyFn};

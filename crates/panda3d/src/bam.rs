@@ -30,7 +30,34 @@ use crate::nodes::prelude::*;
 #[derive(Debug, Snafu)]
 #[non_exhaustive]
 pub enum Error {
-    /// Thrown when trying to open a file or folder that doesn't exist.
+    /// Thrown if a [`std::io::Error`] happened when trying to read/write files.
+    #[snafu(display("Filesystem Error {source}"))]
+    FileError { source: std::io::Error },
+
+    /// Thrown if a [`DataError`] other than EndOfFile is encountered.
+    #[snafu(display("Decoding Error {source}"))]
+    DataError { source: DataError },
+
+    /// Thrown if trying to read the file out of its current bounds.
+    #[snafu(display("Reached the end of the current stream!"))]
+    EndOfFile,
+
+    /// Thrown if UTF-8 validation fails when trying to convert a string.
+    #[snafu(display("{source}"))]
+    InvalidString { source: Utf8ErrorSource },
+
+    /// Thrown if the header contains a magic number other than "pbj\0\n\r".
+    #[snafu(display("Invalid Magic! Expected {:?}.", BinaryAsset::MAGIC))]
+    InvalidMagic,
+
+    /// Thrown if the header version is too new to be supported.
+    #[snafu(display("Invalid Version! Expected <= v{}.", BinaryAsset::CURRENT_VERSION))]
+    InvalidVersion,
+
+    /// Thrown if unable to downcast to a specific type.
+    #[snafu(display("Node is not of type {type_name}"))]
+    InvalidType { type_name: &'static str },
+    /*/// Thrown when trying to open a file or folder that doesn't exist.
     #[snafu(display("Unable to find file/folder!"))]
     NotFound,
     /// Thrown if reading/writing tries to go out of bounds.
@@ -53,21 +80,14 @@ pub enum Error {
     InvalidType,
     /// Thrown if trying to convert an enum but the value is outside of the bounds
     #[snafu(display("Invalid Enum Variant! Malformed BAM file?"))]
-    InvalidEnum,
+    InvalidEnum,*/
 }
 
 #[cfg(feature = "std")]
 impl From<std::io::Error> for Error {
     #[inline]
-    fn from(error: std::io::Error) -> Self {
-        match error.kind() {
-            std::io::ErrorKind::NotFound => Self::NotFound,
-            std::io::ErrorKind::UnexpectedEof => Self::EndOfFile,
-            std::io::ErrorKind::PermissionDenied => Self::PermissionDenied,
-            kind => {
-                panic!("Unexpected std::io::error: {kind}! Something has gone horribly wrong")
-            }
-        }
+    fn from(source: std::io::Error) -> Self {
+        Self::FileError { source }
     }
 }
 
@@ -75,9 +95,25 @@ impl From<DataError> for Error {
     #[inline]
     fn from(error: DataError) -> Self {
         match error {
-            DataError::EndOfFile => Self::EndOfFile,
-            _ => panic!("Unexpected data::error! Something has gone horribly wrong"),
+            DataError::Io { source } => Error::FileError { source },
+            DataError::EndOfFile => Error::EndOfFile,
+            DataError::InvalidString { source } => Error::InvalidString { source },
+            _ => todo!(),
         }
+    }
+}
+
+impl From<core::str::Utf8Error> for Error {
+    #[inline]
+    fn from(source: core::str::Utf8Error) -> Self {
+        Error::InvalidString { source: Utf8ErrorSource::Slice { source } }
+    }
+}
+
+impl From<std::string::FromUtf8Error> for Error {
+    #[inline]
+    fn from(source: std::string::FromUtf8Error) -> Self {
+        Error::InvalidString { source: Utf8ErrorSource::String { source } }
     }
 }
 
@@ -147,7 +183,7 @@ pub struct BinaryAsset {
     /// Used if there are more than 65535 Pointer to Array IDs
     pub(crate) long_pta_id: bool,
     pub(crate) type_registry: HashMap<u16, String>,
-    pub(crate) nodes: Vec<PandaObject>,
+    pub(crate) nodes: Vec<Box<dyn Node>>,
     pub(crate) arrays: Vec<Vec<u32>>,
 }
 
@@ -199,8 +235,8 @@ impl BinaryAsset {
             header,
             type_registry: HashMap::new(),
             objects_left,
-            nodes: vec![PandaObject::Null], //1-indexed
-            arrays: vec![Vec::new()],       //1-indexed
+            nodes: Vec::new(),
+            arrays: Vec::new(),
             ..Default::default()
         };
 
@@ -290,11 +326,7 @@ impl BinaryAsset {
 
         // Found a new type, read its string and register it
         if !self.type_registry.contains_key(&type_handle) {
-            //read_slice
-            let length = data.read_u16()?;
-            let slice = data.read_slice(length as usize)?;
-
-            let type_name = core::str::from_utf8(&slice).map_err(|_| Error::InvalidType)?.to_owned();
+            let type_name = data.read_string()?;
             //println!("Registering Type {type_name} -> {type_handle}");
             self.type_registry.insert(type_handle, type_name);
 
@@ -343,68 +375,75 @@ impl BinaryAsset {
             if let ObjectsLeft::ObjectCount { ref mut num_extra_objects } = self.objects_left {
                 *num_extra_objects -= 1;
             }
-            return Ok(Some(object_id));
+            // ObjectID 0 is reserved, but we still want to store indices as zero-indexed, so subtract 1
+            return Ok(Some(object_id - 1));
         }
         Ok(None)
     }
 
+    pub fn get_node<T: Node>(&self, index: usize) -> Result<&T, self::Error> {
+        self.nodes
+            .get(index)
+            .and_then(|node| node.downcast_ref::<T>())
+            .ok_or(Error::InvalidType { type_name: std::any::type_name::<T>() })
+    }
+
+    pub fn get_node_mut<T: Node>(&mut self, index: usize) -> Result<&mut T, self::Error> {
+        self.nodes
+            .get_mut(index)
+            .and_then(|node| node.downcast_mut::<T>())
+            .ok_or(Error::InvalidType { type_name: std::any::type_name::<T>() })
+    }
+
+    pub fn is_node<T: Node>(&self, index: usize) -> bool {
+        self.nodes.get(index).map(|node| node.is::<T>()).unwrap_or(false)
+    }
+
     //should really be using make_from_bam as an entrypoint
     async fn fillin(&mut self, data: &mut Datagram<'_>, type_name: &str) -> Result<(), self::Error> {
-        let node = match type_name {
-            "AnimBundle" => PandaObject::AnimBundle(AnimBundle::create(self, data)?),
-            "AnimBundleNode" => PandaObject::AnimBundleNode(AnimBundleNode::create(self, data)?),
-            "AnimChannelMatrixXfmTable" => {
-                PandaObject::AnimChannelMatrixXfmTable(AnimChannelMatrixXfmTable::create(self, data)?)
-            }
-            "AnimGroup" => PandaObject::AnimGroup(AnimGroup::create(self, data)?),
-            "BillboardEffect" => PandaObject::BillboardEffect(BillboardEffect::create(self, data)?),
-            "Character" => PandaObject::Character(Character::create(self, data)?),
-            "CharacterJoint" => PandaObject::CharacterJoint(CharacterJoint::create(self, data)?),
-            "CharacterJointBundle" => PandaObject::CharacterJointBundle(PartBundle::create(self, data)?),
-            "CharacterJointEffect" => {
-                PandaObject::CharacterJointEffect(CharacterJointEffect::create(self, data)?)
-            }
-            "CollisionCapsule" => PandaObject::CollisionCapsule(CollisionCapsule::create(self, data)?),
-            "CollisionNode" => PandaObject::CollisionNode(CollisionNode::create(self, data)?),
-            "CollisionPolygon" => PandaObject::CollisionPolygon(CollisionPolygon::create(self, data)?),
-            "CollisionSphere" => PandaObject::CollisionSphere(CollisionSphere::create(self, data)?),
-            "CollisionTube" => PandaObject::CollisionCapsule(CollisionCapsule::create(self, data)?),
-            "ColorAttrib" => PandaObject::ColorAttrib(ColorAttrib::create(self, data)?),
-            "CullBinAttrib" => PandaObject::CullBinAttrib(CullBinAttrib::create(self, data)?),
-            "CullFaceAttrib" => PandaObject::CullFaceAttrib(CullFaceAttrib::create(self, data)?),
-            "DecalEffect" => PandaObject::DecalEffect(DecalEffect::create(self, data)?),
-            "DepthWriteAttrib" => PandaObject::DepthWriteAttrib(DepthWriteAttrib::create(self, data)?),
-            "Geom" => PandaObject::Geom(Geom::create(self, data)?),
-            "GeomNode" => PandaObject::GeomNode(GeomNode::create(self, data)?),
-            "GeomTriangles" => PandaObject::GeomTriangles(GeomPrimitive::create(self, data)?),
-            "GeomTristrips" => PandaObject::GeomTristrips(GeomPrimitive::create(self, data)?), /* TODO: cleanup GeomPrimitive */
-            "GeomVertexArrayData" => {
-                PandaObject::GeomVertexArrayData(GeomVertexArrayData::create(self, data)?)
-            }
-            "GeomVertexArrayFormat" => {
-                PandaObject::GeomVertexArrayFormat(GeomVertexArrayFormat::create(self, data)?)
-            }
-            "GeomVertexData" => PandaObject::GeomVertexData(GeomVertexData::create(self, data)?),
-            "GeomVertexFormat" => PandaObject::GeomVertexFormat(GeomVertexFormat::create(self, data)?),
-            "InternalName" => PandaObject::InternalName(InternalName::create(self, data)?),
-            "JointVertexTransform" => {
-                PandaObject::JointVertexTransform(JointVertexTransform::create(self, data)?)
-            }
-            "LODNode" => PandaObject::LODNode(LODNode::create(self, data)?),
-            "ModelNode" => PandaObject::ModelNode(ModelNode::create(self, data)?),
-            "ModelRoot" => PandaObject::ModelRoot(ModelNode::create(self, data)?),
-            "PandaNode" => PandaObject::PandaNode(PandaNode::create(self, data)?),
-            "PartGroup" => PandaObject::PartGroup(PartGroup::create(self, data)?),
-            "RenderEffects" => PandaObject::RenderEffects(RenderEffects::create(self, data)?),
-            "RenderState" => PandaObject::RenderState(RenderState::create(self, data)?),
-            "Texture" => PandaObject::Texture(Texture::create(self, data)?),
-            "TextureAttrib" => PandaObject::TextureAttrib(TextureAttrib::create(self, data)?),
-            "TextureStage" => PandaObject::TextureStage(TextureStage::create(self, data)?),
-            "TransformBlendTable" => {
-                PandaObject::TransformBlendTable(TransformBlendTable::create(self, data)?)
-            }
-            "TransformState" => PandaObject::TransformState(TransformState::create(self, data)?),
-            "TransparencyAttrib" => PandaObject::TransparencyAttrib(TransparencyAttrib::create(self, data)?),
+        let node: Box<dyn Node> = match type_name {
+            "AnimBundle" => Box::new(AnimBundle::create(self, data)?),
+            "AnimBundleNode" => Box::new(AnimBundleNode::create(self, data)?),
+            "AnimChannelMatrixXfmTable" => Box::new(AnimChannelMatrixXfmTable::create(self, data)?),
+            "AnimGroup" => Box::new(AnimGroup::create(self, data)?),
+            "BillboardEffect" => Box::new(BillboardEffect::create(self, data)?),
+            "Character" => Box::new(Character::create(self, data)?),
+            "CharacterJoint" => Box::new(CharacterJoint::create(self, data)?),
+            "CharacterJointBundle" => Box::new(PartBundle::create(self, data)?),
+            "CharacterJointEffect" => Box::new(CharacterJointEffect::create(self, data)?),
+            "CollisionCapsule" => Box::new(CollisionCapsule::create(self, data)?),
+            "CollisionNode" => Box::new(CollisionNode::create(self, data)?),
+            "CollisionPolygon" => Box::new(CollisionPolygon::create(self, data)?),
+            "CollisionSphere" => Box::new(CollisionSphere::create(self, data)?),
+            "CollisionTube" => Box::new(CollisionCapsule::create(self, data)?),
+            "ColorAttrib" => Box::new(ColorAttrib::create(self, data)?),
+            "CullBinAttrib" => Box::new(CullBinAttrib::create(self, data)?),
+            "CullFaceAttrib" => Box::new(CullFaceAttrib::create(self, data)?),
+            "DecalEffect" => Box::new(DecalEffect::create(self, data)?),
+            "DepthWriteAttrib" => Box::new(DepthWriteAttrib::create(self, data)?),
+            "Geom" => Box::new(Geom::create(self, data)?),
+            "GeomNode" => Box::new(GeomNode::create(self, data)?),
+            "GeomTriangles" => Box::new(GeomPrimitive::create(self, data)?),
+            "GeomTristrips" => Box::new(GeomPrimitive::create(self, data)?),
+            "GeomVertexArrayData" => Box::new(GeomVertexArrayData::create(self, data)?),
+            "GeomVertexArrayFormat" => Box::new(GeomVertexArrayFormat::create(self, data)?),
+            "GeomVertexData" => Box::new(GeomVertexData::create(self, data)?),
+            "GeomVertexFormat" => Box::new(GeomVertexFormat::create(self, data)?),
+            "InternalName" => Box::new(InternalName::create(self, data)?),
+            "JointVertexTransform" => Box::new(JointVertexTransform::create(self, data)?),
+            "LODNode" => Box::new(LODNode::create(self, data)?),
+            "ModelNode" => Box::new(ModelNode::create(self, data)?),
+            "ModelRoot" => Box::new(ModelNode::create(self, data)?),
+            "PandaNode" => Box::new(PandaNode::create(self, data)?),
+            "PartGroup" => Box::new(PartGroup::create(self, data)?),
+            "RenderEffects" => Box::new(RenderEffects::create(self, data)?),
+            "RenderState" => Box::new(RenderState::create(self, data)?),
+            "Texture" => Box::new(Texture::create(self, data)?),
+            "TextureAttrib" => Box::new(TextureAttrib::create(self, data)?),
+            "TextureStage" => Box::new(TextureStage::create(self, data)?),
+            "TransformBlendTable" => Box::new(TransformBlendTable::create(self, data)?),
+            "TransformState" => Box::new(TransformState::create(self, data)?),
+            "TransparencyAttrib" => Box::new(TransparencyAttrib::create(self, data)?),
             _ => todo!("{type_name}"),
         };
         //println!("{:#?}", node);

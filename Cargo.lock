@@ -81,9 +81,9 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
-version = "1.0.93"
+version = "1.0.94"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4c95c10ba0b00a02636238b814946408b1322d5ac4760326e6fb8ec956d85775"
+checksum = "c1fd03a028ef38ba2276dce7e33fcd6369c158a1bca17946c4b1b701891c1ff7"
 
 [[package]]
 name = "approx"
@@ -2160,6 +2160,7 @@ dependencies = [
  "bevy_tasks",
  "bevy_transform",
  "bitflags 2.6.0",
+ "downcast-rs",
  "hashbrown 0.15.2",
  "num_enum",
  "orthrus-core",
@@ -2172,7 +2173,7 @@ name = "orthrus-windows"
 version = "0.1.0"
 dependencies = [
  "bitflags 2.6.0",
- "zerocopy 0.8.11",
+ "zerocopy 0.8.12",
 ]
 
 [[package]]
@@ -2699,9 +2700,9 @@ dependencies = [
 
 [[package]]
 name = "time"
-version = "0.3.36"
+version = "0.3.37"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5dfd88e563464686c916c7e46e623e520ddc6d79fa6641390f2e3fa86e83e885"
+checksum = "35e7868883861bd0e56d9ac6efcaaca0d6d5d82a2a7ec8209ff492c07cf37b21"
 dependencies = [
  "deranged",
  "libc",
@@ -3371,9 +3372,9 @@ dependencies = [
 
 [[package]]
 name = "xml-rs"
-version = "0.8.23"
+version = "0.8.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af310deaae937e48a26602b730250b4949e125f468f11e6990be3e5304ddd96f"
+checksum = "ea8b391c9a790b496184c29f7f93b9ed5b16abb306c05415b68bcc16e4d06432"
 
 [[package]]
 name = "zerocopy"
@@ -3387,11 +3388,11 @@ dependencies = [
 
 [[package]]
 name = "zerocopy"
-version = "0.8.11"
+version = "0.8.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cce3b5629d87654b53a49002acc2ce64aa5aa7255f5c718374a37ac7fd98c218"
+checksum = "e031087b26520ba76806365896f191416ce84873ed6c6910a9ab5fe0f98f8ed3"
 dependencies = [
- "zerocopy-derive 0.8.11",
+ "zerocopy-derive 0.8.12",
 ]
 
 [[package]]
@@ -3407,9 +3408,9 @@ dependencies = [
 
 [[package]]
 name = "zerocopy-derive"
-version = "0.8.11"
+version = "0.8.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "74a82c26c3986af2623ec9eb890ff4aa19c006e30a1133dc9bd1830ec1612e20"
+checksum = "568244125ba0fc91ae949b97f2852f82cb1a65c3327bd68e6edadd29e67cca26"
 dependencies = [
  "proc-macro2",
  "quote",

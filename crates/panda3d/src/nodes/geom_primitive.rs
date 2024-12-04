@@ -25,6 +25,7 @@ impl Node for GeomPrimitive {
         let usage_hint = UsageHint::from(data.read_u8()?);
         let vertices_ref = loader.read_pointer(data)?;
 
+        // This needs to be zero-indexed, but we need to differentiate Some/None, TODO: helper function?
         let ends_ref = match loader.read_pta_id(data)? {
             0 => {
                 // If the pointer is zero, that means that it's a NULL, so just store None. We still need to
@@ -41,11 +42,11 @@ impl Node for GeomPrimitive {
                     array.push(data.read_u32()?);
                 }
                 loader.arrays.push(array);
-                Some(x)
+                Some(x - 1)
             }
             x => {
                 // We've already seen this array, just store the pointer and call it a day
-                Some(x)
+                Some(x - 1)
             }
         };
 

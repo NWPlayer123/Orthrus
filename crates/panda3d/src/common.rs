@@ -21,7 +21,7 @@ impl core::fmt::Display for Version {
 
 // TODO: just make this a generic and enforce f32/f64 depending on the BAM file using a sealed trait like we
 // do in Ferrox
-pub(crate) struct Datagram<'a> {
+pub struct Datagram<'a> {
     cursor: DataCursorRef<'a>,
     float_type: bool,
 }
@@ -42,7 +42,7 @@ impl<'a> Datagram<'a> {
     pub(crate) fn read_string(&mut self) -> Result<String, DataError> {
         let length = self.cursor.read_u16()?;
         let slice = self.cursor.read_slice(length.into())?;
-        let string = core::str::from_utf8(&slice).map_err(|source| DataError::InvalidStr { source })?;
+        let string = core::str::from_utf8(&slice)?;
         Ok(string.to_owned())
     }
 
