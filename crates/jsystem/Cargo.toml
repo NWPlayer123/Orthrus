@@ -6,13 +6,14 @@ description = "Orthrus module supporting the Nintendo JSystem framework"
 license.workspace = true
 repository.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
-orthrus-core = { version = "0.3", path = "../core" }
-
-snafu = { version = "0.8", default-features = false, features = ["rust_1_81"] }
+orthrus-core = { workspace = true }
+snafu = { workspace = true }
+bitflags = { workspace = true }
 #yaml-peg = { version = "1.0", default-features = false }
-
-bitflags = "2.6"
 
 [features]
 default = ["std"]

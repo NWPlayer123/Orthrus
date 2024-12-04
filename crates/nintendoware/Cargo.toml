@@ -6,13 +6,14 @@ description = "Orthrus module supporting NintendoWare targets"
 license.workspace = true
 repository.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
-orthrus-core = { version = "0.3", path = "../core" }
-
-snafu = { version = "0.8", default-features = false, features = ["rust_1_81"] }
-num_enum = { version = "0.7", default-features = false }
-
-bitflags = "2.6"
+orthrus-core = { workspace = true }
+snafu = { workspace = true }
+bitflags = { workspace = true }
+num_enum = { workspace = true }
 
 [features]
 default = ["std"]

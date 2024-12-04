@@ -9,6 +9,9 @@ repository = "https://github.com/NWPlayer123/Orthrus"
 license = "MPL-2.0"
 keywords = ["modding", "gamedev"]
 
+[lints]
+workspace = true
+
 [profile.release]
 strip = true
 lto = true
@@ -16,19 +19,20 @@ codegen-units = 1
 panic = "abort"
 
 [dependencies]
-orthrus-core = { version = "0.3", path = "crates/core", features = ["time"] }
-orthrus-godot = { version = "0.1", path = "crates/godot" }
-orthrus-jsystem = { version = "0.1", path = "crates/jsystem" }
-orthrus-panda3d = { version = "0.1", path = "crates/panda3d", features = ["identify"] }
-orthrus-ncompress = { version = "0.2", path = "crates/ncompress" }
-orthrus-nintendoware = { version = "0.1", path = "crates/nintendoware" }
+orthrus-core = { workspace = true, features = ["time"] }
+orthrus-godot = { workspace = true }
+orthrus-jsystem = { workspace = true }
+orthrus-ncompress = { workspace = true }
+orthrus-nintendoware = { workspace = true }
+orthrus-panda3d = { workspace = true, features = ["identify"] }
 
-argp = { version = "0.3", default-features = false, git = "https://github.com/jirutka/argp.git", rev="12cb9c62b1f3f8cdb02527355953d9d44ef5c711" }
+argp = { version = "0.3", default-features = false, git = "https://github.com/jirutka/argp.git", rev = "12cb9c62b1f3f8cdb02527355953d9d44ef5c711" }
 env_logger = { version = "0.11", default-features = false }
+anyhow = { version = "1.0", default-features = false }
+
 log = "0.4"
 owo-colors = "4.1"
 paste = "1.0"
-anyhow = { version = "1.0", default-features = false }
 mimalloc = "0.1"
 
 [workspace]
@@ -41,3 +45,22 @@ members = ["crates/*"]
 [workspace.package]
 license = "MPL-2.0"
 repository = "https://github.com/NWPlayer123/Orthrus"
+
+[workspace.dependencies]
+orthrus-core = { version = "0.3", path = "crates/core" }
+orthrus-godot = { version = "0.1", path = "crates/godot" }
+orthrus-jsystem = { version = "0.1", path = "crates/jsystem" }
+orthrus-ncompress = { version = "0.2", path = "crates/ncompress" }
+orthrus-nintendoware = { version = "0.1", path = "crates/nintendoware" }
+orthrus-panda3d = { version = "0.1", path = "crates/panda3d" }
+orthrus-windows = { version = "0.1", path = "crates/windows" }
+
+snafu = { version = "0.8", default-features = false, features = ["rust_1_81"] }
+num_enum = { version = "0.7", default-features = false }
+zerocopy = { version = "0.8", features = ["derive"] }
+
+bitflags = "2.6"
+hashbrown = "0.15"
+
+[workspace.lints.rust]
+unused_crate_dependencies = "deny"

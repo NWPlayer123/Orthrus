@@ -6,8 +6,11 @@ description = "Provides core functionality for Orthrus"
 license.workspace = true
 repository.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
-snafu = { version = "0.8", default-features = false, features = ["rust_1_81"] }
+snafu = { workspace = true }
 
 # Required for time module
 time = { version = "0.3", features = ["local-offset"], optional = true }

@@ -6,10 +6,12 @@ description = "Orthrus module supporting Nintendo compression formats"
 license.workspace = true
 repository.workspace = true
 
-[dependencies]
-orthrus-core = { version = "0.3", path = "../core" }
+[lints]
+workspace = true
 
-snafu = { version = "0.8", default-features = false, features = ["rust_1_81"] }
+[dependencies]
+orthrus-core = { workspace = true }
+snafu = { workspace = true }
 
 [features]
 default = ["std"]

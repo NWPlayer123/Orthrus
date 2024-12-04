@@ -6,13 +6,13 @@ description = "Orthrus module supporting Microsoft Windows formats"
 license.workspace = true
 repository.workspace = true
 
-[dependencies]
-#orthrus-core = { version = "0.3", path = "../core" }
+[lints]
+workspace = true
 
-#snafu = { version = "0.8", default-features = false, features = ["rust_1_81"] }
-zerocopy = { version = "0.8", features = ["derive"] }
-bitflags = { version = "2.6" }
+[dependencies]
+bitflags = { workspace = true }
+zerocopy = { workspace = true }
 
 [features]
 default = ["std"]
-std = ["zerocopy/std"]#, "snafu/std", "orthrus-core/std"]
+std = ["zerocopy/std"] #, "snafu/std", "orthrus-core/std"]

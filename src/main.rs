@@ -1,5 +1,3 @@
-#![deny(unused_crate_dependencies)]
-
 use mimalloc::MiMalloc;
 
 #[global_allocator]

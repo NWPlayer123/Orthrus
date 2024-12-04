@@ -6,11 +6,13 @@ description = "Orthrus module supporting the Godot game engine"
 license.workspace = true
 repository.workspace = true
 
-[dependencies]
-orthrus-core = { version = "0.3", path = "../core" }
-orthrus-windows = { version = "0.1", path = "../windows" }
+[lints]
+workspace = true
 
-snafu = { version = "0.8", default-features = false, features = ["rust_1_81"] }
+[dependencies]
+orthrus-core = { workspace = true }
+orthrus-windows = { workspace = true }
+snafu = { workspace = true }
 
 [features]
 default = ["std"]
