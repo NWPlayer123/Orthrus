@@ -24,6 +24,7 @@ use orthrus_core::prelude::*;
 use snafu::prelude::*;
 
 use crate::common::*;
+use crate::nodes::dispatch::{NodeStorage, StoredType};
 use crate::nodes::prelude::*;
 
 /// Error conditions for when working with Multifile archives.
@@ -183,7 +184,7 @@ pub struct BinaryAsset {
     /// Used if there are more than 65535 Pointer to Array IDs
     pub(crate) long_pta_id: bool,
     pub(crate) type_registry: HashMap<u16, String>,
-    pub(crate) nodes: Vec<Box<dyn Node>>,
+    pub(crate) nodes: NodeStorage,
     pub(crate) arrays: Vec<Vec<u32>>,
 }
 
@@ -235,7 +236,7 @@ impl BinaryAsset {
             header,
             type_registry: HashMap::new(),
             objects_left,
-            nodes: Vec::new(),
+            nodes: NodeStorage::new(),
             arrays: Vec::new(),
             ..Default::default()
         };
@@ -296,7 +297,7 @@ impl BinaryAsset {
         // Check the type handle, see if we need to register any new types
         let type_handle = self.read_handle(data)?;
         // Read the Object ID and process it
-        let _object_id = self.read_object_id(data)?;
+        let _object_id = self.read_object_id(data)? - 1;
         //println!("Object ID {}", _object_id);
         /*println!(
             "Initial type data {:#X}, Data size {:#X}\n",
@@ -381,72 +382,58 @@ impl BinaryAsset {
         Ok(None)
     }
 
-    pub fn get_node<T: Node>(&self, index: usize) -> Result<&T, self::Error> {
-        self.nodes
-            .get(index)
-            .and_then(|node| node.downcast_ref::<T>())
-            .ok_or(Error::InvalidType { type_name: std::any::type_name::<T>() })
-    }
-
-    pub fn get_node_mut<T: Node>(&mut self, index: usize) -> Result<&mut T, self::Error> {
-        self.nodes
-            .get_mut(index)
-            .and_then(|node| node.downcast_mut::<T>())
-            .ok_or(Error::InvalidType { type_name: std::any::type_name::<T>() })
-    }
-
-    pub fn is_node<T: Node>(&self, index: usize) -> bool {
-        self.nodes.get(index).map(|node| node.is::<T>()).unwrap_or(false)
-    }
-
     //should really be using make_from_bam as an entrypoint
     async fn fillin(&mut self, data: &mut Datagram<'_>, type_name: &str) -> Result<(), self::Error> {
-        let node: Box<dyn Node> = match type_name {
-            "AnimBundle" => Box::new(AnimBundle::create(self, data)?),
-            "AnimBundleNode" => Box::new(AnimBundleNode::create(self, data)?),
-            "AnimChannelMatrixXfmTable" => Box::new(AnimChannelMatrixXfmTable::create(self, data)?),
-            "AnimGroup" => Box::new(AnimGroup::create(self, data)?),
-            "BillboardEffect" => Box::new(BillboardEffect::create(self, data)?),
-            "Character" => Box::new(Character::create(self, data)?),
-            "CharacterJoint" => Box::new(CharacterJoint::create(self, data)?),
-            "CharacterJointBundle" => Box::new(PartBundle::create(self, data)?),
-            "CharacterJointEffect" => Box::new(CharacterJointEffect::create(self, data)?),
-            "CollisionCapsule" => Box::new(CollisionCapsule::create(self, data)?),
-            "CollisionNode" => Box::new(CollisionNode::create(self, data)?),
-            "CollisionPolygon" => Box::new(CollisionPolygon::create(self, data)?),
-            "CollisionSphere" => Box::new(CollisionSphere::create(self, data)?),
-            "CollisionTube" => Box::new(CollisionCapsule::create(self, data)?),
-            "ColorAttrib" => Box::new(ColorAttrib::create(self, data)?),
-            "CullBinAttrib" => Box::new(CullBinAttrib::create(self, data)?),
-            "CullFaceAttrib" => Box::new(CullFaceAttrib::create(self, data)?),
-            "DecalEffect" => Box::new(DecalEffect::create(self, data)?),
-            "DepthWriteAttrib" => Box::new(DepthWriteAttrib::create(self, data)?),
-            "Geom" => Box::new(Geom::create(self, data)?),
-            "GeomNode" => Box::new(GeomNode::create(self, data)?),
-            "GeomTriangles" => Box::new(GeomPrimitive::create(self, data)?),
-            "GeomTristrips" => Box::new(GeomPrimitive::create(self, data)?),
-            "GeomVertexArrayData" => Box::new(GeomVertexArrayData::create(self, data)?),
-            "GeomVertexArrayFormat" => Box::new(GeomVertexArrayFormat::create(self, data)?),
-            "GeomVertexData" => Box::new(GeomVertexData::create(self, data)?),
-            "GeomVertexFormat" => Box::new(GeomVertexFormat::create(self, data)?),
-            "InternalName" => Box::new(InternalName::create(self, data)?),
-            "JointVertexTransform" => Box::new(JointVertexTransform::create(self, data)?),
-            "LODNode" => Box::new(LODNode::create(self, data)?),
-            "ModelNode" => Box::new(ModelNode::create(self, data)?),
-            "ModelRoot" => Box::new(ModelNode::create(self, data)?),
-            "PandaNode" => Box::new(PandaNode::create(self, data)?),
-            "PartGroup" => Box::new(PartGroup::create(self, data)?),
-            "RenderEffects" => Box::new(RenderEffects::create(self, data)?),
-            "RenderState" => Box::new(RenderState::create(self, data)?),
-            "Texture" => Box::new(Texture::create(self, data)?),
-            "TextureAttrib" => Box::new(TextureAttrib::create(self, data)?),
-            "TextureStage" => Box::new(TextureStage::create(self, data)?),
-            "TransformBlendTable" => Box::new(TransformBlendTable::create(self, data)?),
-            "TransformState" => Box::new(TransformState::create(self, data)?),
-            "TransparencyAttrib" => Box::new(TransparencyAttrib::create(self, data)?),
+        match type_name {
+            "AnimBundle" => self.create_node::<AnimBundle>(data),
+            "AnimBundleNode" => self.create_node::<AnimBundleNode>(data),
+            "AnimChannelMatrixXfmTable" => self.create_node::<AnimChannelMatrixXfmTable>(data),
+            "AnimGroup" => self.create_node::<AnimGroup>(data),
+            "BillboardEffect" => self.create_node::<BillboardEffect>(data),
+            "Character" => self.create_node::<Character>(data),
+            "CharacterJoint" => self.create_node::<CharacterJoint>(data),
+            "CharacterJointBundle" => self.create_node::<PartBundle>(data),
+            "CharacterJointEffect" => self.create_node::<CharacterJointEffect>(data),
+            "CollisionCapsule" => self.create_node::<CollisionCapsule>(data),
+            "CollisionNode" => self.create_node::<CollisionNode>(data),
+            "CollisionPolygon" => self.create_node::<CollisionPolygon>(data),
+            "CollisionSphere" => self.create_node::<CollisionSphere>(data),
+            "CollisionTube" => self.create_node::<CollisionCapsule>(data),
+            "ColorAttrib" => self.create_node::<ColorAttrib>(data),
+            "CullBinAttrib" => self.create_node::<CullBinAttrib>(data),
+            "CullFaceAttrib" => self.create_node::<CullFaceAttrib>(data),
+            "DecalEffect" => self.create_node::<DecalEffect>(data),
+            "DepthWriteAttrib" => self.create_node::<DepthWriteAttrib>(data),
+            "Geom" => self.create_node::<Geom>(data),
+            "GeomNode" => self.create_node::<GeomNode>(data),
+            "GeomTriangles" => self.create_node::<GeomPrimitive>(data),
+            "GeomTristrips" => self.create_node::<GeomPrimitive>(data),
+            "GeomVertexArrayData" => self.create_node::<GeomVertexArrayData>(data),
+            "GeomVertexArrayFormat" => self.create_node::<GeomVertexArrayFormat>(data),
+            "GeomVertexData" => self.create_node::<GeomVertexData>(data),
+            "GeomVertexFormat" => self.create_node::<GeomVertexFormat>(data),
+            "InternalName" => self.create_node::<InternalName>(data),
+            "JointVertexTransform" => self.create_node::<JointVertexTransform>(data),
+            "LODNode" => self.create_node::<LODNode>(data),
+            "ModelNode" => self.create_node::<ModelNode>(data),
+            "ModelRoot" => self.create_node::<ModelNode>(data),
+            "PandaNode" => self.create_node::<PandaNode>(data),
+            "PartGroup" => self.create_node::<PartGroup>(data),
+            "RenderEffects" => self.create_node::<RenderEffects>(data),
+            "RenderState" => self.create_node::<RenderState>(data),
+            "Texture" => self.create_node::<Texture>(data),
+            "TextureAttrib" => self.create_node::<TextureAttrib>(data),
+            "TextureStage" => self.create_node::<TextureStage>(data),
+            "TransformBlendTable" => self.create_node::<TransformBlendTable>(data),
+            "TransformState" => self.create_node::<TransformState>(data),
+            "TransparencyAttrib" => self.create_node::<TransparencyAttrib>(data),
             _ => todo!("{type_name}"),
-        };
-        //println!("{:#?}", node);
+        }
+    }
+
+    fn create_node<T: Node + StoredType>(&mut self, data: &mut Datagram<'_>) -> Result<(), Error> {
+        let node = T::create(self, data)?;
+        //println!("{:?}", node);
         self.nodes.push(node);
         Ok(())
     }
