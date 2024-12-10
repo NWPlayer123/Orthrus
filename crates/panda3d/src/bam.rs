@@ -48,8 +48,8 @@ pub enum Error {
     InvalidString { source: Utf8ErrorSource },
 
     /// Thrown if the header contains a magic number other than "pbj\0\n\r".
-    #[snafu(display("Invalid Magic! Expected {:?}.", BinaryAsset::MAGIC))]
-    InvalidMagic,
+    #[snafu(display("Invalid Magic! Expected {expected:?}."))]
+    InvalidMagic { expected: &'static [u8] },
 
     /// Thrown if the header version is too new to be supported.
     #[snafu(display("Invalid Version! Expected <= v{}.", BinaryAsset::CURRENT_VERSION))]
@@ -58,30 +58,6 @@ pub enum Error {
     /// Thrown if unable to downcast to a specific type.
     #[snafu(display("Node is not of type {type_name}"))]
     InvalidType { type_name: &'static str },
-    /*/// Thrown when trying to open a file or folder that doesn't exist.
-    #[snafu(display("Unable to find file/folder!"))]
-    NotFound,
-    /// Thrown if reading/writing tries to go out of bounds.
-    #[snafu(display("Unexpected End-Of-File!"))]
-    EndOfFile,
-    /// Thrown when unable to open a file or folder.
-    #[snafu(display("No permissions to open file/folder!"))]
-    PermissionDenied,
-    /// Thrown if the header contains a magic number other than "pbj\0\n\r".
-    #[snafu(display("Invalid Magic! Expected {:?}.", BinaryAsset::MAGIC))]
-    InvalidMagic,
-    /// Thrown if the header version is too new to be supported.
-    #[snafu(display("Invalid BAM Version! Expected <= v{}.", BinaryAsset::CURRENT_VERSION))]
-    InvalidVersion,
-    /// Thrown if the header has an unknown endianness.
-    #[snafu(display("Invalid File Endian! Malformed BAM file?"))]
-    InvalidEndian,
-    /// Thrown if the header has an unknown endianness.
-    #[snafu(display("Invalid Node Type! Malformed BAM file?"))]
-    InvalidType,
-    /// Thrown if trying to convert an enum but the value is outside of the bounds
-    #[snafu(display("Invalid Enum Variant! Malformed BAM file?"))]
-    InvalidEnum,*/
 }
 
 #[cfg(feature = "std")]
@@ -192,7 +168,7 @@ impl BinaryAsset {
     /// Latest revision of the BAM format. For more info, see [here](self#revisions).
     pub const CURRENT_VERSION: Version = Version { major: 6, minor: 45 };
     /// Unique identifier that tells us if we're reading a Panda3D Binary Object.
-    pub const MAGIC: [u8; 6] = *b"pbj\0\n\r";
+    pub const MAGIC: &'static [u8] = b"pbj\0\n\r";
     /// Earliest supported revision of the BAM format. For more info, see [here](self#revisions).
     pub const MINIMUM_VERSION: Version = Version { major: 6, minor: 14 };
 
@@ -215,7 +191,7 @@ impl BinaryAsset {
         // Read the magic and make sure we're actually parsing a BAM file
         let mut magic = [0u8; 6];
         data.read_length(&mut magic)?;
-        ensure!(magic == Self::MAGIC, InvalidMagicSnafu);
+        ensure!(magic == Self::MAGIC, InvalidMagicSnafu { expected: Self::MAGIC });
 
         // The first datagram is always the header data
         let mut datagram = Datagram::new(&mut data, Endian::Little, false)?;
@@ -433,7 +409,7 @@ impl BinaryAsset {
 
     fn create_node<T: Node + StoredType>(&mut self, data: &mut Datagram<'_>) -> Result<(), Error> {
         let node = T::create(self, data)?;
-        //println!("{:?}", node);
+        //println!("{:#?}", node);
         self.nodes.push(node);
         Ok(())
     }

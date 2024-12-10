@@ -17,6 +17,25 @@ pub(crate) struct CullFaceAttrib {
     pub reverse: bool,
 }
 
+impl CullFaceAttrib {
+    #[inline]
+    pub fn get_effective_mode(&self) -> CullMode {
+        if self.reverse {
+            match self.mode {
+                CullMode::Clockwise | CullMode::Unchanged => CullMode::CounterClockwise,
+                CullMode::CounterClockwise => CullMode::Clockwise,
+                CullMode::None => CullMode::None,
+            }
+        } else {
+            match self.mode {
+                CullMode::Clockwise | CullMode::Unchanged => CullMode::Clockwise,
+                CullMode::CounterClockwise => CullMode::CounterClockwise,
+                CullMode::None => CullMode::None,
+            }
+        }
+    }
+}
+
 impl Node for CullFaceAttrib {
     #[inline]
     fn create(_loader: &mut BinaryAsset, data: &mut Datagram<'_>) -> Result<Self, bam::Error> {

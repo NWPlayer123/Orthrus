@@ -10,7 +10,8 @@ use bevy_internal::animation::{AnimationTarget, AnimationTargetId};
 /// Character node is designed to be a high level animatable node that multiple meshes attach to, as well
 /// as a singular (TODO: check) PartBundle that holds all skinning data
 use bevy_internal::asset::io::Reader;
-use bevy_internal::asset::{AssetLoader, LoadContext};
+use bevy_internal::asset::{AssetLoader, LoadContext, RenderAssetUsages};
+use bevy_internal::image::ImageLoaderSettings;
 use bevy_internal::pbr::{
     ExtendedMaterial, MaterialExtension, MaterialExtensionKey, MaterialExtensionPipeline,
 };
@@ -18,16 +19,21 @@ use bevy_internal::prelude::*;
 use bevy_internal::render::mesh::skinning::{SkinnedMesh, SkinnedMeshInverseBindposes};
 use bevy_internal::render::mesh::MeshVertexBufferLayoutRef;
 use bevy_internal::render::render_resource::{
-    AsBindGroup, RenderPipelineDescriptor, SpecializedMeshPipelineError,
+    AsBindGroup, Face, RenderPipelineDescriptor, SpecializedMeshPipelineError, TextureFormat,
 };
 use bevy_internal::tasks::block_on;
+use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 use smallvec::{smallvec, SmallVec};
 
+use crate::bevy_sgi::SgiImageLoader;
+use crate::nodes::color_attrib::ColorType;
+use crate::nodes::cull_face_attrib::CullMode;
 use crate::nodes::dispatch::NodeRef;
 use crate::nodes::part_bundle::BlendType;
 use crate::nodes::prelude::*;
 use crate::nodes::transform_state::TransformFlags;
+use crate::nodes::transparency_attrib::TransparencyMode;
 //use crate::bevy::Effects;
 use crate::prelude::*;
 
@@ -47,30 +53,31 @@ impl Effects {
             None => Self::default(),
         };
 
-        if let Some(effects) = assets.nodes.get_as::<RenderEffects>(node_index) {
-            for effect in &effects.effect_refs {
-                match assets.nodes.get(*effect as usize) {
-                    Some(node) => match node {
-                        // TODO: actually handle billboards
-                        NodeRef::BillboardEffect(_) => result.is_billboard = true,
-                        NodeRef::DecalEffect(_) => result.is_decal = true,
-                        // We handle Characters separately, TODO verify that this isn't needed using our new
-                        // setup
-                        NodeRef::CharacterJointEffect(_) => {}
-                        _ => {
-                            warn!(name: "unknown_render_effect", target: "Panda3DLoader",
-                                "Unknown RenderEffects: node {}, ignoring.", effect)
-                        }
-                    },
-                    None => {
-                        warn!(name: "unexpected_node_index", target: "Panda3DLoader",
-                            "Tried to access node {}, but it doesn't exist, ignoring.", effect)
-                    }
-                }
-            }
-        } else {
+        let Some(effects) = assets.nodes.get_as::<RenderEffects>(node_index) else {
             warn!(name: "not_a_render_effects", target: "Panda3DLoader",
                 "Tried to access node {}, but it's not a RenderEffects, ignoring.", node_index);
+            return result;
+        };
+
+        for effect in &effects.effect_refs {
+            match assets.nodes.get(*effect as usize) {
+                Some(node) => match node {
+                    // TODO: actually handle billboards
+                    NodeRef::BillboardEffect(_) => result.is_billboard = true,
+                    NodeRef::DecalEffect(_) => result.is_decal = true,
+                    // We handle Characters separately, TODO verify that this isn't needed using our new
+                    // setup
+                    NodeRef::CharacterJointEffect(_) => {}
+                    _ => {
+                        warn!(name: "unknown_render_effect", target: "Panda3DLoader",
+                            "Unknown RenderEffects: node {}, ignoring.", effect)
+                    }
+                },
+                None => {
+                    warn!(name: "unexpected_node_index", target: "Panda3DLoader",
+                        "Tried to access node {}, but it doesn't exist, ignoring.", effect)
+                }
+            }
         }
 
         result
@@ -89,24 +96,50 @@ struct AnimationContext {
 
 impl BinaryAsset {
     async fn recurse_nodes(
-        &self, loader_data: &mut AssetLoaderData<'_, '_>, parent: Option<Entity>, effects: Option<&Effects>,
+        &self, loader: &mut AssetLoaderData<'_, '_>, parent: Option<Entity>, effects: Option<&Effects>,
         joint_data: Option<&SkinnedMesh>, net_nodes: Option<&BTreeMap<usize, Entity>>, node_index: usize,
     ) {
         match self.nodes.get(node_index) {
             Some(NodeRef::ModelNode(node)) => {
                 // This can either be a ModelNode or a ModelRoot, either way we need to spawn a new node to
                 // attach stuff to.
-                let (entity, effects) = self
-                    .handle_panda_node(loader_data.world, parent, effects, net_nodes, node, node_index)
-                    .await;
+                let (entity, effects) =
+                    self.handle_panda_node(loader.world, parent, effects, net_nodes, node, node_index).await;
+
+                // TODO: handle transform: Local correctly?
+                if node.attributes != 0 {
+                    warn!(name: "model_node_attribs_unhandled", target: "Panda3DLoader",
+                        "ModelNode {} has attributes attached that we don't handle, please fix!", node_index);
+                }
 
                 for child_ref in &node.child_refs {
                     if child_ref.1 != 0 {
                         warn!(name: "nonzero_node_sort", target: "Panda3DLoader",
-                                    "Node {} has a child with non-zero sort order, please fix!", node_index);
+                            "Node {} has a child with non-zero sort order, please fix!", node_index);
                     }
                     Box::pin(self.recurse_nodes(
-                        loader_data,
+                        loader,
+                        Some(entity),
+                        Some(&effects),
+                        joint_data,
+                        net_nodes,
+                        child_ref.0 as usize,
+                    ))
+                    .await;
+                }
+            }
+            Some(NodeRef::PandaNode(node)) => {
+                // This is just a plain ol' node, so just process its data and explore all children.
+                let (entity, effects) =
+                    self.handle_panda_node(loader.world, parent, effects, net_nodes, node, node_index).await;
+
+                for child_ref in &node.child_refs {
+                    if child_ref.1 != 0 {
+                        warn!(name: "nonzero_node_sort", target: "Panda3DLoader",
+                            "Node {} has a child with non-zero sort order, please fix!", node_index);
+                    }
+                    Box::pin(self.recurse_nodes(
+                        loader,
                         Some(entity),
                         Some(&effects),
                         joint_data,
@@ -119,14 +152,13 @@ impl BinaryAsset {
             Some(NodeRef::Character(node)) => {
                 // Characters are helper nodes that group together multiple meshes together with
                 // animation data. TODO: add a marker Component?
-                let (entity, effects) = self
-                    .handle_panda_node(loader_data.world, parent, effects, net_nodes, node, node_index)
-                    .await;
+                let (entity, effects) =
+                    self.handle_panda_node(loader.world, parent, effects, net_nodes, node, node_index).await;
 
                 // TODO: figure out if this ever happens
                 if node.bundle_refs.len() != 1 {
                     warn!(name: "unexpected_character_node", target: "Panda3DLoader",
-                                "Character Node {} has more than one associated CharacterJointBundle, ignoring.", node_index);
+                        "Character Node {} has more than one associated CharacterJointBundle, ignoring.", node_index);
                 }
 
                 // First, let's process the `CharacterJointBundle` into [`SkinnedMesh`] data, as well as any
@@ -135,7 +167,7 @@ impl BinaryAsset {
                 let mut net_nodes = BTreeMap::new();
                 let (inverse_bindposes, joints) = self
                     .convert_joint_bundle(
-                        loader_data.world,
+                        loader.world,
                         entity,
                         None,
                         &mut net_nodes,
@@ -144,10 +176,11 @@ impl BinaryAsset {
                     .await;
 
                 // TODO: migrate to bevy_gltf's new enum-based system so this is less dumb
-                let label = format!("Bindpose{}", loader_data.assets.bindposes.len());
-                let inverse_bindposes = loader_data
+                let label = format!("Bindpose{}", loader.assets.bindposes.len());
+                let inverse_bindposes = loader
                     .context
                     .labeled_asset_scope(label, |_| SkinnedMeshInverseBindposes::from(inverse_bindposes));
+                loader.assets.bindposes.push(inverse_bindposes.clone());
                 // We need to attach this to any children Entities we spawn for them to have the correct mesh
                 // joint data.
                 let skinned_mesh = SkinnedMesh { inverse_bindposes, joints };
@@ -156,14 +189,42 @@ impl BinaryAsset {
                 for child_ref in &node.child_refs {
                     if child_ref.1 != 0 {
                         warn!(name: "nonzero_node_sort", target: "Panda3DLoader",
-                                    "Node {} has a child with non-zero sort order, please fix!", node_index);
+                            "Node {} has a child with non-zero sort order, please fix!", node_index);
                     }
                     Box::pin(self.recurse_nodes(
-                        loader_data,
+                        loader,
                         Some(entity),
                         Some(&effects),
                         Some(&skinned_mesh),
                         Some(&net_nodes),
+                        child_ref.0 as usize,
+                    ))
+                    .await;
+                }
+            }
+            Some(NodeRef::GeomNode(node)) => {
+                // We need to create and attach actual mesh data to this node.
+                let (entity, effects) =
+                    self.handle_panda_node(loader.world, parent, effects, net_nodes, node, node_index).await;
+
+                //TODO handle tags, collide_mask?
+
+                for geom_ref in &node.geom_refs {
+                    self.convert_geom_node(loader, geom_ref.0 as usize, geom_ref.1 as usize, entity).await;
+                }
+
+                // Then, we need to process all child nodes
+                for child_ref in &node.child_refs {
+                    if child_ref.1 != 0 {
+                        warn!(name: "nonzero_node_sort", target: "Panda3DLoader",
+                            "Node {} has a child with non-zero sort order, please fix!", node_index);
+                    }
+                    Box::pin(self.recurse_nodes(
+                        loader,
+                        Some(entity),
+                        Some(&effects),
+                        joint_data,
+                        net_nodes,
                         child_ref.0 as usize,
                     ))
                     .await;
@@ -285,58 +346,58 @@ impl BinaryAsset {
                     || node.frame_blend_flag
                 {
                     warn!(name: "unhandled_part_bundle", target: "Panda3DLoader",
-                            "PartBundle attribs on node {} are unhandled, please fix!", node_index);
+                        "PartBundle attribs on node {} are unhandled, please fix!", node_index);
                 }
                 // TODO: if we find an instance where this isn't the case, we'll need to spawn a node
                 // separately to store each PartGroup, but for now this isn't an issue.
                 if node.child_refs.len() != 1 {
                     warn!(name: "unexpected_part_bundle", target: "Panda3DLoader",
-                            "Unexpected number of child nodes on PartBundle node {}, ignoring.", node_index);
+                        "Unexpected number of child nodes on PartBundle node {}, ignoring.", node_index);
                 }
 
-                if let Some(part_group) = self.nodes.get_as::<PartGroup>(node.child_refs[0] as usize) {
-                    // Create a new node that will serve as the base of any animations we want to play
-                    if part_group.name != "<skeleton>" {
-                        warn!(name: "unexpected_part_group_name", target: "Panda3DLoader",
-                            "Encountered a PartGroup that wasn't named <skeleton>, node {}. This model may not be imported correctly.", node.child_refs[0]);
-                    }
-                    let name = Name::new(part_group.name.clone());
-                    let skeleton = world
-                        .spawn((
-                            AnimationPlayer::default(),
-                            Transform::from_matrix(node.root_transform),
-                            name.clone(),
-                        ))
-                        .id();
-
-                    // Make sure to parent it correctly
-                    world.entity_mut(parent).add_child(skeleton);
-
-                    inverse_bindposes.push(node.root_transform.inverse());
-                    joints.push(skeleton);
-
-                    // We know this is the root, so create a new `AnimationContext` to keep track of
-                    // everything, and create a new AnimationTarget
-                    let animation_context = AnimationContext { root: skeleton, path: smallvec![name] };
-                    world.entity_mut(skeleton).insert(AnimationTarget {
-                        id: AnimationTargetId::from_names(animation_context.path.iter()),
-                        player: animation_context.root,
-                    });
-
-                    for child_ref in &part_group.child_refs {
-                        Box::pin(self.convert_joint_bundle(
-                            world,
-                            skeleton,
-                            Some(animation_context.clone()),
-                            net_nodes,
-                            *child_ref as usize,
-                        ))
-                        .await;
-                    }
-                } else {
+                let Some(part_group) = self.nodes.get_as::<PartGroup>(node.child_refs[0] as usize) else {
                     warn!(name: "not_a_part_group", target: "Panda3DLoader",
-                            "Tried to get node {}, but it wasn't a PartGroup. Unable to create joints, returning.", node.child_refs[0]);
+                        "Tried to get node {}, but it wasn't a PartGroup. Unable to create joints, returning.", node.child_refs[0]);
                     return (inverse_bindposes, joints);
+                };
+
+                // Create a new node that will serve as the base of any animations we want to play
+                if part_group.name != "<skeleton>" {
+                    warn!(name: "unexpected_part_group_name", target: "Panda3DLoader",
+                        "Encountered a PartGroup that wasn't named <skeleton>, node {}. This model may not be imported correctly.", node.child_refs[0]);
+                }
+                let name = Name::new(part_group.name.clone());
+                let skeleton = world
+                    .spawn((
+                        AnimationPlayer::default(),
+                        Transform::from_matrix(node.root_transform),
+                        name.clone(),
+                    ))
+                    .id();
+
+                // Make sure to parent it correctly
+                world.entity_mut(parent).add_child(skeleton);
+
+                inverse_bindposes.push(node.root_transform.inverse());
+                joints.push(skeleton);
+
+                // We know this is the root, so create a new `AnimationContext` to keep track of
+                // everything, and create a new AnimationTarget
+                let animation_context = AnimationContext { root: skeleton, path: smallvec![name] };
+                world.entity_mut(skeleton).insert(AnimationTarget {
+                    id: AnimationTargetId::from_names(animation_context.path.iter()),
+                    player: animation_context.root,
+                });
+
+                for child_ref in &part_group.child_refs {
+                    Box::pin(self.convert_joint_bundle(
+                        world,
+                        skeleton,
+                        Some(animation_context.clone()),
+                        net_nodes,
+                        *child_ref as usize,
+                    ))
+                    .await;
                 }
             }
             Some(NodeRef::CharacterJoint(node)) => {
@@ -361,31 +422,31 @@ impl BinaryAsset {
                 // Check any net transform nodes and try to create them. Theoretically, only ModelNode has the
                 // parameter needed to support a transform: Net, so let's just get the node as that.
                 for net_node_ref in &node.net_node_refs {
-                    if let Some(node) = self.nodes.get_as::<ModelNode>(*net_node_ref as usize) {
-                        // Spawn a node, add an AnimationTarget to it, so we're able to animate it even if it
-                        // doesn't have a mesh. We'll handle its effects and etc once we encounter it normally
-                        // in the tree.
-                        let name = Name::new(node.name.clone());
-                        let transform = self.handle_transform_state(node.transform_ref as usize).await;
-                        // Make sure we don't pollute our parent's context
-                        let mut animation_context = animation_context.clone();
-                        animation_context.path.push(name.clone());
-                        let net_node = world
-                            .spawn((
-                                transform,
-                                name,
-                                AnimationTarget {
-                                    id: AnimationTargetId::from_names(animation_context.path.iter()),
-                                    player: animation_context.root,
-                                },
-                            ))
-                            .id();
-
-                        net_nodes.insert(*net_node_ref as usize, net_node);
-                    } else {
+                    let Some(node) = self.nodes.get_as::<ModelNode>(*net_node_ref as usize) else {
                         warn!(name: "not_a_model_node", target: "Panda3DLoader",
                             "Tried to get node {} when trying to construct Net Transforms, but it wasn't a ModelNode, ignoring.", *net_node_ref);
-                    }
+                        continue;
+                    };
+                    // Spawn a node, add an AnimationTarget to it, so we're able to animate it even if it
+                    // doesn't have a mesh. We'll handle its effects and etc once we encounter it normally
+                    // in the tree.
+                    let name = Name::new(node.name.clone());
+                    let transform = self.handle_transform_state(node.transform_ref as usize).await;
+                    // Make sure we don't pollute our parent's context
+                    let mut animation_context = animation_context.clone();
+                    animation_context.path.push(name.clone());
+                    let net_node = world
+                        .spawn((
+                            transform,
+                            name,
+                            AnimationTarget {
+                                id: AnimationTargetId::from_names(animation_context.path.iter()),
+                                player: animation_context.root,
+                            },
+                        ))
+                        .id();
+
+                    net_nodes.insert(*net_node_ref as usize, net_node);
                 }
 
                 for child_ref in &node.child_refs {
@@ -408,6 +469,287 @@ impl BinaryAsset {
 
         (inverse_bindposes, joints)
     }
+
+    async fn convert_geom_node(
+        &self, loader: &mut AssetLoaderData<'_, '_>, geom_ref: usize, render_ref: usize, parent: Entity,
+    ) {
+        let Some(geom_node) = self.nodes.get_as::<Geom>(geom_ref) else {
+            warn!(name: "invalid_geom_node", target: "Panda3DLoader",
+                "Tried to load node {}, but it wasn't a Geom, returning.", geom_ref);
+            return;
+        };
+        let Some(render_state) = self.nodes.get_as::<RenderState>(render_ref) else {
+            warn!(name: "invalid_geom_node", target: "Panda3DLoader",
+                "Tried to load node {}, but it wasn't a RenderState, returning.", render_ref);
+            return;
+        };
+
+        // We already handle primitive_type by what type the node_ref is, and we theoretically account for
+        // Smooth shading because the mesh already has flat normals calculated. TODO: verify this?
+        if geom_node.primitive_refs.len() != 1 {
+            warn!(name: "too_many_primitives", target: "Panda3DLoader",
+                "More than one primitive is attached to node {}, please fix!", geom_ref);
+        }
+        if geom_node.bounds_type != BoundsType::Default {
+            warn!(name: "bounds_type_unhandled", target: "Panda3DLoader",
+                "Geom node {} has a unique BoundsType that isn't being handled, ignoring.", geom_ref);
+        }
+
+        let entity = loader.world.spawn(()).id();
+        loader.world.entity_mut(parent).add_child(entity);
+
+        // TODO: fold this into here?
+        self.convert_primitive(
+            loader,
+            geom_node.data_ref as usize,
+            geom_node.primitive_refs[0] as usize,
+            &render_state,
+            entity,
+        )
+        .await;
+    }
+
+    async fn convert_primitive(
+        &self, loader: &mut AssetLoaderData<'_, '_>, data_ref: usize, primitive_ref: usize,
+        render_state: &RenderState, entity: Entity,
+    ) {
+        // First, let's grab the GeomVertexData.
+        let Some(vertex_data) = self.nodes.get_as::<GeomVertexData>(data_ref) else {
+            warn!(name: "not_a_vertex_data", target: "Panda3DLoader",
+                "Tried to load node {}, but it wasn't GeomVertexData, unable to create geometry.", data_ref);
+            return;
+        };
+
+        // Then, grab the GeomVertexFormat.
+        let Some(vertex_format) = self.nodes.get_as::<GeomVertexFormat>(vertex_data.format_ref as usize)
+        else {
+            warn!(name: "not_a_vertex_format", target: "Panda3DLoader",
+                "Tried to load node {}, but it wasn't GeomVertexFormat, unable to create geometry.", vertex_data.format_ref);
+            return;
+        };
+
+        // Finally, let's grab the GeomPrimitive.
+        let Some(primitive) = self.nodes.get_as::<GeomPrimitive>(primitive_ref) else {
+            warn!(name: "not_a_geom_primitive", target: "Panda3DLoader",
+                "Tried to load node {}, but it wasn't GeomPrimitive, unable to create geometry.", primitive_ref);
+            return;
+        };
+
+        // Now, let's create a Material.
+        if render_state.attrib_refs.is_empty() {
+            warn!(name: "no_render_state_attribs", target: "Panda3DLoader",
+                "Tried to create a mesh using primitive {}, but it has no attributes and can't be rendered, returning.", primitive_ref);
+            return;
+        }
+        let label = format!("Material{}", loader.assets.materials.len());
+        let material = self.create_material(loader, render_state).await;
+        let material = loader.context.labeled_asset_scope(label, |_| material);
+        loader.assets.materials.push(material.clone());
+
+        loader.world.entity_mut(entity).insert(MeshMaterial3d(material));
+    }
+
+    async fn create_material(
+        &self, loader: &mut AssetLoaderData<'_, '_>, render_state: &RenderState,
+    ) -> Panda3DMaterial {
+        let mut material = Panda3DMaterial::default();
+
+        for attrib_ref in &render_state.attrib_refs {
+            if attrib_ref.1 != 0 {
+                warn!(name: "nonzero_override", target: "Panda3DLoader",
+                    "Node {} has a non-zero override value, please fix!", attrib_ref.0);
+            }
+            match self.nodes.get(attrib_ref.0 as usize) {
+                Some(NodeRef::TextureAttrib(attrib)) => {
+                    // First, let's validate that we handle all TextureAttrib's fields
+                    if attrib.off_all_stages
+                        || !attrib.off_stage_refs.is_empty()
+                        || attrib.on_stages.len() != 1
+                    {
+                        warn!(name: "unexpected_texture_attrib", target: "Panda3DLoader",
+                            "Creating a Texture using node {}, but it has unexpected on/off nodes, ignoring.", attrib_ref.0);
+                        if attrib.on_stages.is_empty() {
+                            continue;
+                        }
+                    }
+
+                    // Let's grab the StageNode inside (hopefully only one!)
+                    let stage_node = &attrib.on_stages[0];
+                    if stage_node.sampler.is_some()
+                        || stage_node.priority != 0
+                        || stage_node.implicit_sort != 1
+                    {
+                        warn!(name: "unexpected_stage_node", target: "Panda3DLoader",
+                            "Encountered unexpected StageNode data on node {}, ignoring.", attrib_ref.0);
+                    }
+
+                    // Validate that the TextureStage is plain and we can ignore it.
+                    let Some(texture_stage) =
+                        self.nodes.get_as::<TextureStage>(stage_node.texture_stage_ref as usize)
+                    else {
+                        warn!(name: "not_a_texture_stage", target: "Panda3DLoader",
+                            "Tried to get node {}, but it wasn't a TextureStage, ignoring.", stage_node.texture_stage_ref);
+                        continue;
+                    };
+                    if *texture_stage != TextureStage::default() {
+                        warn!(name: "unhandled_texture_stage", target: "Panda3DLoader",
+                            "TextureStage Node {} is not the default, please fix!", stage_node.texture_stage_ref);
+                    }
+
+                    // Now to grab the Texture and actually handle it
+                    let texture_ref = stage_node.texture_ref as usize;
+                    // If we've already processed this texture, just load the original Image
+                    let rgb_image = if let Some(image_id) = loader.image_cache.get(&texture_ref) {
+                        loader.assets.textures[*image_id].clone()
+                    } else {
+                        let Some(texture) = self.nodes.get_as::<Texture>(texture_ref) else {
+                            warn!(name: "not_a_texture", target: "Panda3DLoader",
+                            "Tried to get node {}, but it wasn't a Texture, ignoring.", texture_ref);
+                            continue;
+                        };
+
+                        /* I cannot tell if this section is blessed or cursed, fragile or robust, but it
+                         * works and that's all I care about */
+                        // First, load the RGB image which should always be available
+                        let rgb_image = match loader
+                            .context
+                            .loader()
+                            .immediate()
+                            .load::<Image>(texture.filename.clone())
+                            .await
+                        {
+                            Ok(image) => image.take(),
+                            Err(error) => {
+                                warn!(name: "image_file_error", target: "Panda3DLoader",
+                                    "Tried to load file {}, got back error {}", texture.filename, error);
+                                continue;
+                            }
+                        };
+
+                        // Then, if the alpha image exists, load it
+                        let alpha_image = if texture.alpha_filename != "" {
+                            Some(
+                                match loader
+                                    .context
+                                    .loader()
+                                    .immediate()
+                                    .load::<Image>(texture.alpha_filename.clone())
+                                    .await
+                                {
+                                    Ok(image) => image.take(),
+                                    Err(error) => {
+                                        warn!(name: "image_file_error", target: "Panda3DLoader",
+                                            "Tried to load file {}, got back error {}", texture.alpha_filename, error);
+                                        continue;
+                                    }
+                                },
+                            )
+                        } else {
+                            None
+                        };
+
+                        // If an alpha texture exists, then we need to merge the two into a single Image
+                        let image = if let Some(alpha_image) = alpha_image {
+                            // Image.convert has very limited support, so use a match to filter out the couple
+                            // we care about, and convert to RGBA
+                            let mut rgb_image = match rgb_image.texture_descriptor.format {
+                                TextureFormat::R8Unorm | TextureFormat::Rg8Unorm => {
+                                    rgb_image.convert(TextureFormat::Rgba8UnormSrgb).unwrap()
+                                }
+                                TextureFormat::Rgba8UnormSrgb => rgb_image.clone(),
+                                _ => {
+                                    warn!(name: "combine_alpha_no_convert", target: "Panda3DLoader",
+                                        "Material {} has a separate alpha channel, but the RGB file {} was not in a supported format! Ignoring.", texture_ref, texture.filename);
+                                    continue;
+                                }
+                            };
+
+                            // The only supported format right now is R8, theoretically we could support any
+                            // kind of Rgba8 and just grab the alpha from that, TODO?
+                            match alpha_image.texture_descriptor.format {
+                                TextureFormat::R8Unorm => (),
+                                _ => {
+                                    warn!(name: "unsupported_alpha_image", target: "Panda3DLoader",
+                                        "Trying to merge alpha texture {}, but it's not in a supported format! Ignoring.", texture.alpha_filename);
+                                    continue;
+                                }
+                            }
+
+                            // For the entire image, replace the alpha u8 with the one from alpha image
+                            let height = rgb_image.texture_descriptor.size.height;
+                            let width = rgb_image.texture_descriptor.size.width;
+                            for y in 0..height {
+                                for x in 0..width {
+                                    let alpha_pixel = alpha_image.data[(y * width + x) as usize];
+                                    rgb_image.data[((y * width + x) * 4) as usize + 3] = alpha_pixel;
+                                }
+                            }
+                            rgb_image
+                        } else {
+                            rgb_image
+                        };
+
+                        // Make sure we cache this image so we don't try to merge it again
+                        loader.image_cache.insert(texture_ref, loader.assets.textures.len());
+
+                        // Register our (potentially) new image with the AssetServer properly, and store it
+                        let label = format!("Image{}", loader.assets.textures.len());
+                        let rgb_image = loader.context.labeled_asset_scope(label, |_| image);
+                        loader.assets.textures.push(rgb_image.clone());
+
+                        rgb_image
+                    };
+
+                    material.base.base_color_texture = Some(rgb_image);
+                }
+                Some(NodeRef::TransparencyAttrib(attrib)) => {
+                    material.base.alpha_mode = match attrib.mode {
+                        TransparencyMode::None => AlphaMode::Opaque,
+                        TransparencyMode::Alpha => AlphaMode::Blend,
+                        TransparencyMode::PremultipliedAlpha => AlphaMode::Premultiplied,
+                        TransparencyMode::Binary => AlphaMode::Mask(0.5),
+                        TransparencyMode::Dual => AlphaMode::AlphaToCoverage,
+                        _ => {
+                            warn!(name: "multisample_transparency", target: "Panda3DLoader",
+                                "Encountered Multisample TransparencyAttrib on node {}, ignoring.", attrib_ref.0);
+                            AlphaMode::Opaque
+                        }
+                    }
+                }
+                Some(NodeRef::ColorAttrib(attrib)) => {
+                    material.base.base_color = match attrib.color_type {
+                        // Flat means use this color for all geometry
+                        ColorType::Flat => Color::Srgba(Srgba::from_vec4(attrib.color)),
+                        // Vertex colors are provided as part of the mesh, just keep base color white
+                        ColorType::Vertex => Color::WHITE,
+                        // Colors off just means pure white base color.
+                        ColorType::Off => Color::WHITE,
+                    };
+                }
+                Some(NodeRef::CullFaceAttrib(attrib)) => {
+                    material.base.cull_mode = match attrib.get_effective_mode() {
+                        CullMode::None => None,
+                        CullMode::Clockwise => Some(Face::Back),
+                        CullMode::CounterClockwise => Some(Face::Front),
+                        CullMode::Unchanged => unreachable!("get_effective_mode() resolves Unchanged for us"),
+                    };
+                }
+                Some(NodeRef::DepthWriteAttrib(attrib)) => {
+                    material.extension.depth_write_enabled = attrib.depth_write_enabled();
+                }
+                Some(NodeRef::CullBinAttrib(_)) => {
+                    // TODO: actually handle this? There's not much we can do about pipelining in this loader.
+                }
+                Some(node) => println!("Unexpected node {:?} in create_material", node),
+                None => {
+                    warn!(name: "unexpected_node_index", target: "Panda3DLoader",
+                        "Tried to access node {}, but it doesn't exist, ignoring.", attrib_ref.0);
+                }
+            }
+        }
+
+        material
+    }
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -419,6 +761,9 @@ pub struct Panda3DLoader;
 #[derive(Asset, TypePath, Debug, Default)]
 pub struct Panda3DAsset {
     pub scene: Handle<Scene>,
+    pub meshes: Vec<Handle<Mesh>>,
+    pub materials: Vec<Handle<Panda3DMaterial>>,
+    pub textures: Vec<Handle<Image>>,
     pub bindposes: Vec<Handle<SkinnedMeshInverseBindposes>>,
 }
 
@@ -426,6 +771,8 @@ struct AssetLoaderData<'loader, 'context> {
     world: &'loader mut World,
     context: &'loader mut LoadContext<'context>,
     assets: &'loader mut Panda3DAsset,
+    // Stores all Texture NodeIDs and their Image# so we don't try to load image files twice
+    image_cache: HashMap<usize, usize>,
 }
 
 impl AssetLoader for Panda3DLoader {
@@ -450,9 +797,14 @@ impl AssetLoader for Panda3DLoader {
         assets.scene = load_context.labeled_asset_scope("Scene0".to_string(), |context| {
             let mut world = World::default();
 
-            let mut loader_data = AssetLoaderData { world: &mut world, context, assets: &mut assets };
+            let mut loader = AssetLoaderData {
+                world: &mut world,
+                context,
+                assets: &mut assets,
+                image_cache: HashMap::new(),
+            };
 
-            block_on(bam.recurse_nodes(&mut loader_data, None, None, None, None, 0));
+            block_on(bam.recurse_nodes(&mut loader, None, None, None, None, 0));
 
             Scene::new(world)
         });
@@ -470,10 +822,9 @@ pub struct Panda3DPlugin;
 impl Plugin for Panda3DPlugin {
     fn build(&self, app: &mut App) {
         app.init_asset_loader::<Panda3DLoader>()
+            .init_asset_loader::<SgiImageLoader>()
             .init_asset::<Panda3DAsset>()
-            .add_plugins(MaterialPlugin::<
-                ExtendedMaterial<StandardMaterial, Panda3DExtension>,
-            >::default());
+            .add_plugins(MaterialPlugin::<Panda3DMaterial>::default());
     }
 }
 
@@ -504,7 +855,8 @@ impl MaterialExtension for Panda3DExtension {
         if let Some(depth_stencil) = descriptor.depth_stencil.as_mut() {
             depth_stencil.depth_write_enabled = key.bind_group_data.depth_write_enabled;
             if key.bind_group_data.decal_effect {
-                depth_stencil.bias.constant = 1; //TODO: tweak these more if they give any trouble
+                //TODO: tweak these more if they give any trouble
+                depth_stencil.bias.constant = 1;
                 depth_stencil.bias.slope_scale = 0.5;
                 depth_stencil.depth_write_enabled = false;
             }
@@ -521,3 +873,5 @@ impl From<&Panda3DExtension> for Panda3DExtensionKey {
         }
     }
 }
+
+pub type Panda3DMaterial = ExtendedMaterial<StandardMaterial, Panda3DExtension>;

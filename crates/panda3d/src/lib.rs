@@ -20,6 +20,8 @@ pub mod bam;
 //pub mod bevy;
 #[cfg(feature = "bevy")]
 pub mod bevy2;
+#[cfg(feature = "bevy")]
+pub mod bevy_sgi;
 
 pub mod common;
 pub mod prelude;

@@ -71,7 +71,7 @@ pub(crate) enum CombineOperand {
     OneMinusSourceAlpha,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, PartialEq)]
 #[allow(dead_code)]
 pub(crate) struct CombineConfig {
     pub mode: CombineMode,
@@ -122,7 +122,7 @@ impl CombineConfig {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 #[allow(dead_code)]
 pub(crate) struct TextureStage {
     pub name: String,

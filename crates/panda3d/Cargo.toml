@@ -37,10 +37,11 @@ features = [
     "bevy_animation",
     "bevy_asset",
     "bevy_color",
-    "bevy_image",
     "bevy_pbr",
     "bevy_render",
     "bevy_scene",
+    "jpeg",
+    "png",
 ]
 
 [features]

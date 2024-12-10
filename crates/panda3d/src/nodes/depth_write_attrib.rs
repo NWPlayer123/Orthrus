@@ -15,6 +15,16 @@ pub(crate) struct DepthWriteAttrib {
     pub mode: DepthMode,
 }
 
+impl DepthWriteAttrib {
+    #[inline]
+    pub fn depth_write_enabled(&self) -> bool {
+        match self.mode {
+            DepthMode::Off => false,
+            DepthMode::On => true,
+        }
+    }
+}
+
 impl Node for DepthWriteAttrib {
     #[inline]
     fn create(_loader: &mut BinaryAsset, data: &mut Datagram<'_>) -> Result<Self, bam::Error> {
