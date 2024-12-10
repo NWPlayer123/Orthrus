@@ -81,7 +81,7 @@ impl SgiHeader {
 
         let dimension = data.read_u16()?;
         ensure!(
-            dimension >= 1 && dimension <= 3,
+            (1..=3).contains(&dimension),
             InvalidDimensionSnafu { value: dimension }
         );
 

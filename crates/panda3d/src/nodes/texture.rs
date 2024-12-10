@@ -1,3 +1,5 @@
+use core::ops::{Deref, DerefMut};
+
 use super::auto_texture_scale::AutoTextureScale;
 use super::geom_enums::UsageHint;
 use super::prelude::*;
@@ -355,5 +357,33 @@ impl Node for Texture {
             data,
             has_read_mipmaps,
         })
+    }
+}
+
+impl Deref for Texture {
+    type Target = TextureBody;
+
+    fn deref(&self) -> &Self::Target {
+        &self.body
+    }
+}
+
+impl DerefMut for Texture {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.body
+    }
+}
+
+impl Deref for TextureBody {
+    type Target = SamplerState;
+
+    fn deref(&self) -> &Self::Target {
+        &self.default_sampler
+    }
+}
+
+impl DerefMut for TextureBody {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.default_sampler
     }
 }

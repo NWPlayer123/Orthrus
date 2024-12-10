@@ -10,8 +10,8 @@ use bevy_internal::animation::{AnimationTarget, AnimationTargetId};
 /// Character node is designed to be a high level animatable node that multiple meshes attach to, as well
 /// as a singular (TODO: check) PartBundle that holds all skinning data
 use bevy_internal::asset::io::Reader;
-use bevy_internal::asset::{AssetLoader, LoadContext, RenderAssetUsages};
-use bevy_internal::image::ImageLoaderSettings;
+use bevy_internal::asset::{AssetLoader, LoadContext};
+use bevy_internal::image::{ImageAddressMode, ImageFilterMode, ImageSamplerBorderColor};
 use bevy_internal::pbr::{
     ExtendedMaterial, MaterialExtension, MaterialExtensionKey, MaterialExtensionPipeline,
 };
@@ -32,6 +32,7 @@ use crate::nodes::cull_face_attrib::CullMode;
 use crate::nodes::dispatch::NodeRef;
 use crate::nodes::part_bundle::BlendType;
 use crate::nodes::prelude::*;
+use crate::nodes::sampler_state::{FilterType, WrapMode};
 use crate::nodes::transform_state::TransformFlags;
 use crate::nodes::transparency_attrib::TransparencyMode;
 //use crate::bevy::Effects;
@@ -463,7 +464,7 @@ impl BinaryAsset {
             Some(node) => println!("Unexpected node {:?} in convert_joint_bundle", node),
             None => {
                 warn!(name: "unexpected_node_index", target: "Panda3DLoader",
-                "Tried to access node {}, but it doesn't exist, ignoring.", node_index);
+                    "Tried to access node {}, but it doesn't exist, ignoring.", node_index);
             }
         }
 
@@ -503,7 +504,7 @@ impl BinaryAsset {
             loader,
             geom_node.data_ref as usize,
             geom_node.primitive_refs[0] as usize,
-            &render_state,
+            render_state,
             entity,
         )
         .await;
@@ -547,6 +548,46 @@ impl BinaryAsset {
         loader.assets.materials.push(material.clone());
 
         loader.world.entity_mut(entity).insert(MeshMaterial3d(material));
+    }
+
+    fn convert_wrap_mode(&self, mode: WrapMode, node_index: usize) -> ImageAddressMode {
+        match mode {
+            WrapMode::Clamp => ImageAddressMode::ClampToEdge,
+            WrapMode::Repeat => ImageAddressMode::Repeat,
+            WrapMode::Mirror => ImageAddressMode::MirrorRepeat,
+            WrapMode::BorderColor => ImageAddressMode::ClampToBorder,
+            _ => {
+                warn!(name: "unexpected_wrap_mode", target: "Panda3DLoader",
+                    "Unsupported WrapMode encountered on node {}", node_index);
+                ImageAddressMode::default()
+            }
+        }
+    }
+
+    fn convert_image_filter(&self, filter: FilterType, is_mipmap: bool) -> ImageFilterMode {
+        match filter {
+            // Direct mappings for basic filtering modes
+            FilterType::Nearest => ImageFilterMode::Nearest,
+            FilterType::Linear => ImageFilterMode::Linear,
+
+            // These are minification/mipmap modes but might be used for mag filter
+            // Map them to their nearest equivalent
+            FilterType::NearestMipmapNearest => ImageFilterMode::Nearest,
+            FilterType::NearestMipmapLinear => match is_mipmap {
+                false => ImageFilterMode::Nearest,
+                true => ImageFilterMode::Linear,
+            },
+            FilterType::LinearMipmapNearest => match is_mipmap {
+                false => ImageFilterMode::Linear,
+                true => ImageFilterMode::Nearest,
+            },
+            FilterType::LinearMipmapLinear => ImageFilterMode::Linear,
+
+            // Special cases
+            FilterType::Shadow => ImageFilterMode::Linear, // Typically want smooth shadows
+            FilterType::Default => ImageFilterMode::Linear, // Most common default
+            FilterType::Invalid => ImageFilterMode::Linear, // Safe fallback
+        }
     }
 
     async fn create_material(
@@ -599,12 +640,12 @@ impl BinaryAsset {
                     // Now to grab the Texture and actually handle it
                     let texture_ref = stage_node.texture_ref as usize;
                     // If we've already processed this texture, just load the original Image
-                    let rgb_image = if let Some(image_id) = loader.image_cache.get(&texture_ref) {
+                    let image = if let Some(image_id) = loader.image_cache.get(&texture_ref) {
                         loader.assets.textures[*image_id].clone()
                     } else {
                         let Some(texture) = self.nodes.get_as::<Texture>(texture_ref) else {
                             warn!(name: "not_a_texture", target: "Panda3DLoader",
-                            "Tried to get node {}, but it wasn't a Texture, ignoring.", texture_ref);
+                                "Tried to get node {}, but it wasn't a Texture, ignoring.", texture_ref);
                             continue;
                         };
 
@@ -627,7 +668,7 @@ impl BinaryAsset {
                         };
 
                         // Then, if the alpha image exists, load it
-                        let alpha_image = if texture.alpha_filename != "" {
+                        let alpha_image = if !texture.alpha_filename.is_empty() {
                             Some(
                                 match loader
                                     .context
@@ -649,7 +690,7 @@ impl BinaryAsset {
                         };
 
                         // If an alpha texture exists, then we need to merge the two into a single Image
-                        let image = if let Some(alpha_image) = alpha_image {
+                        let mut image = if let Some(alpha_image) = alpha_image {
                             // Image.convert has very limited support, so use a match to filter out the couple
                             // we care about, and convert to RGBA
                             let mut rgb_image = match rgb_image.texture_descriptor.format {
@@ -689,18 +730,42 @@ impl BinaryAsset {
                             rgb_image
                         };
 
+                        // Now that we have this new image, we need to configure its properties
+                        let descriptor = image.sampler.get_or_init_descriptor();
+                        descriptor.label = Some(texture.name.clone());
+
+                        descriptor.address_mode_u = self.convert_wrap_mode(texture.wrap_u, texture_ref);
+                        descriptor.address_mode_v = self.convert_wrap_mode(texture.wrap_v, texture_ref);
+                        descriptor.address_mode_w = self.convert_wrap_mode(texture.wrap_w, texture_ref);
+
+                        descriptor.mag_filter = self.convert_image_filter(texture.mag_filter, false);
+                        descriptor.min_filter = self.convert_image_filter(texture.min_filter, false);
+                        descriptor.mipmap_filter = self.convert_image_filter(texture.min_filter, true);
+
+                        // Clamp (-1000..=1000) to (0..=32) since that seems to be the default range for both.
+                        // TODO: re-evaluate once we find a model that doesn't have the default?
+                        descriptor.lod_min_clamp = (texture.min_lod * 32.0) / 2000.0 + 16.0;
+                        descriptor.lod_max_clamp = (texture.max_lod * 32.0) / 2000.0 + 16.0;
+
+                        descriptor.border_color = match texture.border_color.to_array() {
+                            [0.0, 0.0, 0.0, 0.0] => Some(ImageSamplerBorderColor::TransparentBlack),
+                            [0.0, 0.0, 0.0, 1.0] => Some(ImageSamplerBorderColor::OpaqueBlack),
+                            [1.0, 1.0, 1.0, 1.0] => Some(ImageSamplerBorderColor::OpaqueWhite),
+                            _ => None,
+                        };
+
                         // Make sure we cache this image so we don't try to merge it again
                         loader.image_cache.insert(texture_ref, loader.assets.textures.len());
 
                         // Register our (potentially) new image with the AssetServer properly, and store it
                         let label = format!("Image{}", loader.assets.textures.len());
-                        let rgb_image = loader.context.labeled_asset_scope(label, |_| image);
-                        loader.assets.textures.push(rgb_image.clone());
+                        let image = loader.context.labeled_asset_scope(label, |_| image);
+                        loader.assets.textures.push(image.clone());
 
-                        rgb_image
+                        image
                     };
 
-                    material.base.base_color_texture = Some(rgb_image);
+                    material.base.base_color_texture = Some(image);
                 }
                 Some(NodeRef::TransparencyAttrib(attrib)) => {
                     material.base.alpha_mode = match attrib.mode {
