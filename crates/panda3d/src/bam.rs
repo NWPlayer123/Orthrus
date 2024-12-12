@@ -360,6 +360,7 @@ impl BinaryAsset {
 
     //should really be using make_from_bam as an entrypoint
     async fn fillin(&mut self, data: &mut Datagram<'_>, type_name: &str) -> Result<(), self::Error> {
+        //println!("{type_name}");
         match type_name {
             "AnimBundle" => self.create_node::<AnimBundle>(data),
             "AnimBundleNode" => self.create_node::<AnimBundleNode>(data),

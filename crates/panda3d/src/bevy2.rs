@@ -10,21 +10,25 @@ use bevy_internal::animation::{AnimationTarget, AnimationTargetId};
 /// Character node is designed to be a high level animatable node that multiple meshes attach to, as well
 /// as a singular (TODO: check) PartBundle that holds all skinning data
 use bevy_internal::asset::io::Reader;
-use bevy_internal::asset::{AssetLoader, LoadContext};
+use bevy_internal::asset::{AssetLoader, LoadContext, RenderAssetUsages};
 use bevy_internal::image::{ImageAddressMode, ImageFilterMode, ImageSamplerBorderColor};
 use bevy_internal::pbr::{
     ExtendedMaterial, MaterialExtension, MaterialExtensionKey, MaterialExtensionPipeline,
 };
 use bevy_internal::prelude::*;
 use bevy_internal::render::mesh::skinning::{SkinnedMesh, SkinnedMeshInverseBindposes};
-use bevy_internal::render::mesh::MeshVertexBufferLayoutRef;
+use bevy_internal::render::mesh::{
+    Indices, MeshVertexBufferLayoutRef, PrimitiveTopology, VertexAttributeValues,
+};
 use bevy_internal::render::render_resource::{
     AsBindGroup, Face, RenderPipelineDescriptor, SpecializedMeshPipelineError, TextureFormat,
 };
 use bevy_internal::tasks::block_on;
 use hashbrown::HashMap;
+use orthrus_core::prelude::*;
 use serde::{Deserialize, Serialize};
 use smallvec::{smallvec, SmallVec};
+use snafu::prelude::*;
 
 use crate::bevy_sgi::SgiImageLoader;
 use crate::nodes::color_attrib::ColorType;
@@ -33,6 +37,7 @@ use crate::nodes::dispatch::NodeRef;
 use crate::nodes::part_bundle::BlendType;
 use crate::nodes::prelude::*;
 use crate::nodes::sampler_state::{FilterType, WrapMode};
+use crate::nodes::transform_blend::TransformEntry;
 use crate::nodes::transform_state::TransformFlags;
 use crate::nodes::transparency_attrib::TransparencyMode;
 //use crate::bevy::Effects;
@@ -40,6 +45,29 @@ use crate::prelude::*;
 
 // TODO on this whole file, try to reduce nesting, should be able to create an internal Error type, return
 // result and error if we encounter unexpected data, instead of the current stupid if let Some() spam.
+
+#[derive(Debug, Snafu)]
+pub enum Panda3DError {
+    /// Thrown if a [`DataError`] other than EndOfFile is encountered.
+    #[snafu(display("Decoding Error {source}"))]
+    DataError { source: DataError },
+
+    #[snafu(display("Tried to get node {node_index}, but it wasn't {node_type}, returning."))]
+    WrongNode {
+        node_index: usize,
+        node_type: &'static str,
+    },
+
+    #[snafu(display("Tried to parse node {node_index}, but encountered unexpected data, returning."))]
+    UnexpectedData { node_index: usize },
+}
+
+impl From<DataError> for Panda3DError {
+    #[inline]
+    fn from(source: DataError) -> Self {
+        Panda3DError::DataError { source }
+    }
+}
 
 #[derive(Debug, Default, Clone, Copy)]
 struct Effects {
@@ -172,6 +200,7 @@ impl BinaryAsset {
                         entity,
                         None,
                         &mut net_nodes,
+                        None,
                         node.bundle_refs[0] as usize,
                     )
                     .await;
@@ -211,7 +240,14 @@ impl BinaryAsset {
                 //TODO handle tags, collide_mask?
 
                 for geom_ref in &node.geom_refs {
-                    self.convert_geom_node(loader, geom_ref.0 as usize, geom_ref.1 as usize, entity).await;
+                    self.convert_geom_node(
+                        loader,
+                        joint_data,
+                        geom_ref.0 as usize,
+                        geom_ref.1 as usize,
+                        entity,
+                    )
+                    .await;
                 }
 
                 // Then, we need to process all child nodes
@@ -315,9 +351,10 @@ impl BinaryAsset {
 
         // Finally, let's check if we've already spawned a node to add an AnimationTarget previously. If it
         // isn't in the lookup, then let's spawn a new one.
-        let entity = net_nodes
-            .and_then(|node_lookup| node_lookup.get(&node_index).copied())
-            .unwrap_or_else(|| world.spawn((transform, Name::new(node.name.clone()))).id());
+        let entity =
+            net_nodes.and_then(|node_lookup| node_lookup.get(&node_index).copied()).unwrap_or_else(|| {
+                world.spawn((transform, Visibility::default(), Name::new(node.name.clone()))).id()
+            });
 
         // Even if the node was already created, it wasn't parented, so parent it now.
         if let Some(parent) = parent {
@@ -331,7 +368,7 @@ impl BinaryAsset {
     /// well as any associated net_nodes.
     async fn convert_joint_bundle(
         &self, world: &mut World, parent: Entity, animation_context: Option<AnimationContext>,
-        net_nodes: &mut BTreeMap<usize, Entity>, node_index: usize,
+        net_nodes: &mut BTreeMap<usize, Entity>, parent_transform: Option<Mat4>, node_index: usize,
     ) -> (Vec<Mat4>, Vec<Entity>) {
         let mut inverse_bindposes = Vec::new();
         let mut joints = Vec::new();
@@ -362,22 +399,28 @@ impl BinaryAsset {
                     return (inverse_bindposes, joints);
                 };
 
-                // Create a new node that will serve as the base of any animations we want to play
+                // Create a new node that will serve as the base of any animations we want to play. TODO:
+                // remove this, as it's not present in .egg
                 if part_group.name != "<skeleton>" {
                     warn!(name: "unexpected_part_group_name", target: "Panda3DLoader",
                         "Encountered a PartGroup that wasn't named <skeleton>, node {}. This model may not be imported correctly.", node.child_refs[0]);
                 }
-                let name = Name::new(part_group.name.clone());
+                if node.root_transform != Mat4::default() {
+                    warn!(name: "non-zero_skeleton", target: "Panda3DLoader",
+                        "Non-zero transform on the skeleton! Ignoring.", node);
+                }
+                /*let name = Name::new(part_group.name.clone());
                 let skeleton = world
                     .spawn((
                         AnimationPlayer::default(),
                         Transform::from_matrix(node.root_transform),
+                        Visibility::default(),
                         name.clone(),
                     ))
-                    .id();
+                    .id();*/
 
                 // Make sure to parent it correctly
-                world.entity_mut(parent).add_child(skeleton);
+                //world.entity_mut(parent).add_child(skeleton);
 
                 inverse_bindposes.push(node.root_transform.inverse());
                 joints.push(skeleton);
@@ -391,25 +434,49 @@ impl BinaryAsset {
                 });
 
                 for child_ref in &part_group.child_refs {
-                    Box::pin(self.convert_joint_bundle(
+                    let (child_inverse_bindposes, child_joints) = Box::pin(self.convert_joint_bundle(
                         world,
                         skeleton,
                         Some(animation_context.clone()),
                         net_nodes,
+                        None,
                         *child_ref as usize,
                     ))
                     .await;
+                    inverse_bindposes.extend(child_inverse_bindposes);
+                    joints.extend(child_joints);
                 }
             }
             Some(NodeRef::CharacterJoint(node)) => {
                 // We're at an actual skeletal joint.
+
+                // Calculate net_transform based on whether this is a toplevel joint or not
+                let net_transform = if let Some(parent_transform) = parent_transform {
+                    // Child joint: net_transform = value * parent_net_transform
+                    node.default_value * parent_transform
+                } else {
+                    // Toplevel joint: Already has the correct transform from default_value
+                    node.default_value
+                };
+
+                println!(
+                    "{}",
+                    net_transform.inverse() == node.initial_net_transform_inverse
+                );
+
                 let name = Name::new(node.name.clone());
-                let joint = world.spawn((Transform::from_matrix(node.default_value), name.clone())).id();
+                let joint = world
+                    .spawn((
+                        Transform::from_matrix(net_transform),
+                        Visibility::default(),
+                        name.clone(),
+                    ))
+                    .id();
 
                 // Make sure to parent it correctly
                 world.entity_mut(parent).add_child(joint);
 
-                inverse_bindposes.push(node.initial_net_transform_inverse);
+                inverse_bindposes.push(net_transform.inverse());
                 joints.push(joint);
 
                 // We should always have a valid AnimationContext, and if we don't, we have bigger worries.
@@ -439,6 +506,7 @@ impl BinaryAsset {
                     let net_node = world
                         .spawn((
                             transform,
+                            Visibility::default(),
                             name,
                             AnimationTarget {
                                 id: AnimationTargetId::from_names(animation_context.path.iter()),
@@ -456,6 +524,7 @@ impl BinaryAsset {
                         joint,
                         Some(animation_context.clone()),
                         net_nodes,
+                        Some(net_transform),
                         *child_ref as usize,
                     ))
                     .await;
@@ -472,7 +541,8 @@ impl BinaryAsset {
     }
 
     async fn convert_geom_node(
-        &self, loader: &mut AssetLoaderData<'_, '_>, geom_ref: usize, render_ref: usize, parent: Entity,
+        &self, loader: &mut AssetLoaderData<'_, '_>, joint_data: Option<&SkinnedMesh>, geom_ref: usize,
+        render_ref: usize, parent: Entity,
     ) {
         let Some(geom_node) = self.nodes.get_as::<Geom>(geom_ref) else {
             warn!(name: "invalid_geom_node", target: "Panda3DLoader",
@@ -485,69 +555,28 @@ impl BinaryAsset {
             return;
         };
 
-        // We already handle primitive_type by what type the node_ref is, and we theoretically account for
-        // Smooth shading because the mesh already has flat normals calculated. TODO: verify this?
-        if geom_node.primitive_refs.len() != 1 {
-            warn!(name: "too_many_primitives", target: "Panda3DLoader",
-                "More than one primitive is attached to node {}, please fix!", geom_ref);
-        }
-        if geom_node.bounds_type != BoundsType::Default {
-            warn!(name: "bounds_type_unhandled", target: "Panda3DLoader",
-                "Geom node {} has a unique BoundsType that isn't being handled, ignoring.", geom_ref);
-        }
-
-        let entity = loader.world.spawn(()).id();
+        let entity = loader.world.spawn((Transform::default(), Visibility::default())).id();
         loader.world.entity_mut(parent).add_child(entity);
 
-        // TODO: fold this into here?
-        self.convert_primitive(
-            loader,
-            geom_node.data_ref as usize,
-            geom_node.primitive_refs[0] as usize,
-            render_state,
-            entity,
-        )
-        .await;
-    }
-
-    async fn convert_primitive(
-        &self, loader: &mut AssetLoaderData<'_, '_>, data_ref: usize, primitive_ref: usize,
-        render_state: &RenderState, entity: Entity,
-    ) {
-        // First, let's grab the GeomVertexData.
-        let Some(vertex_data) = self.nodes.get_as::<GeomVertexData>(data_ref) else {
-            warn!(name: "not_a_vertex_data", target: "Panda3DLoader",
-                "Tried to load node {}, but it wasn't GeomVertexData, unable to create geometry.", data_ref);
-            return;
-        };
-
-        // Then, grab the GeomVertexFormat.
-        let Some(vertex_format) = self.nodes.get_as::<GeomVertexFormat>(vertex_data.format_ref as usize)
-        else {
-            warn!(name: "not_a_vertex_format", target: "Panda3DLoader",
-                "Tried to load node {}, but it wasn't GeomVertexFormat, unable to create geometry.", vertex_data.format_ref);
-            return;
-        };
-
-        // Finally, let's grab the GeomPrimitive.
-        let Some(primitive) = self.nodes.get_as::<GeomPrimitive>(primitive_ref) else {
-            warn!(name: "not_a_geom_primitive", target: "Panda3DLoader",
-                "Tried to load node {}, but it wasn't GeomPrimitive, unable to create geometry.", primitive_ref);
-            return;
-        };
-
         // Now, let's create a Material.
-        if render_state.attrib_refs.is_empty() {
-            warn!(name: "no_render_state_attribs", target: "Panda3DLoader",
-                "Tried to create a mesh using primitive {}, but it has no attributes and can't be rendered, returning.", primitive_ref);
-            return;
-        }
         let label = format!("Material{}", loader.assets.materials.len());
+        // This should be fine, if attrib_refs is empty, it'll just return a default Material.
         let material = self.create_material(loader, render_state).await;
         let material = loader.context.labeled_asset_scope(label, |_| material);
         loader.assets.materials.push(material.clone());
 
-        loader.world.entity_mut(entity).insert(MeshMaterial3d(material));
+        // TODO: remove unwrap
+        /*println!(
+            "Building up Mesh {}, {}",
+            loader.assets.meshes.len(),
+            geom_node.name
+        );*/
+        let label = format!("Mesh{}", loader.assets.meshes.len());
+        let mesh = self.create_mesh(loader, joint_data, entity, geom_ref, geom_node).unwrap();
+        let mesh = loader.context.labeled_asset_scope(label, |_| mesh);
+        loader.assets.meshes.push(mesh.clone());
+
+        loader.world.entity_mut(entity).insert((Mesh3d(mesh), MeshMaterial3d(material)));
     }
 
     fn convert_wrap_mode(&self, mode: WrapMode, node_index: usize) -> ImageAddressMode {
@@ -689,7 +718,8 @@ impl BinaryAsset {
                             None
                         };
 
-                        // If an alpha texture exists, then we need to merge the two into a single Image
+                        // If an alpha texture exists, then we need to merge the two into a single Image.
+                        // TODO: enforce texture.format?
                         let mut image = if let Some(alpha_image) = alpha_image {
                             // Image.convert has very limited support, so use a match to filter out the couple
                             // we care about, and convert to RGBA
@@ -765,6 +795,7 @@ impl BinaryAsset {
                         image
                     };
 
+                    // TODO: not always base_color_texture, see egg MODULATE
                     material.base.base_color_texture = Some(image);
                 }
                 Some(NodeRef::TransparencyAttrib(attrib)) => {
@@ -813,7 +844,347 @@ impl BinaryAsset {
             }
         }
 
+        //TODO: create toggle when loading so users can choose to use actual lighting
+        material.base.unlit = true;
+        material.base.perceptual_roughness = 1.0;
+        material.base.fog_enabled = false;
+
         material
+    }
+
+    fn convert_blend_entry(&self, entry: &TransformEntry, lookup: &HashMap<u32, u16>) -> Option<(u16, f32)> {
+        lookup.get(&entry.transform_ref).map(|&joint_id| (joint_id, entry.weight))
+    }
+
+    fn process_blend(&self, blend: &TransformBlend, lookup: &HashMap<u32, u16>) -> ([u16; 4], [f32; 4]) {
+        let mut indices = [0u16; 4];
+        let mut weights = [0f32; 4];
+
+        // First sort entries by weight
+        let mut entries: Vec<_> =
+            blend.entries.iter().filter_map(|entry| self.convert_blend_entry(entry, lookup)).collect();
+        entries.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+
+        // Take first 4 entries after sorting
+        for (i, &(joint_id, weight)) in entries.iter().take(4).enumerate() {
+            indices[i] = joint_id;
+            weights[i] = weight;
+        }
+
+        // Normalize weights
+        let total: f32 = weights.iter().sum();
+        if total > 0.0 {
+            weights.iter_mut().for_each(|w| *w /= total);
+        }
+
+        (indices, weights)
+    }
+
+    fn build_joint_lookup(
+        &self, blend_table: &TransformBlendTable, world: &World, joint_data: Option<&SkinnedMesh>,
+    ) -> Option<HashMap<u32, u16>> {
+        let mut lookup = HashMap::new();
+        let joint_data = joint_data?;
+
+        for transform in &blend_table.blends {
+            for entry in &transform.entries {
+                if lookup.contains_key(&entry.transform_ref) {
+                    continue;
+                }
+
+                // Get the joint vertex transform
+                let vertex_transform =
+                    match self.nodes.get_as::<JointVertexTransform>(entry.transform_ref as usize) {
+                        Some(node) => node,
+                        None => {
+                            warn!(name: "not_a_joint_vertex_transform", target: "Panda3DLoader",
+                            "Expected JointVertexTransform for node {}, ignoring.", entry.transform_ref);
+                            continue;
+                        }
+                    };
+
+                // Get the character joint
+                let joint = match self.nodes.get_as::<CharacterJoint>(vertex_transform.joint_ref as usize) {
+                    Some(node) => node,
+                    None => {
+                        warn!(name: "not_a_character_joint", target: "Panda3DLoader",
+                            "Expected CharacterJoint for node {}, ignoring.", vertex_transform.joint_ref);
+                        continue;
+                    }
+                };
+
+                // Find matching joint in joint_data
+                for (joint_id, &entity) in joint_data.joints.iter().enumerate() {
+                    if **world.entity(entity).get::<Name>().unwrap() == *joint.name {
+                        lookup.insert(entry.transform_ref, joint_id as u16);
+                        break;
+                    }
+                }
+            }
+        }
+
+        Some(lookup)
+    }
+
+    fn create_mesh(
+        &self, loader: &mut AssetLoaderData<'_, '_>, joint_data: Option<&SkinnedMesh>, entity: Entity,
+        geom_ref: usize, geom_node: &Geom,
+    ) -> Result<Mesh, Panda3DError> {
+        // We already handle primitive_type by what type the node_ref is, and we theoretically account for
+        // Smooth shading because the mesh already has flat normals calculated. TODO: verify this?
+        if geom_node.primitive_refs.len() != 1 {
+            warn!(name: "too_many_primitives", target: "Panda3DLoader",
+                "More than one primitive is attached to node {}, please fix!", geom_ref);
+        }
+        if geom_node.bounds_type != BoundsType::Default {
+            warn!(name: "bounds_type_unhandled", target: "Panda3DLoader",
+                "Geom node {} has a unique BoundsType that isn't being handled, ignoring.", geom_ref);
+        }
+
+        // First, let's grab the GeomVertexData.
+        let node_index = geom_node.data_ref as usize;
+        let vertex_data = self
+            .nodes
+            .get_as::<GeomVertexData>(node_index)
+            .context(WrongNodeSnafu { node_index, node_type: "GeomVertexData" })?;
+
+        // Then, grab the GeomVertexFormat.
+        let node_index = vertex_data.format_ref as usize;
+        let vertex_format = self
+            .nodes
+            .get_as::<GeomVertexFormat>(node_index)
+            .context(WrongNodeSnafu { node_index, node_type: "GeomVertexFormat" })?;
+
+        // Finally, let's grab the GeomPrimitive.
+        let node_index = geom_node.primitive_refs[0] as usize;
+        let primitive = self
+            .nodes
+            .get_as::<GeomPrimitive>(node_index)
+            .context(WrongNodeSnafu { node_index, node_type: "GeomPrimitive" })?;
+
+        let topology = if geom_node.geom_rendering.contains(GeomRendering::TriangleStrip) {
+            PrimitiveTopology::TriangleStrip
+        } else if geom_node.geom_rendering.is_empty() {
+            PrimitiveTopology::TriangleList
+        } else {
+            warn!(name: "unexpected_rendering_flags", target: "Panda3DLoader",
+                "Unknown geometry rendering type: {:?}, defaulting to TriangleList", geom_node.geom_rendering);
+            PrimitiveTopology::TriangleList
+        };
+
+        let mut mesh = Mesh::new(topology, RenderAssetUsages::default());
+
+        match primitive.vertices_ref {
+            // If we have an associated ArrayData, then this polygon is indexed, so we need to read it
+            Some(index) => {
+                let array_data =
+                    self.nodes.get_as::<GeomVertexArrayData>(index as usize).context(WrongNodeSnafu {
+                        node_index: index as usize,
+                        node_type: "GeomVertexArrayData",
+                    })?;
+
+                let node_index = array_data.array_format_ref as usize;
+                let array_format = self
+                    .nodes
+                    .get_as::<GeomVertexArrayFormat>(node_index)
+                    .context(WrongNodeSnafu { node_index, node_type: "GeomVertexArrayFormat" })?;
+
+                if array_format.num_columns != 1 {
+                    warn!(name: "too_many_array_columns", target: "Panda3DLoader",
+                        "Too many columns in GeomVertexArrayFormat {}, ignoring.", array_data.array_format_ref as usize);
+                }
+
+                // Grab the column, and validate that it's what we expect.
+                let column = &array_format.columns[0];
+                let node_index = column.name_ref as usize;
+                let internal_name = self
+                    .nodes
+                    .get_as::<InternalName>(column.name_ref as usize)
+                    .context(WrongNodeSnafu { node_index, node_type: "InternalName" })?;
+
+                ensure!(
+                    column.numeric_type == NumericType::U16
+                        && column.contents == Contents::Index
+                        && internal_name.name == "index",
+                    UnexpectedDataSnafu { node_index },
+                );
+
+                let mut data = DataCursorRef::new(&array_data.buffer, Endian::Little);
+                let mut indices = Vec::with_capacity(data.len().unwrap() as usize / 2);
+                for _ in 0..indices.capacity() {
+                    indices.push(data.read_u16()?);
+                }
+                mesh.insert_indices(Indices::U16(indices));
+            }
+            // Otherwise, we need to generate indices ourselves
+            None => {
+                // TODO: make sure this is robust?
+                let start = primitive.first_vertex as u32;
+                let end = match primitive.num_vertices {
+                    -1 => {
+                        if let Some(ends_ref) = primitive.ends_ref {
+                            let ends = &self.arrays[ends_ref as usize];
+                            ensure!(
+                                ends.len() == 1,
+                                UnexpectedDataSnafu { node_index: geom_node.primitive_refs[0] as usize }
+                            );
+                            ends[0]
+                        } else {
+                            return Err(Panda3DError::UnexpectedData {
+                                node_index: geom_node.primitive_refs[0] as usize,
+                            });
+                        }
+                    }
+                    num_vertices => num_vertices as u32,
+                };
+                mesh.insert_indices(Indices::U32((start..start + end).collect()));
+            }
+        }
+
+        // Now let's process the sub-arrays. We always have at least one, containing the actual mesh data.
+        let node_index = vertex_data.array_refs[0] as usize;
+        let array_data = self
+            .nodes
+            .get_as::<GeomVertexArrayData>(node_index)
+            .context(WrongNodeSnafu { node_index, node_type: "GeomVertexArrayData" })?;
+
+        let node_index = vertex_format.array_refs[0] as usize;
+        let array_format = self
+            .nodes
+            .get_as::<GeomVertexArrayFormat>(node_index)
+            .context(WrongNodeSnafu { node_index, node_type: "GeomVertexArrayFormat" })?;
+
+        // Let's manually calculate the number of polygons/primitives, since it's a bit of a mess otherwise.
+        let num_primitives = array_data.buffer.len() as u64 / u64::from(array_format.stride);
+        let mut data = DataCursorRef::new(&array_data.buffer, Endian::Little);
+        for column in &array_format.columns {
+            let node_index = column.name_ref as usize;
+            let internal_name = self
+                .nodes
+                .get_as::<InternalName>(node_index)
+                .context(WrongNodeSnafu { node_index, node_type: "InternalName" })?;
+
+            match internal_name.name.as_str() {
+                "vertex" => {
+                    // Note: this can be 4D homogenous space, if it is we just ignore the 4th float which is
+                    // 1.0.
+                    if (column.num_components != 3 && column.num_components != 4)
+                        || column.numeric_type != NumericType::F32
+                        || column.contents != Contents::Point
+                    {
+                        warn!(name: "unexpected_vertex_type", target: "Panda3DLoader",
+                            "Tried to parse vertex data on node {}, but encountered unexpected data, ignoring.", vertex_data.array_refs[0]);
+                        continue;
+                    }
+
+                    let mut vertex_data = Vec::with_capacity(num_primitives as usize);
+                    for n in 0..num_primitives {
+                        // We have a stride to worry about
+                        data.set_position(u64::from(column.start) + u64::from(array_format.stride) * n)?;
+                        vertex_data.push([data.read_f32()?, data.read_f32()?, data.read_f32()?]);
+                    }
+                    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, vertex_data);
+                }
+                "texcoord" => {
+                    if column.num_components != 2
+                        || column.numeric_type != NumericType::F32
+                        || column.contents != Contents::TexCoord
+                    {
+                        warn!(name: "unexpected_texcoord_type", target: "Panda3DLoader",
+                            "Tried to parse texcoord data on node {}, but encountered unexpected data, ignoring.", vertex_data.array_refs[0]);
+                        continue;
+                    }
+
+                    let mut texcoord_data = Vec::with_capacity(num_primitives as usize);
+                    for n in 0..num_primitives {
+                        // We have a stride to worry about
+                        data.set_position(u64::from(array_format.stride) * n + u64::from(column.start))?;
+
+                        // Panda3D stores flipped Y values to support OpenGL, so we do 1.0 - value.
+                        texcoord_data.push([data.read_f32()?, 1.0 - data.read_f32()?]);
+                    }
+                    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, texcoord_data);
+                }
+                _ => warn!(name: "unexpected_column_type", target: "Panda3DLoader",
+                    "Unexpected Column Type Encountered: {}, ignoring.", internal_name.name),
+            }
+        }
+
+        // Now that we've handled base data, let's check all other tables.
+        let mut tables_read = 1;
+        if let Some(_node_index) = vertex_data.transform_table_ref {
+            warn!(name: "unsupported_transform_table", target: "Panda3DLoader",
+                "Vertex Data {} has a TransformTable, please fix!", geom_node.data_ref);
+            tables_read += 1;
+        }
+
+        // if vertex_data.has_column("transform_blend") && joint_map.is_some() &&
+        // transform_blend_table.is_some() do shit; TODO make a reader for
+        // GeomVertexColumn::Packer::get_data1i that uses a match instead of hardcoded bullshit. Follow
+        // EggSaver::convert_primitive more closely.
+        if let Some(node_index) = vertex_data.transform_blend_table_ref {
+            let blend_table =
+                self.nodes.get_as::<TransformBlendTable>(node_index as usize).context(WrongNodeSnafu {
+                    node_index: node_index as usize,
+                    node_type: "TransformBlendTable",
+                })?;
+
+            // We first need to build a HashMap lookup that maps this BAM's ObjectID->Joint Index, so we can
+            // take a shortcut when filling out ATTRIBUTE_JOINT_WEIGHT and ATTRIBUTE_JOINT_INDEX.
+            //
+            // We have to walk the TransformBlendTable twice, but the number of joints is less than the number
+            // of blend combinations, so this should overall save time.
+            let Some(lookup) = self.build_joint_lookup(blend_table, loader.world, joint_data) else {
+                warn!(name: "joint_data_missing", target: "Panda3DLoader",
+                    "No joint data available for mesh with blend table, ignoring.");
+                return Ok(mesh);
+            };
+
+            // Process blend data ahead of time for each unique blend
+            let transforms: Vec<([u16; 4], [f32; 4])> =
+                blend_table.blends.iter().map(|blend| self.process_blend(blend, &lookup)).collect();
+
+            // Read node's array data to get blend indices
+            let array_data = self
+                .nodes
+                .get_as::<GeomVertexArrayData>(vertex_data.array_refs[tables_read] as usize)
+                .context(WrongNodeSnafu {
+                    node_index: vertex_data.array_refs[tables_read] as usize,
+                    node_type: "GeomVertexArrayData",
+                })?;
+
+            let node_index = array_data.array_format_ref as usize;
+            let array_format = self
+                .nodes
+                .get_as::<GeomVertexArrayFormat>(node_index)
+                .context(WrongNodeSnafu { node_index, node_type: "GeomVertexArrayFormat" })?;
+
+            let mut data = DataCursorRef::new(&array_data.buffer, Endian::Little);
+            let mut blend_lookup = vec![[0u16; 4]; num_primitives as usize];
+            let mut blend_table = vec![[0f32; 4]; num_primitives as usize];
+
+            for n in 0..num_primitives {
+                data.set_position(u64::from(array_format.stride) * n)?;
+                let lookup_id = data.read_u16()? as usize;
+                blend_lookup[n as usize] = transforms[lookup_id].0;
+                blend_table[n as usize] = transforms[lookup_id].1;
+            }
+
+            /*mesh.insert_attribute(
+                Mesh::ATTRIBUTE_JOINT_INDEX,
+                VertexAttributeValues::Uint16x4(blend_lookup),
+            );
+            mesh.insert_attribute(
+                Mesh::ATTRIBUTE_JOINT_WEIGHT,
+                VertexAttributeValues::Float32x4(blend_table),
+            );
+            if let Some(joint_data) = joint_data {
+                loader.world.entity_mut(entity).insert(joint_data.clone());
+            }*/
+
+            tables_read += 1;
+        }
+        Ok(mesh)
     }
 }
 
@@ -869,7 +1240,13 @@ impl AssetLoader for Panda3DLoader {
                 image_cache: HashMap::new(),
             };
 
-            block_on(bam.recurse_nodes(&mut loader, None, None, None, None, 0));
+            // Let's first pull out the root node, since it's a placeholder.
+            let Some(root_node) = bam.nodes.get_as::<ModelNode>(0) else {
+                warn!(name: "not_a_model_node", target: "Panda3DLoader", "Root Node isn't a ModelNode! Aborting loading.");
+                return Scene::new(world);
+            };
+
+            block_on(bam.recurse_nodes(&mut loader, None, None, None, None, root_node.child_refs[0].0 as usize));
 
             Scene::new(world)
         });
