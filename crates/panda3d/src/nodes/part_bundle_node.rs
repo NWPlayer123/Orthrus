@@ -27,6 +27,29 @@ impl PartBundleNode {
     }
 }
 
+impl GraphDisplay for PartBundleNode {
+    fn write_data(
+        &self, label: &mut impl core::fmt::Write, connections: &mut Vec<u32>, is_root: bool,
+    ) -> Result<(), bam::Error> {
+        // Header
+        if is_root {
+            write!(label, "{{PartBundleNode|")?;
+        }
+
+        // Fields
+        self.inner.write_data(label, connections, false)?;
+        for reference in &self.bundle_refs {
+            connections.push(*reference);
+        }
+
+        // Footer
+        if is_root {
+            write!(label, "}}")?;
+        }
+        Ok(())
+    }
+}
+
 impl Deref for PartBundleNode {
     type Target = PandaNode;
 

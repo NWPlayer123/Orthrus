@@ -115,3 +115,30 @@ impl Default for SamplerState {
         }
     }
 }
+
+impl GraphDisplay for SamplerState {
+    fn write_data(
+        &self, label: &mut impl core::fmt::Write, _connections: &mut Vec<u32>, _is_root: bool,
+    ) -> Result<(), bam::Error> {
+        // Header
+        write!(label, "{{SamplerState|{{")?;
+
+        // Fields
+        write!(
+            label,
+            "wrap: [{:?}, {:?}, {:?}]|",
+            self.wrap_u, self.wrap_v, self.wrap_w
+        )?;
+        write!(label, "min_filter: {:?}|", self.min_filter)?;
+        write!(label, "mag_filter: {:?}|", self.mag_filter)?;
+        write!(label, "aniso_degree: {:?}|", self.aniso_degree)?;
+        write!(label, "border_color: {}|", self.border_color)?;
+        write!(label, "min_lod: {}|", self.min_lod)?;
+        write!(label, "max_lod: {}|", self.max_lod)?;
+        write!(label, "lod_bias: {}", self.lod_bias)?;
+
+        // Footer
+        write!(label, "}}}}")?;
+        Ok(())
+    }
+}

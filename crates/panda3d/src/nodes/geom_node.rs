@@ -29,6 +29,30 @@ impl Node for GeomNode {
     }
 }
 
+impl GraphDisplay for GeomNode {
+    fn write_data(
+        &self, label: &mut impl core::fmt::Write, connections: &mut Vec<u32>, is_root: bool,
+    ) -> Result<(), bam::Error> {
+        // Header
+        if is_root {
+            write!(label, "{{GeomNode|")?;
+        }
+
+        // Fields
+        self.inner.write_data(label, connections, false)?;
+        for reference in &self.geom_refs {
+            connections.push(reference.0);
+            connections.push(reference.1);
+        }
+
+        // Footer
+        if is_root {
+            write!(label, "}}")?;
+        }
+        Ok(())
+    }
+}
+
 impl Deref for GeomNode {
     type Target = PandaNode;
 

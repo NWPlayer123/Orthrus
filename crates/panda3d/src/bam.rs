@@ -15,7 +15,7 @@
 //! # Revisions
 
 #[cfg(feature = "std")]
-use std::path::Path;
+use std::{io::prelude::*, path::Path};
 
 use bevy_tasks::block_on;
 use hashbrown::HashMap;
@@ -31,6 +31,9 @@ use crate::nodes::prelude::*;
 #[derive(Debug, Snafu)]
 #[non_exhaustive]
 pub enum Error {
+    #[snafu(display("Formatting Error {source}"))]
+    FormatError { source: core::fmt::Error },
+
     /// Thrown if a [`std::io::Error`] happened when trying to read/write files.
     #[snafu(display("Filesystem Error {source}"))]
     FileError { source: std::io::Error },
@@ -58,6 +61,13 @@ pub enum Error {
     /// Thrown if unable to downcast to a specific type.
     #[snafu(display("Node is not of type {type_name}"))]
     InvalidType { type_name: &'static str },
+}
+
+impl From<core::fmt::Error> for Error {
+    #[inline]
+    fn from(source: core::fmt::Error) -> Self {
+        Self::FormatError { source }
+    }
 }
 
 #[cfg(feature = "std")]
@@ -160,7 +170,7 @@ pub struct BinaryAsset {
     /// Used if there are more than 65535 Pointer to Array IDs
     pub(crate) long_pta_id: bool,
     pub(crate) type_registry: HashMap<u16, String>,
-    pub(crate) nodes: NodeStorage,
+    pub nodes: NodeStorage,
     pub(crate) arrays: Vec<Vec<u32>>,
 }
 
@@ -414,4 +424,79 @@ impl BinaryAsset {
         self.nodes.push(node);
         Ok(())
     }
+}
+
+#[cfg(feature = "std")]
+pub struct GraphWriter {
+    file: std::fs::File,
+}
+
+impl GraphWriter {
+    fn new<P: AsRef<Path>>(path: P) -> std::io::Result<Self> {
+        let mut file = std::fs::File::create(&path)?;
+
+        let graph_name = path.as_ref().file_stem().and_then(|s| s.to_str()).unwrap_or("graph");
+
+        writeln!(file, "digraph \"{}\" {{", graph_name)?;
+        //writeln!(file, "    graph [rankdir=LR]")?;
+        writeln!(
+            file,
+            "    node [shape=record, style=rounded, fontname=\"Consolas\", fontsize=20]"
+        )?;
+        writeln!(file)?;
+
+        Ok(GraphWriter { file })
+    }
+
+    fn write_line(&mut self, line: &str) -> std::io::Result<()> {
+        writeln!(self.file, "    {}", line)
+    }
+
+    fn write_edge(&mut self, from: &str, to: &str, label: Option<&str>) -> std::io::Result<()> {
+        match label {
+            Some(l) => self.write_line(&format!("{} -> {} [label=\"{}\"];", from, to, l)),
+            None => self.write_line(&format!("{} -> {};", from, to)),
+        }
+    }
+
+    fn write_node(&mut self, name: &str, label: Option<&str>) -> std::io::Result<()> {
+        match label {
+            Some(l) => self.write_line(&format!("{} [label=\"{}\"];", name, l)),
+            None => self.write_line(&format!("{};", name)),
+        }
+    }
+
+    fn close(mut self) -> std::io::Result<()> {
+        writeln!(self.file, "}}")
+    }
+
+    pub fn write_nodes<P: AsRef<Path>>(nodes: &NodeStorage, path: P) -> Result<(), Error> {
+        let mut graph_writer = Self::new(path)?;
+
+        for n in 0..nodes.len() {
+            let node = nodes.get(n).unwrap();
+            let mut label = String::new();
+            let mut connections = Vec::new();
+            node.write_graph_data(&mut label, &mut connections)?;
+            let name = format!("node_{}", n);
+            graph_writer.write_node(&name, Some(&label))?;
+            for connection in connections {
+                let to = format!("node_{}", connection);
+                graph_writer.write_edge(&name, &to, None)?;
+            }
+        }
+
+        graph_writer.close()?;
+        Ok(())
+    }
+}
+
+// TODO: stuff I can already see, it would be nice to add labels to connections (&mut Vec<(u32, &'static
+// str)>), and it would be nice to have read access to NodeStorage so we can get std::any::type_name() for
+// NodePath
+#[cfg(feature = "std")]
+pub trait GraphDisplay {
+    fn write_data(
+        &self, label: &mut impl core::fmt::Write, connections: &mut Vec<u32>, is_root: bool,
+    ) -> Result<(), Error>;
 }

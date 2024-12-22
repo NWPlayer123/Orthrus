@@ -35,6 +35,34 @@ impl TransformBlend {
     }
 }
 
+impl GraphDisplay for TransformBlend {
+    fn write_data(
+        &self, label: &mut impl core::fmt::Write, _connections: &mut Vec<u32>, _is_root: bool,
+    ) -> Result<(), bam::Error> {
+        // Header
+        write!(label, "{{TransformBlend|")?;
+
+        // Fields
+        let mut first = true;
+        for entry in &self.entries {
+            if !first {
+                write!(label, "|")?;
+            }
+            //connections.push(entry.transform_ref);
+            write!(
+                label,
+                "{{transform: {}|weight: {}}}",
+                entry.transform_ref, entry.weight
+            )?;
+            first = false;
+        }
+
+        // Footer
+        write!(label, "}}")?;
+        Ok(())
+    }
+}
+
 impl Deref for TransformBlend {
     type Target = Vec<TransformEntry>;
 

@@ -34,3 +34,25 @@ impl CollisionSolid {
         Ok(Self { flags, effective_normal })
     }
 }
+
+impl GraphDisplay for CollisionSolid {
+    fn write_data(
+        &self, label: &mut impl core::fmt::Write, _connections: &mut Vec<u32>, is_root: bool,
+    ) -> Result<(), bam::Error> {
+        // Header
+        if is_root {
+            write!(label, "{{CollisionSolid|")?;
+        }
+
+        // Fields
+        let flags = self.flags.iter_names().map(|(name, _)| name).collect::<Vec<_>>().join(", ");
+        write!(label, "flags: [{}]", flags)?;
+        write!(label, "|effective_normal: {}", self.effective_normal)?;
+
+        // Footer
+        if is_root {
+            write!(label, "}}")?;
+        }
+        Ok(())
+    }
+}

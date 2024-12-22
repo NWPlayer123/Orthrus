@@ -31,3 +31,37 @@ impl Node for GeomVertexArrayFormat {
         Ok(Self { stride, total_bytes, pad_to, divisor, num_columns, columns })
     }
 }
+
+impl GraphDisplay for GeomVertexArrayFormat {
+    fn write_data(
+        &self, label: &mut impl core::fmt::Write, connections: &mut Vec<u32>, is_root: bool,
+    ) -> Result<(), bam::Error> {
+        // Header
+        if is_root {
+            write!(label, "{{GeomVertexArrayFormat|")?;
+        }
+
+        // Fields
+        write!(label, "stride: {:#06X}|", self.stride)?;
+        write!(label, "total_bytes: {:#06X}|", self.total_bytes)?;
+        write!(label, "pad_to: {:#04X}|", self.pad_to)?;
+        write!(label, "divisor: {:#06X}|", self.divisor)?;
+        write!(label, "num_columns: {:#06X}|", self.num_columns)?;
+        write!(label, "{{columns|")?;
+        let mut first = true;
+        for column in &self.columns {
+            if !first {
+                write!(label, "|")?;
+            }
+            column.write_data(label, connections, false)?;
+            first = false;
+        }
+        write!(label, "}}")?;
+
+        // Footer
+        if is_root {
+            write!(label, "}}")?;
+        }
+        Ok(())
+    }
+}

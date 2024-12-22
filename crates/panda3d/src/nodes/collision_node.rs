@@ -31,6 +31,30 @@ impl Node for CollisionNode {
     }
 }
 
+impl GraphDisplay for CollisionNode {
+    fn write_data(
+        &self, label: &mut impl core::fmt::Write, connections: &mut Vec<u32>, is_root: bool,
+    ) -> Result<(), bam::Error> {
+        // Header
+        if is_root {
+            write!(label, "{{CollisionNode|")?;
+        }
+
+        // Fields
+        self.inner.write_data(label, connections, false)?;
+        for reference in &self.solid_refs {
+            connections.push(*reference);
+        }
+        write!(label, "|collide_mask: {:#010X}", self.collide_mask)?;
+
+        // Footer
+        if is_root {
+            write!(label, "}}")?;
+        }
+        Ok(())
+    }
+}
+
 impl Deref for CollisionNode {
     type Target = PandaNode;
 

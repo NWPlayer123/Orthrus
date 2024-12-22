@@ -9,3 +9,13 @@ impl Node for DecalEffect {
         Ok(Self {})
     }
 }
+
+impl GraphDisplay for DecalEffect {
+    fn write_data(
+        &self, label: &mut impl core::fmt::Write, _connections: &mut Vec<u32>, _is_root: bool,
+    ) -> Result<(), bam::Error> {
+        // This has no fields, let's just use one write
+        write!(label, "{{DecalEffect}}")?;
+        Ok(())
+    }
+}

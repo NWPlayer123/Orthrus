@@ -194,16 +194,13 @@ impl BinaryAsset {
                 // net nodes we spawned to add an [`AnimationTarget`]. TODO: make a
                 // non-recursive function to simplify this mess?
                 let mut net_nodes = BTreeMap::new();
-                let (inverse_bindposes, joints) = self
-                    .convert_joint_bundle(
-                        loader.world,
-                        entity,
-                        None,
-                        &mut net_nodes,
-                        None,
-                        node.bundle_refs[0] as usize,
-                    )
-                    .await;
+                let (inverse_bindposes, joints) = self.convert_joint_bundle(
+                    loader.world,
+                    entity,
+                    None,
+                    &mut net_nodes,
+                    node.bundle_refs[0] as usize,
+                );
 
                 // TODO: migrate to bevy_gltf's new enum-based system so this is less dumb
                 let label = format!("Bindpose{}", loader.assets.bindposes.len());
@@ -277,7 +274,7 @@ impl BinaryAsset {
 
     /// Constructs a [`Transform`] from a given `TransformState`. Used for any node that inherits from
     /// `PandaNode`.
-    async fn handle_transform_state(&self, node_index: usize) -> Transform {
+    fn handle_transform_state(&self, node_index: usize) -> Transform {
         if let Some(node) = self.nodes.get_as::<TransformState>(node_index) {
             if node.flags.contains(TransformFlags::Identity) {
                 Transform::default()
@@ -328,7 +325,7 @@ impl BinaryAsset {
         }
 
         // Handle our Transform so we can spawn a new entity
-        let transform = self.handle_transform_state(node.transform_ref as usize).await;
+        let transform = self.handle_transform_state(node.transform_ref as usize);
 
         // We only see what data is attached to a RenderEffects so we can pass it down to child nodes, TODO:
         // figure out proper inheritance
@@ -366,9 +363,9 @@ impl BinaryAsset {
 
     /// Recursively converts a CharacterJointBundle into the data needed for animating [`SkinnedMesh`]es, as
     /// well as any associated net_nodes.
-    async fn convert_joint_bundle(
+    fn convert_joint_bundle(
         &self, world: &mut World, parent: Entity, animation_context: Option<AnimationContext>,
-        net_nodes: &mut BTreeMap<usize, Entity>, parent_transform: Option<Mat4>, node_index: usize,
+        net_nodes: &mut BTreeMap<usize, Entity>, node_index: usize,
     ) -> (Vec<Mat4>, Vec<Entity>) {
         let mut inverse_bindposes = Vec::new();
         let mut joints = Vec::new();
@@ -376,8 +373,12 @@ impl BinaryAsset {
         match self.nodes.get(node_index) {
             Some(NodeRef::PartBundle(node)) => {
                 // We're at a PartBundle/CharacterJointBundle, which means we're attached to a Character and
-                // have a skeleton below us. We need to combine this with the PartGroup under us, so we'll
-                // grab that and spawn them as one Entity.
+                // are the root node of a skeleton. We'll need to attach the AnimationPlayer to our parent
+                // (the Character) Entity so our AnimationPath includes it, which may otherwise have
+                // unexpected side effects when trying to play animations on nodes that share a name.
+
+                // Let's start by validating the PartBundle, which should share the same name as the Character
+                // above us.
                 if node.anim_preload_ref.is_some()
                     || node.blend_type != BlendType::NormalizedLinear
                     || node.anim_blend_flag
@@ -393,56 +394,54 @@ impl BinaryAsset {
                         "Unexpected number of child nodes on PartBundle node {}, ignoring.", node_index);
                 }
 
+                // Let's also grab the PartGroup so we can make sure it's what we expect.
                 let Some(part_group) = self.nodes.get_as::<PartGroup>(node.child_refs[0] as usize) else {
                     warn!(name: "not_a_part_group", target: "Panda3DLoader",
                         "Tried to get node {}, but it wasn't a PartGroup. Unable to create joints, returning.", node.child_refs[0]);
                     return (inverse_bindposes, joints);
                 };
 
-                // Create a new node that will serve as the base of any animations we want to play. TODO:
-                // remove this, as it's not present in .egg
                 if part_group.name != "<skeleton>" {
                     warn!(name: "unexpected_part_group_name", target: "Panda3DLoader",
                         "Encountered a PartGroup that wasn't named <skeleton>, node {}. This model may not be imported correctly.", node.child_refs[0]);
                 }
-                if node.root_transform != Mat4::default() {
-                    warn!(name: "non-zero_skeleton", target: "Panda3DLoader",
-                        "Non-zero transform on the skeleton! Ignoring.", node);
-                }
-                /*let name = Name::new(part_group.name.clone());
+
+                // We first need to create a new AnimationPlayer and attach it to our parent. It cannot have
+                // animation tables assigned to itself, so we'll only add an AnimationTarget to the skeleton
+                // on down.
+                world.entity_mut(parent).insert(AnimationPlayer::default());
+
+                let parent_name = Name::new(node.name.clone());
+                let name = Name::new(part_group.name.clone());
+                let animation_context =
+                    AnimationContext { root: parent, path: smallvec![parent_name, name.clone()] };
+
                 let skeleton = world
                     .spawn((
-                        AnimationPlayer::default(),
+                        AnimationTarget {
+                            id: AnimationTargetId::from_names(animation_context.path.iter()),
+                            player: animation_context.root,
+                        },
                         Transform::from_matrix(node.root_transform),
                         Visibility::default(),
                         name.clone(),
                     ))
-                    .id();*/
+                    .id();
 
                 // Make sure to parent it correctly
-                //world.entity_mut(parent).add_child(skeleton);
+                world.entity_mut(parent).add_child(skeleton);
 
                 inverse_bindposes.push(node.root_transform.inverse());
                 joints.push(skeleton);
 
-                // We know this is the root, so create a new `AnimationContext` to keep track of
-                // everything, and create a new AnimationTarget
-                let animation_context = AnimationContext { root: skeleton, path: smallvec![name] };
-                world.entity_mut(skeleton).insert(AnimationTarget {
-                    id: AnimationTargetId::from_names(animation_context.path.iter()),
-                    player: animation_context.root,
-                });
-
                 for child_ref in &part_group.child_refs {
-                    let (child_inverse_bindposes, child_joints) = Box::pin(self.convert_joint_bundle(
+                    let (child_inverse_bindposes, child_joints) = self.convert_joint_bundle(
                         world,
                         skeleton,
                         Some(animation_context.clone()),
                         net_nodes,
-                        None,
                         *child_ref as usize,
-                    ))
-                    .await;
+                    );
                     inverse_bindposes.extend(child_inverse_bindposes);
                     joints.extend(child_joints);
                 }
@@ -450,24 +449,10 @@ impl BinaryAsset {
             Some(NodeRef::CharacterJoint(node)) => {
                 // We're at an actual skeletal joint.
 
-                // Calculate net_transform based on whether this is a toplevel joint or not
-                let net_transform = if let Some(parent_transform) = parent_transform {
-                    // Child joint: net_transform = value * parent_net_transform
-                    node.default_value * parent_transform
-                } else {
-                    // Toplevel joint: Already has the correct transform from default_value
-                    node.default_value
-                };
-
-                println!(
-                    "{}",
-                    net_transform.inverse() == node.initial_net_transform_inverse
-                );
-
                 let name = Name::new(node.name.clone());
                 let joint = world
                     .spawn((
-                        Transform::from_matrix(net_transform),
+                        Transform::from_matrix(node.default_value),
                         Visibility::default(),
                         name.clone(),
                     ))
@@ -476,7 +461,7 @@ impl BinaryAsset {
                 // Make sure to parent it correctly
                 world.entity_mut(parent).add_child(joint);
 
-                inverse_bindposes.push(net_transform.inverse());
+                inverse_bindposes.push(node.initial_net_transform_inverse);
                 joints.push(joint);
 
                 // We should always have a valid AnimationContext, and if we don't, we have bigger worries.
@@ -499,7 +484,7 @@ impl BinaryAsset {
                     // doesn't have a mesh. We'll handle its effects and etc once we encounter it normally
                     // in the tree.
                     let name = Name::new(node.name.clone());
-                    let transform = self.handle_transform_state(node.transform_ref as usize).await;
+                    let transform = self.handle_transform_state(node.transform_ref as usize);
                     // Make sure we don't pollute our parent's context
                     let mut animation_context = animation_context.clone();
                     animation_context.path.push(name.clone());
@@ -519,15 +504,15 @@ impl BinaryAsset {
                 }
 
                 for child_ref in &node.child_refs {
-                    Box::pin(self.convert_joint_bundle(
+                    let (child_inverse_bindposes, child_joints) = self.convert_joint_bundle(
                         world,
                         joint,
                         Some(animation_context.clone()),
                         net_nodes,
-                        Some(net_transform),
                         *child_ref as usize,
-                    ))
-                    .await;
+                    );
+                    inverse_bindposes.extend(child_inverse_bindposes);
+                    joints.extend(child_joints);
                 }
             }
             Some(node) => println!("Unexpected node {:?} in convert_joint_bundle", node),
@@ -566,11 +551,6 @@ impl BinaryAsset {
         loader.assets.materials.push(material.clone());
 
         // TODO: remove unwrap
-        /*println!(
-            "Building up Mesh {}, {}",
-            loader.assets.meshes.len(),
-            geom_node.name
-        );*/
         let label = format!("Mesh{}", loader.assets.meshes.len());
         let mesh = self.create_mesh(loader, joint_data, entity, geom_ref, geom_node).unwrap();
         let mesh = loader.context.labeled_asset_scope(label, |_| mesh);
@@ -1170,7 +1150,7 @@ impl BinaryAsset {
                 blend_table[n as usize] = transforms[lookup_id].1;
             }
 
-            /*mesh.insert_attribute(
+            mesh.insert_attribute(
                 Mesh::ATTRIBUTE_JOINT_INDEX,
                 VertexAttributeValues::Uint16x4(blend_lookup),
             );
@@ -1180,9 +1160,9 @@ impl BinaryAsset {
             );
             if let Some(joint_data) = joint_data {
                 loader.world.entity_mut(entity).insert(joint_data.clone());
-            }*/
+            }
 
-            tables_read += 1;
+            //tables_read += 1;
         }
         Ok(mesh)
     }

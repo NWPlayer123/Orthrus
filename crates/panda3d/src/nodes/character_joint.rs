@@ -46,6 +46,43 @@ impl Node for CharacterJoint {
     }
 }
 
+impl GraphDisplay for CharacterJoint {
+    fn write_data(
+        &self, label: &mut impl core::fmt::Write, connections: &mut Vec<u32>, is_root: bool,
+    ) -> Result<(), bam::Error> {
+        // Header
+        if is_root {
+            write!(label, "{{CharacterJoint|")?;
+        }
+
+        // Fields
+        self.inner.write_data(label, connections, false)?;
+        if let Some(character_ref) = self.character_ref {
+            connections.push(character_ref);
+        }
+        for reference in &self.net_node_refs {
+            connections.push(*reference);
+        }
+        for reference in &self.local_node_refs {
+            connections.push(*reference);
+        }
+        write!(
+            label,
+            "|{{initial_net_transform_inverse|{}\\n{}\\n{}\\n{}}}",
+            self.initial_net_transform_inverse.w_axis,
+            self.initial_net_transform_inverse.x_axis,
+            self.initial_net_transform_inverse.y_axis,
+            self.initial_net_transform_inverse.z_axis
+        )?;
+
+        // Footer
+        if is_root {
+            write!(label, "}}")?;
+        }
+        Ok(())
+    }
+}
+
 impl Deref for CharacterJoint {
     type Target = MovingPartMatrix;
 

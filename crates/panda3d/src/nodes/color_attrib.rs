@@ -47,3 +47,20 @@ impl Node for ColorAttrib {
         Ok(attrib)
     }
 }
+
+impl GraphDisplay for ColorAttrib {
+    fn write_data(
+        &self, label: &mut impl core::fmt::Write, _connections: &mut Vec<u32>, _is_root: bool,
+    ) -> Result<(), bam::Error> {
+        // Header
+        write!(label, "{{ColorAttrib|")?;
+
+        // Fields
+        write!(label, "color_type: {:?}|", self.color_type)?;
+        write!(label, "color: {}", self.color)?;
+
+        // Footer
+        write!(label, "}}")?;
+        Ok(())
+    }
+}

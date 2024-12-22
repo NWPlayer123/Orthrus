@@ -23,6 +23,19 @@ impl Node for RenderState {
     }
 }
 
+impl GraphDisplay for RenderState {
+    fn write_data(
+        &self, label: &mut impl core::fmt::Write, connections: &mut Vec<u32>, _is_root: bool,
+    ) -> Result<(), bam::Error> {
+        // This doesn't have any data, write a placeholder
+        write!(label, "{{RenderState|count: {}}}", self.attrib_refs.len())?;
+        for reference in &self.attrib_refs {
+            connections.push(reference.0);
+        }
+        Ok(())
+    }
+}
+
 impl Deref for RenderState {
     type Target = Vec<(u32, i32)>;
 

@@ -42,3 +42,26 @@ impl Node for GeomVertexArrayData {
         Ok(Self { array_format_ref, usage_hint, buffer })
     }
 }
+
+impl GraphDisplay for GeomVertexArrayData {
+    fn write_data(
+        &self, label: &mut impl core::fmt::Write, connections: &mut Vec<u32>, is_root: bool,
+    ) -> Result<(), bam::Error> {
+        // Header
+        if is_root {
+            write!(label, "{{GeomVertexArrayData|")?;
+        }
+
+        // Fields
+        connections.push(self.array_format_ref);
+        write!(label, "usage_hint: {:?}|", self.usage_hint)?;
+        // Don't try to print the buffer data, it's way too big
+        write!(label, "buffer: [...]")?;
+
+        // Footer
+        if is_root {
+            write!(label, "}}")?;
+        }
+        Ok(())
+    }
+}

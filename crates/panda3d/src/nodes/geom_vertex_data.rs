@@ -44,3 +44,36 @@ impl Node for GeomVertexData {
         })
     }
 }
+
+impl GraphDisplay for GeomVertexData {
+    fn write_data(
+        &self, label: &mut impl core::fmt::Write, connections: &mut Vec<u32>, is_root: bool,
+    ) -> Result<(), bam::Error> {
+        // Header
+        if is_root {
+            write!(label, "{{GeomVertexData|")?;
+        }
+        // Fields
+        write!(label, "name: {}|", self.name)?;
+        connections.push(self.format_ref);
+        write!(label, "usage_hint: {:?}", self.usage_hint)?;
+        for reference in &self.array_refs {
+            connections.push(*reference);
+        }
+        if let Some(reference) = self.transform_table_ref {
+            connections.push(reference);
+        }
+        if let Some(reference) = self.transform_blend_table_ref {
+            connections.push(reference);
+        }
+        if let Some(reference) = self.slider_table_ref {
+            connections.push(reference);
+        }
+
+        // Footer
+        if is_root {
+            write!(label, "}}")?;
+        }
+        Ok(())
+    }
+}

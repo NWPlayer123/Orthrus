@@ -40,6 +40,38 @@ impl StageNode {
     }
 }
 
+impl GraphDisplay for StageNode {
+    fn write_data(
+        &self, label: &mut impl core::fmt::Write, connections: &mut Vec<u32>, is_root: bool,
+    ) -> Result<(), bam::Error> {
+        // Header
+        if is_root {
+            write!(label, "{{StageNode")?;
+        }
+
+        // Fields
+        if let Some(sampler) = &self.sampler {
+            if is_root {
+                write!(label, "|")?;
+            }
+            sampler.write_data(label, connections, false)?;
+        }
+        connections.push(self.texture_stage_ref);
+        connections.push(self.texture_ref);
+        if is_root {
+            write!(label, "|")?;
+        }
+        write!(label, "priority: {}", self.priority)?;
+        write!(label, "|implicit_sort: {:#06X}", self.implicit_sort)?;
+
+        // Footer
+        if is_root {
+            write!(label, "}}")?;
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Default)]
 #[allow(dead_code)]
 pub(crate) struct TextureAttrib {
@@ -80,5 +112,32 @@ impl Node for TextureAttrib {
         }
 
         Ok(Self { off_all_stages, off_stage_refs, on_stages })
+    }
+}
+
+impl GraphDisplay for TextureAttrib {
+    fn write_data(
+        &self, label: &mut impl core::fmt::Write, connections: &mut Vec<u32>, is_root: bool,
+    ) -> Result<(), bam::Error> {
+        // Header
+        if is_root {
+            write!(label, "{{TextureAttrib|")?;
+        }
+
+        // Fields
+        write!(label, "off_all_stages: {}", self.off_all_stages)?;
+        for reference in &self.off_stage_refs {
+            connections.push(*reference);
+        }
+        for stage in &self.on_stages {
+            write!(label, "|")?;
+            stage.write_data(label, connections, false)?;
+        }
+
+        // Footer
+        if is_root {
+            write!(label, "}}")?;
+        }
+        Ok(())
     }
 }

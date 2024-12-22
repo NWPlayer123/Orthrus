@@ -23,6 +23,39 @@ impl MovingPartMatrix {
     }
 }
 
+impl GraphDisplay for MovingPartMatrix {
+    fn write_data(
+        &self, label: &mut impl core::fmt::Write, connections: &mut Vec<u32>, is_root: bool,
+    ) -> Result<(), bam::Error> {
+        // Header
+        if is_root {
+            write!(label, "{{MovingPartMatrix|")?;
+        }
+
+        // Fields
+        self.inner.write_data(label, connections, false)?;
+        write!(
+            label,
+            "|{{value|{}\\n{}\\n{}\\n{}}}",
+            self.value.w_axis, self.value.x_axis, self.value.y_axis, self.value.z_axis
+        )?;
+        write!(
+            label,
+            "|{{default_value|{}\\n{}\\n{}\\n{}}}",
+            self.default_value.w_axis,
+            self.default_value.x_axis,
+            self.default_value.y_axis,
+            self.default_value.z_axis
+        )?;
+
+        // Footer
+        if is_root {
+            write!(label, "}}")?;
+        }
+        Ok(())
+    }
+}
+
 impl Deref for MovingPartMatrix {
     type Target = MovingPartBase;
 

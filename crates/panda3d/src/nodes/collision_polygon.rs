@@ -33,6 +33,39 @@ impl Node for CollisionPolygon {
     }
 }
 
+impl GraphDisplay for CollisionPolygon {
+    fn write_data(
+        &self, label: &mut impl core::fmt::Write, connections: &mut Vec<u32>, is_root: bool,
+    ) -> Result<(), bam::Error> {
+        // Header
+        if is_root {
+            write!(label, "{{CollisionPolygon|")?;
+        }
+
+        // Fields
+        self.inner.write_data(label, connections, false)?;
+        write!(label, "|{{points")?;
+        for point in &self.points {
+            write!(label, "|{}\\n{}", point.0, point.1)?;
+        }
+        write!(label, "}}|")?;
+        write!(
+            label,
+            "{{to_2d_matrix|{}\\n{}\\n{}\\n{}}}",
+            self.to_2d_matrix.w_axis,
+            self.to_2d_matrix.x_axis,
+            self.to_2d_matrix.y_axis,
+            self.to_2d_matrix.z_axis
+        )?;
+
+        // Footer
+        if is_root {
+            write!(label, "}}")?;
+        }
+        Ok(())
+    }
+}
+
 impl Deref for CollisionPolygon {
     type Target = CollisionPlane;
 

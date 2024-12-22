@@ -43,6 +43,27 @@ impl Node for ModelNode {
     }
 }
 
+impl GraphDisplay for ModelNode {
+    fn write_data(
+        &self, label: &mut impl core::fmt::Write, connections: &mut Vec<u32>, is_root: bool,
+    ) -> Result<(), bam::Error> {
+        // Header
+        if is_root {
+            write!(label, "{{ModelNode|")?;
+        }
+
+        self.inner.write_data(label, connections, false)?;
+        write!(label, "|transform: {:?}", self.transform)?;
+        write!(label, "|attributes: {:#06X}", self.attributes)?;
+
+        // Footer
+        if is_root {
+            write!(label, "}}")?;
+        }
+        Ok(())
+    }
+}
+
 impl Deref for ModelNode {
     type Target = PandaNode;
 

@@ -37,4 +37,8 @@ pub struct BAMFlags {
     #[argp(positional)]
     #[argp(description = "BAM file to be processed")]
     pub input: String,
+
+    #[argp(option, short = 'd')]
+    #[argp(description = "Graphviz output filepath")]
+    pub dotfile: Option<String>,
 }

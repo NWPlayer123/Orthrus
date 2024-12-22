@@ -10,7 +10,7 @@ repository.workspace = true
 workspace = true
 
 [dependencies]
-orthrus-core = { workspace = true }
+orthrus-core = { workspace = true, features = ["time"] }
 snafu = { workspace = true }
 num_enum = { workspace = true }
 hashbrown = { workspace = true }

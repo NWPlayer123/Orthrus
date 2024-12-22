@@ -21,6 +21,19 @@ impl Node for RenderEffects {
     }
 }
 
+impl GraphDisplay for RenderEffects {
+    fn write_data(
+        &self, label: &mut impl core::fmt::Write, connections: &mut Vec<u32>, _is_root: bool,
+    ) -> Result<(), bam::Error> {
+        // This doesn't have any actual data, just write a placeholder
+        write!(label, "{{RenderEffects|count: {}}}", self.effect_refs.len())?;
+        for reference in &self.effect_refs {
+            connections.push(*reference);
+        }
+        Ok(())
+    }
+}
+
 impl Deref for RenderEffects {
     type Target = Vec<u32>;
 

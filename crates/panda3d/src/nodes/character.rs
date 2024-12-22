@@ -25,6 +25,29 @@ impl Node for Character {
     }
 }
 
+impl GraphDisplay for Character {
+    fn write_data(
+        &self, label: &mut impl core::fmt::Write, connections: &mut Vec<u32>, is_root: bool,
+    ) -> Result<(), bam::Error> {
+        // Header
+        if is_root {
+            write!(label, "{{Character|")?;
+        }
+
+        // Fields
+        self.inner.write_data(label, connections, false)?;
+        for reference in &self.temp_part_refs {
+            connections.push(*reference);
+        }
+
+        // Footer
+        if is_root {
+            write!(label, "}}")?;
+        }
+        Ok(())
+    }
+}
+
 impl Deref for Character {
     type Target = PartBundleNode;
 

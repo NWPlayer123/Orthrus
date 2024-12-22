@@ -99,3 +99,35 @@ impl GeomVertexColumn {
         Ok(column)
     }
 }
+
+impl GraphDisplay for GeomVertexColumn {
+    fn write_data(
+        &self, label: &mut impl core::fmt::Write, connections: &mut Vec<u32>, is_root: bool,
+    ) -> Result<(), bam::Error> {
+        // Header
+        if is_root {
+            write!(label, "{{GeomVertexColumn|")?;
+        }
+        write!(label, "{{")?;
+
+        // Fields
+        connections.push(self.name_ref);
+        write!(label, "num_components: {:#04X}|", self.num_components)?;
+        write!(label, "numeric_type: {:?}|", self.numeric_type)?;
+        write!(label, "contents: {:?}|", self.contents)?;
+        write!(label, "start: {:#06X}|", self.start)?;
+        write!(label, "column_alignment: {:#04X}|", self.column_alignment)?;
+        write!(label, "num_elements: {:#04X}|", self.num_elements)?;
+        write!(label, "element_stride: {:#06X}|", self.element_stride)?;
+        write!(label, "num_values: {:#06X}|", self.num_values)?;
+        write!(label, "component_bytes: {:#04X}|", self.component_bytes)?;
+        write!(label, "total_bytes: {:#010X}", self.total_bytes)?;
+
+        // Footer
+        write!(label, "}}")?;
+        if is_root {
+            write!(label, "}}")?;
+        }
+        Ok(())
+    }
+}

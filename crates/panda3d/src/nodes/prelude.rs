@@ -68,3 +68,4 @@ pub(crate) use super::transform_blend::TransformBlend;
 pub(crate) use super::transform_blend_table::TransformBlendTable;
 pub(crate) use super::transform_state::TransformState;
 pub(crate) use super::transparency_attrib::TransparencyAttrib;
+pub(crate) use crate::bam::GraphDisplay;

@@ -163,11 +163,10 @@ pub(crate) struct Texture {
 
     pub color_num_channels: u8,
     pub alpha_num_channels: u8,
-    pub has_rawdata: bool,
     pub texture_type: TextureType,
+    pub has_read_mipmaps: bool,
     pub body: TextureBody,
     pub data: Option<TextureData>,
-    pub has_read_mipmaps: bool,
 }
 
 #[derive(Debug, Default)]
@@ -351,12 +350,111 @@ impl Node for Texture {
             alpha_filename,
             color_num_channels,
             alpha_num_channels,
-            has_rawdata,
             texture_type,
+            has_read_mipmaps,
             body,
             data,
-            has_read_mipmaps,
         })
+    }
+}
+
+impl GraphDisplay for Texture {
+    fn write_data(
+        &self, label: &mut impl core::fmt::Write, connections: &mut Vec<u32>, is_root: bool,
+    ) -> Result<(), bam::Error> {
+        // Header
+        if is_root {
+            write!(label, "{{Texture|")?;
+        }
+
+        // Fields
+        write!(label, "name: {}|", self.name)?;
+        write!(label, "filename: {}|", self.filename)?;
+        if !self.alpha_filename.is_empty() {
+            write!(label, "alpha_filename: {}|", self.alpha_filename)?;
+        }
+        write!(label, "color_num_channels: {:#04X}|", self.color_num_channels)?;
+        write!(label, "alpha_num_channels: {:#04X}|", self.alpha_num_channels)?;
+        write!(label, "texture_type: {:?}|", self.texture_type)?;
+        write!(label, "has_read_mipmaps: {}|", self.has_read_mipmaps)?;
+        self.body.write_data(label, connections, false)?;
+        if let Some(data) = &self.data {
+            write!(label, "|")?;
+            data.write_data(label, connections, false)?;
+        }
+
+        // Footer
+        if is_root {
+            write!(label, "}}")?;
+        }
+        Ok(())
+    }
+}
+
+impl GraphDisplay for TextureBody {
+    fn write_data(
+        &self, label: &mut impl core::fmt::Write, connections: &mut Vec<u32>, is_root: bool,
+    ) -> Result<(), bam::Error> {
+        // Header
+        if is_root {
+            write!(label, "{{TextureBody|")?;
+        }
+
+        // Fields
+        self.default_sampler.write_data(label, connections, false)?;
+        write!(label, "|")?;
+        write!(label, "format: {:?}|", self.format)?;
+        write!(label, "compression: {:?}|", self.compression)?;
+        write!(label, "usage_hint: {:?}|", self.usage_hint)?;
+        write!(label, "quality_level: {:?}|", self.quality_level)?;
+        write!(label, "auto_texture_scale: {:?}|", self.auto_texture_scale)?;
+        write!(label, "num_components: {:#04X}|", self.num_components)?;
+        write!(label, "orig_file_x_size: {:#010X}|", self.orig_file_x_size)?;
+        write!(label, "orig_file_y_size: {:#010X}|", self.orig_file_y_size)?;
+        write!(label, "simple_x_size: {:#010X}|", self.simple_x_size)?;
+        write!(label, "simple_y_size: {:#010X}|", self.simple_y_size)?;
+        write!(
+            label,
+            "simple_image_date_generated: {}|",
+            orthrus_core::time::format_timestamp(self.simple_image_date_generated.into()).unwrap()
+        )?;
+        write!(label, "image: [...]")?;
+        if let Some(clear_color) = self.clear_color {
+            write!(label, "|clear_color: {}", clear_color)?;
+        }
+
+        // Footer
+        if is_root {
+            write!(label, "}}")?;
+        }
+        Ok(())
+    }
+}
+
+impl GraphDisplay for TextureData {
+    fn write_data(
+        &self, label: &mut impl core::fmt::Write, _connections: &mut Vec<u32>, is_root: bool,
+    ) -> Result<(), bam::Error> {
+        // Header
+        if is_root {
+            write!(label, "{{TextureData|")?;
+        }
+
+        // Fields
+        write!(label, "size: {}|", self.size)?;
+        write!(label, "pad_size: {}|", self.pad_size)?;
+        write!(label, "num_views: {:#010X}|", self.num_views)?;
+        write!(label, "component_type: {:?}|", self.component_type)?;
+        write!(label, "component_width: {:#04X}|", self.component_width)?;
+        write!(label, "ram_image_compression: {:?}|", self.ram_image_compression)?;
+        write!(label, "ram_image_count: {:#04X}|", self.ram_image_count)?;
+        write!(label, "ram_images: [(...),...]")?;
+
+        // Footer
+        if is_root {
+            write!(label, "}}")?;
+        }
+        Ok(())
     }
 }
 

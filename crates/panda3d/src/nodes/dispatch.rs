@@ -55,7 +55,7 @@ macro_rules! stored_types {
                 }
 
                 // Get by global ID
-                pub fn get(&self, id: usize) -> Option<NodeRef<'_>> {
+                pub(crate) fn get(&self, id: usize) -> Option<NodeRef<'_>> {
                     let (type_idx, local_idx) = self.id_map.get(id)?;
                     Some(match type_idx {
                         $(
@@ -80,10 +80,20 @@ macro_rules! stored_types {
             // Enum for referencing any node type
             #[derive(Debug)]
             #[allow(dead_code)]
-            pub enum NodeRef<'a> {
+            pub(crate) enum NodeRef<'a> {
                 $(
                     $type(&'a $type),
                 )*
+            }
+
+            impl<'a> NodeRef<'a> {
+                pub(crate) fn write_graph_data(&self, label: &mut impl core::fmt::Write, connections: &mut Vec<u32>) -> Result<(), bam::Error> {
+                    match self {
+                        $(
+                            NodeRef::$type(node) => node.write_data(label, connections, true),
+                        )*
+                    }
+                }
             }
 
             // Trait for stored types

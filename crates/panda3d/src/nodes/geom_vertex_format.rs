@@ -25,6 +25,29 @@ impl Node for GeomVertexFormat {
     }
 }
 
+impl GraphDisplay for GeomVertexFormat {
+    fn write_data(
+        &self, label: &mut impl core::fmt::Write, connections: &mut Vec<u32>, is_root: bool,
+    ) -> Result<(), bam::Error> {
+        // Header
+        if is_root {
+            write!(label, "{{GeomVertexFormat|")?;
+        }
+
+        // Fields
+        self.animation.write_data(label, connections, false)?;
+        for reference in &self.array_refs {
+            connections.push(*reference);
+        }
+
+        // Footer
+        if is_root {
+            write!(label, "}}")?;
+        }
+        Ok(())
+    }
+}
+
 // These aren't traditional inheritance but for the sake of the API, I'm making this a Deref
 impl Deref for GeomVertexFormat {
     type Target = GeomVertexAnimationSpec;

@@ -18,6 +18,27 @@ impl Node for AnimBundleNode {
     }
 }
 
+impl GraphDisplay for AnimBundleNode {
+    fn write_data(
+        &self, label: &mut impl core::fmt::Write, connections: &mut Vec<u32>, is_root: bool,
+    ) -> Result<(), bam::Error> {
+        // Header
+        if is_root {
+            write!(label, "{{AnimBundleNode|")?;
+        }
+
+        // Fields
+        self.inner.write_data(label, connections, false)?;
+        connections.push(self.anim_bundle_ref);
+
+        // Footer
+        if is_root {
+            write!(label, "}}")?;
+        }
+        Ok(())
+    }
+}
+
 impl Deref for AnimBundleNode {
     type Target = PandaNode;
 

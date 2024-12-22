@@ -61,3 +61,32 @@ impl Node for GeomPrimitive {
         })
     }
 }
+
+impl GraphDisplay for GeomPrimitive {
+    fn write_data(
+        &self, label: &mut impl core::fmt::Write, connections: &mut Vec<u32>, is_root: bool,
+    ) -> Result<(), bam::Error> {
+        // Header
+        if is_root {
+            write!(label, "{{GeomPrimitive|")?;
+        }
+
+        // Fields
+        write!(label, "shade_model: {:?}|", self.shade_model)?;
+        write!(label, "first_vertex: {}|", self.first_vertex)?;
+        write!(label, "num_vertices: {}|", self.num_vertices)?;
+        write!(label, "index_type: {:?}|", self.index_type)?;
+        write!(label, "usage_hint: {:?}|", self.usage_hint)?;
+        if let Some(vertices_ref) = self.vertices_ref {
+            connections.push(vertices_ref);
+        }
+        // This is a PTA which we don't really handle well, so just print if it's Some/None
+        write!(label, "ends_ref: {:?}", self.ends_ref)?;
+
+        // Footer
+        if is_root {
+            write!(label, "}}")?;
+        }
+        Ok(())
+    }
+}

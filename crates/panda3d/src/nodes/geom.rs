@@ -45,3 +45,30 @@ impl Node for Geom {
         })
     }
 }
+
+impl GraphDisplay for Geom {
+    fn write_data(
+        &self, label: &mut impl core::fmt::Write, connections: &mut Vec<u32>, is_root: bool,
+    ) -> Result<(), bam::Error> {
+        // Header
+        if is_root {
+            write!(label, "{{Geom|")?;
+        }
+
+        // Fields
+        connections.push(self.data_ref);
+        for reference in &self.primitive_refs {
+            connections.push(*reference);
+        }
+        write!(label, "primitive_type: {:?}|", self.primitive_type)?;
+        write!(label, "shade_model: {:?}|", self.shade_model)?;
+        write!(label, "geom_rendering: {:?}|", self.geom_rendering)?;
+        write!(label, "bounds_type: {:?}", self.bounds_type)?;
+
+        // Footer
+        if is_root {
+            write!(label, "}}")?;
+        }
+        Ok(())
+    }
+}

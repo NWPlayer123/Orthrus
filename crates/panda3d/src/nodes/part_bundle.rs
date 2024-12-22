@@ -57,6 +57,40 @@ impl Node for PartBundle {
     }
 }
 
+impl GraphDisplay for PartBundle {
+    fn write_data(
+        &self, label: &mut impl core::fmt::Write, connections: &mut Vec<u32>, is_root: bool,
+    ) -> Result<(), bam::Error> {
+        // Header
+        if is_root {
+            write!(label, "{{PartBundle|")?;
+        }
+
+        // Fields
+        self.inner.write_data(label, connections, false)?;
+        if let Some(reference) = self.anim_preload_ref {
+            connections.push(reference);
+        }
+        write!(label, "|blend_type: {:?}", self.blend_type)?;
+        write!(label, "|anim_blend_flag: {}", self.anim_blend_flag)?;
+        write!(label, "|frame_blend_flag: {}", self.frame_blend_flag)?;
+        write!(
+            label,
+            "|{{root_transform|{}\\n{}\\n{}\\n{}}}",
+            self.root_transform.w_axis,
+            self.root_transform.x_axis,
+            self.root_transform.y_axis,
+            self.root_transform.z_axis
+        )?;
+
+        // Footer
+        if is_root {
+            write!(label, "}}")?;
+        }
+        Ok(())
+    }
+}
+
 impl Deref for PartBundle {
     type Target = PartGroup;
 

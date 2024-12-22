@@ -32,6 +32,22 @@ impl Node for DepthWriteAttrib {
     }
 }
 
+impl GraphDisplay for DepthWriteAttrib {
+    fn write_data(
+        &self, label: &mut impl core::fmt::Write, _connections: &mut Vec<u32>, _is_root: bool,
+    ) -> Result<(), bam::Error> {
+        // Header
+        write!(label, "{{DepthWriteAttrib|")?;
+
+        // Fields
+        write!(label, "mode: {:?}", self.mode)?;
+
+        // Footer
+        write!(label, "}}")?;
+        Ok(())
+    }
+}
+
 impl Deref for DepthWriteAttrib {
     type Target = DepthMode;
 

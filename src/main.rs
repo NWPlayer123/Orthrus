@@ -150,7 +150,11 @@ fn main() -> Result<()> {
                 }
             }
             Panda3dModules::BAM(data) => {
-                BinaryAsset::open(data.input)?;
+                let asset = BinaryAsset::open(data.input)?;
+
+                if let Some(dotfile) = data.dotfile {
+                    orthrus_panda3d::bam::GraphWriter::write_nodes(&asset.nodes, dotfile)?;
+                }
             }
         },
         Modules::JSystem(module) => match module.nested {

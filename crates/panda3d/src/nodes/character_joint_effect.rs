@@ -14,6 +14,17 @@ impl Node for CharacterJointEffect {
     }
 }
 
+impl GraphDisplay for CharacterJointEffect {
+    fn write_data(
+        &self, label: &mut impl core::fmt::Write, connections: &mut Vec<u32>, _is_root: bool,
+    ) -> Result<(), bam::Error> {
+        // This has no data, so let's just do one write
+        write!(label, "{{CharacterJointEffect}}")?;
+        connections.push(self.character_ref);
+        Ok(())
+    }
+}
+
 impl Deref for CharacterJointEffect {
     type Target = u32;
 

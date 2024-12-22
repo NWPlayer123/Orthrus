@@ -19,3 +19,25 @@ impl GeomVertexAnimationSpec {
         Ok(Self { animation_type, num_transforms, indexed_transforms })
     }
 }
+
+impl GraphDisplay for GeomVertexAnimationSpec {
+    fn write_data(
+        &self, label: &mut impl core::fmt::Write, _connections: &mut Vec<u32>, is_root: bool,
+    ) -> Result<(), bam::Error> {
+        // Header
+        if is_root {
+            write!(label, "{{GeomVertexAnimationSpec|")?;
+        }
+
+        // Fields
+        write!(label, "animation_type: {:?}|", self.animation_type)?;
+        write!(label, "num_transforms: {:#06X}|", self.num_transforms)?;
+        write!(label, "indexed_transforms: {}", self.indexed_transforms)?;
+
+        // Footer
+        if is_root {
+            write!(label, "}}")?;
+        }
+        Ok(())
+    }
+}

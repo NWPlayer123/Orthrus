@@ -115,3 +115,50 @@ impl Node for PandaNode {
         })
     }
 }
+
+impl GraphDisplay for PandaNode {
+    fn write_data(
+        &self, label: &mut impl core::fmt::Write, connections: &mut Vec<u32>, is_root: bool,
+    ) -> Result<(), bam::Error> {
+        // Header
+        if is_root {
+            write!(label, "{{PandaNode|")?;
+        }
+
+        // Fields
+        write!(label, "name: {}|", self.name)?;
+        connections.push(self.state_ref);
+        connections.push(self.transform_ref);
+        connections.push(self.effects_ref);
+        write!(label, "draw_control_mask: {:#010X}|", self.draw_control_mask)?;
+        write!(label, "draw_show_mask: {:#010X}|", self.draw_show_mask)?;
+        write!(label, "into_collide_mask: {:#010X}|", self.into_collide_mask)?;
+        write!(label, "bounds_type: {:#?}", self.bounds_type)?;
+
+        if !self.tag_data.is_empty() {
+            write!(label, "|{{tag_data|")?;
+            let mut first = true;
+            for (key, value) in &self.tag_data {
+                if !first {
+                    write!(label, "|")?;
+                }
+                write!(label, "{}: {}", key, value)?;
+                first = false;
+            }
+            write!(label, "}}")?;
+        }
+        // Ignore parents, since we should already have made that
+        for child_ref in &self.child_refs {
+            connections.push(child_ref.0);
+        }
+        for stashed_ref in &self.stashed_refs {
+            connections.push(stashed_ref.0);
+        }
+
+        // Footer
+        if is_root {
+            write!(label, "}}")?;
+        }
+        Ok(())
+    }
+}

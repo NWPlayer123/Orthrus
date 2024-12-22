@@ -19,6 +19,26 @@ impl AnimChannelMatrix {
     }
 }
 
+impl GraphDisplay for AnimChannelMatrix {
+    fn write_data(
+        &self, label: &mut impl core::fmt::Write, connections: &mut Vec<u32>, is_root: bool,
+    ) -> Result<(), bam::Error> {
+        // Header
+        if is_root {
+            write!(label, "{{AnimChannelMatrix|")?;
+        }
+        // Fields
+        self.inner.write_data(label, connections, false)?;
+        write!(label, "|last_frame: {:#06X}", self.last_frame)?;
+
+        // Footer
+        if is_root {
+            write!(label, "}}")?;
+        }
+        Ok(())
+    }
+}
+
 impl Deref for AnimChannelMatrix {
     type Target = AnimGroup;
 

@@ -22,3 +22,29 @@ impl Node for AnimGroup {
         Ok(Self { name, root_ref, child_refs })
     }
 }
+
+impl GraphDisplay for AnimGroup {
+    fn write_data(
+        &self, label: &mut impl core::fmt::Write, connections: &mut Vec<u32>, is_root: bool,
+    ) -> Result<(), bam::Error> {
+        // Header
+        if is_root {
+            write!(label, "{{AnimGroup|")?;
+        }
+
+        // Fields
+        let name = self.name.replace('<', "\\<").replace('>', "\\>");
+        // This is a hack because PartGroup often has <skeleton> which graphviz doesn't like
+        write!(label, "name: {}", name)?;
+        // root_ref just makes cyclic references so eh
+        for child in &self.child_refs {
+            connections.push(*child);
+        }
+
+        // Footer
+        if is_root {
+            write!(label, "}}")?;
+        }
+        Ok(())
+    }
+}

@@ -41,6 +41,49 @@ impl Node for AnimChannelMatrixXfmTable {
     }
 }
 
+impl GraphDisplay for AnimChannelMatrixXfmTable {
+    fn write_data(
+        &self, label: &mut impl core::fmt::Write, connections: &mut Vec<u32>, is_root: bool,
+    ) -> Result<(), bam::Error> {
+        // Header
+        if is_root {
+            write!(label, "{{AnimChannelMatrixXfmTable|")?;
+        }
+
+        // Fields
+        self.inner.write_data(label, connections, false)?;
+
+        write!(label, "|{{tables|")?;
+        let mut first = true;
+        for table in &self.tables {
+            if !first {
+                write!(label, "\\n")?;
+            }
+
+            write!(label, "[")?;
+            write!(label, "0f32; {}", table.len())?;
+            /*let mut first_inner = true;
+            for entry in table {
+                if !first_inner {
+                    write!(label, ", ")?;
+                }
+                write!(label, "{entry}")?;
+                first_inner = false;
+            }*/
+            write!(label, "]")?;
+
+            first = false;
+        }
+        write!(label, "}}")?;
+
+        // Footer
+        if is_root {
+            write!(label, "}}")?;
+        }
+        Ok(())
+    }
+}
+
 impl Deref for AnimChannelMatrixXfmTable {
     type Target = AnimChannelMatrix;
 

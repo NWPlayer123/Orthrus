@@ -47,6 +47,38 @@ impl Node for LODNode {
     }
 }
 
+impl GraphDisplay for LODNode {
+    fn write_data(
+        &self, label: &mut impl core::fmt::Write, connections: &mut Vec<u32>, is_root: bool,
+    ) -> Result<(), bam::Error> {
+        // Header
+        if is_root {
+            write!(label, "{{LODNode|")?;
+        }
+
+        // Fields
+        self.inner.write_data(label, connections, false)?;
+        write!(label, "|center: {}|", self.center)?;
+        write!(label, "switches: [")?;
+        let mut first = true;
+        for switch in &self.switch_vector {
+            if !first {
+                write!(label, ", ")?;
+            }
+            write!(label, "{{start: {}|end: {}}}", switch.start, switch.end)?;
+            first = false;
+        }
+        write!(label, "]|")?;
+        write!(label, "lod_scale: {}", self.lod_scale)?;
+
+        // Footer
+        if is_root {
+            write!(label, "}}")?;
+        }
+        Ok(())
+    }
+}
+
 impl Deref for LODNode {
     type Target = PandaNode;
 

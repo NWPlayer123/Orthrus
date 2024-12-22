@@ -18,6 +18,27 @@ impl CollisionPlane {
     }
 }
 
+impl GraphDisplay for CollisionPlane {
+    fn write_data(
+        &self, label: &mut impl core::fmt::Write, connections: &mut Vec<u32>, is_root: bool,
+    ) -> Result<(), bam::Error> {
+        // Header
+        if is_root {
+            write!(label, "{{CollisionPlane|")?;
+        }
+
+        // Fields
+        self.inner.write_data(label, connections, false)?;
+        write!(label, "|plane: {}", self.plane)?;
+
+        // Footer
+        if is_root {
+            write!(label, "}}")?;
+        }
+        Ok(())
+    }
+}
+
 impl Deref for CollisionPlane {
     type Target = CollisionSolid;
 

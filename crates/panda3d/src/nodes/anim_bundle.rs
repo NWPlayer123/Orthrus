@@ -20,6 +20,28 @@ impl Node for AnimBundle {
     }
 }
 
+impl GraphDisplay for AnimBundle {
+    fn write_data(
+        &self, label: &mut impl core::fmt::Write, connections: &mut Vec<u32>, is_root: bool,
+    ) -> Result<(), bam::Error> {
+        // Header
+        if is_root {
+            write!(label, "{{AnimBundle|")?;
+        }
+
+        // Fields
+        self.inner.write_data(label, connections, false)?;
+        write!(label, "|fps: {}", self.fps)?;
+        write!(label, "|num_frames: {}", self.num_frames)?;
+
+        // Footer
+        if is_root {
+            write!(label, "}}")?;
+        }
+        Ok(())
+    }
+}
+
 impl Deref for AnimBundle {
     type Target = AnimGroup;
 

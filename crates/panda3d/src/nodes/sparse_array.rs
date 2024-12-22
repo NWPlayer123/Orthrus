@@ -24,3 +24,29 @@ impl SparseArray {
         Ok(Self { subranges, inverse })
     }
 }
+
+impl GraphDisplay for SparseArray {
+    fn write_data(
+        &self, label: &mut impl core::fmt::Write, _connections: &mut Vec<u32>, _is_root: bool,
+    ) -> Result<(), bam::Error> {
+        // Header
+        write!(label, "{{SparseArray|")?;
+
+        // Fields
+        write!(label, "ranges: [")?;
+        let mut first = true;
+        for range in &self.subranges {
+            if !first {
+                write!(label, ", ")?;
+            }
+            write!(label, "({}, {})", range.0, range.1)?;
+            first = false;
+        }
+        write!(label, "]|")?;
+        write!(label, "inverse: {}", self.inverse)?;
+
+        // Footer
+        write!(label, "}}")?;
+        Ok(())
+    }
+}

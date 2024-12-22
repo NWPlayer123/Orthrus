@@ -44,3 +44,20 @@ impl Node for CullFaceAttrib {
         Ok(Self { mode, reverse })
     }
 }
+
+impl GraphDisplay for CullFaceAttrib {
+    fn write_data(
+        &self, label: &mut impl core::fmt::Write, _connections: &mut Vec<u32>, _is_root: bool,
+    ) -> Result<(), bam::Error> {
+        // Header
+        write!(label, "{{CullFaceAttrib|")?;
+
+        // Fields
+        write!(label, "mode: {:?}|", self.mode)?;
+        write!(label, "reverse: {}", self.reverse)?;
+
+        // Footer
+        write!(label, "}}")?;
+        Ok(())
+    }
+}

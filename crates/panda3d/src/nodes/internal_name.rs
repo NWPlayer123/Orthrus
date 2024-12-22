@@ -14,6 +14,22 @@ impl Node for InternalName {
     }
 }
 
+impl GraphDisplay for InternalName {
+    fn write_data(
+        &self, label: &mut impl core::fmt::Write, _connections: &mut Vec<u32>, _is_root: bool,
+    ) -> Result<(), bam::Error> {
+        // Header
+        write!(label, "{{InternalName|")?;
+
+        // Fields
+        write!(label, "name: {}", self.name)?;
+
+        // Footer
+        write!(label, "}}")?;
+        Ok(())
+    }
+}
+
 impl Deref for InternalName {
     type Target = String;
 

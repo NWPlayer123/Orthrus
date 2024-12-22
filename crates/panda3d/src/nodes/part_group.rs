@@ -25,3 +25,28 @@ impl Node for PartGroup {
         Ok(Self { name, child_refs })
     }
 }
+
+impl GraphDisplay for PartGroup {
+    fn write_data(
+        &self, label: &mut impl core::fmt::Write, connections: &mut Vec<u32>, is_root: bool,
+    ) -> Result<(), bam::Error> {
+        // Header
+        if is_root {
+            write!(label, "{{PartGroup|")?;
+        }
+
+        // Fields
+        let name = self.name.replace('<', "\\<").replace('>', "\\>");
+        // This is a hack because PartGroup often has <skeleton> which graphviz doesn't like
+        write!(label, "name: {}", name)?;
+        for reference in &self.child_refs {
+            connections.push(*reference);
+        }
+
+        // Footer
+        if is_root {
+            write!(label, "}}")?;
+        }
+        Ok(())
+    }
+}

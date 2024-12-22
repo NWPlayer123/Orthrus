@@ -122,6 +122,33 @@ impl CombineConfig {
     }
 }
 
+impl GraphDisplay for CombineConfig {
+    fn write_data(
+        &self, label: &mut impl core::fmt::Write, _connections: &mut Vec<u32>, _is_root: bool,
+    ) -> Result<(), bam::Error> {
+        // Header
+        write!(label, "{{CombineConfig|{{")?;
+
+        // Fields
+        write!(label, "mode: {:?}|", self.mode)?;
+        write!(label, "num_operands: {:#04X}|", self.num_operands)?;
+        write!(
+            label,
+            "sources: [{:?}, {:?}, {:?}]|",
+            self.sources[0], self.sources[1], self.sources[2]
+        )?;
+        write!(
+            label,
+            "operands: [{:?}, {:?}, {:?}]",
+            self.operands[0], self.operands[1], self.operands[2]
+        )?;
+
+        // Footer
+        write!(label, "}}}}")?;
+        Ok(())
+    }
+}
+
 #[derive(Debug, PartialEq)]
 #[allow(dead_code)]
 pub(crate) struct TextureStage {
@@ -239,5 +266,46 @@ impl Default for TextureStage {
             uses_primary_color: false,
             uses_last_saved_result: false,
         }
+    }
+}
+
+impl GraphDisplay for TextureStage {
+    fn write_data(
+        &self, label: &mut impl core::fmt::Write, connections: &mut Vec<u32>, is_root: bool,
+    ) -> Result<(), bam::Error> {
+        // Header
+        if is_root {
+            write!(label, "{{TextureStage|")?;
+        }
+
+        // Fields
+        write!(label, "name: {}|", self.name)?;
+        write!(label, "sort: {}|", self.sort)?;
+        write!(label, "priority: {}|", self.priority)?;
+        if let Some(reference) = self.texcoord_name_ref {
+            connections.push(reference);
+        }
+        write!(label, "mode: {:?}|", self.mode)?;
+        write!(label, "color: {}|", self.color)?;
+        write!(label, "rgb_scale: {:#04X}|", self.rgb_scale)?;
+        write!(label, "alpha_scale: {:#04X}|", self.alpha_scale)?;
+        write!(label, "saved_result: {}|", self.saved_result)?;
+        write!(label, "tex_view_offset: {}|", self.tex_view_offset)?;
+        write!(label, "combine_rgb|")?;
+        self.combine_rgb.write_data(label, connections, false)?;
+        write!(label, "|")?;
+        write!(label, "combine_alpha|")?;
+        self.combine_alpha.write_data(label, connections, false)?;
+        write!(label, "|")?;
+        write!(label, "involves_color_scale: {}|", self.involves_color_scale)?;
+        write!(label, "uses_color: {}|", self.uses_color)?;
+        write!(label, "uses_primary_color: {}|", self.uses_primary_color)?;
+        write!(label, "uses_last_saved_result: {}", self.uses_last_saved_result)?;
+
+        // Footer
+        if is_root {
+            write!(label, "}}")?;
+        }
+        Ok(())
     }
 }

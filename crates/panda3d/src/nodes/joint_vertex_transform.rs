@@ -14,6 +14,17 @@ impl Node for JointVertexTransform {
     }
 }
 
+impl GraphDisplay for JointVertexTransform {
+    fn write_data(
+        &self, label: &mut impl core::fmt::Write, connections: &mut Vec<u32>, _is_root: bool,
+    ) -> Result<(), bam::Error> {
+        // This doesn't have any actual data, so write a placeholder
+        write!(label, "{{JointVertexTransform}}")?;
+        connections.push(self.joint_ref);
+        Ok(())
+    }
+}
+
 impl Deref for JointVertexTransform {
     type Target = u32;
 

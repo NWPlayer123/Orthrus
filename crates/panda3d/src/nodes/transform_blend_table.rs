@@ -25,3 +25,34 @@ impl Node for TransformBlendTable {
         Ok(Self { blends, rows })
     }
 }
+
+impl GraphDisplay for TransformBlendTable {
+    fn write_data(
+        &self, label: &mut impl core::fmt::Write, connections: &mut Vec<u32>, is_root: bool,
+    ) -> Result<(), bam::Error> {
+        // Header
+        if is_root {
+            write!(label, "{{TransformBlendTable|")?;
+        }
+
+        // Fields
+        write!(label, "{{blends|")?;
+        write!(label, "[...]")?;
+        /*let mut first = true;
+        for blend in &self.blends {
+            if !first {
+                write!(label, "|")?;
+            }
+            blend.write_data(label, connections, false)?;
+            first = false;
+        }*/
+        write!(label, "}}|")?;
+        self.rows.write_data(label, connections, false)?;
+
+        // Footer
+        if is_root {
+            write!(label, "}}")?;
+        }
+        Ok(())
+    }
+}

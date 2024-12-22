@@ -45,6 +45,31 @@ impl Node for CollisionCapsule {
     }
 }
 
+impl GraphDisplay for CollisionCapsule {
+    fn write_data(
+        &self, label: &mut impl core::fmt::Write, connections: &mut Vec<u32>, is_root: bool,
+    ) -> Result<(), bam::Error> {
+        // Header
+        if is_root {
+            write!(label, "{{CollisionCapsule|")?;
+        }
+
+        // Fields
+        self.inner.write_data(label, connections, false)?;
+        write!(label, "|a: {}", self.a)?;
+        write!(label, "|b: {}", self.b)?;
+        write!(label, "|radius: {}", self.radius)?;
+        write!(label, "|length: {}", self.length)?;
+        write!(label, "|transform: {:?}", self.transform)?;
+
+        // Footer
+        if is_root {
+            write!(label, "}}")?;
+        }
+        Ok(())
+    }
+}
+
 impl Deref for CollisionCapsule {
     type Target = CollisionSolid;
 

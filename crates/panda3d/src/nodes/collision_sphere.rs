@@ -20,6 +20,28 @@ impl Node for CollisionSphere {
     }
 }
 
+impl GraphDisplay for CollisionSphere {
+    fn write_data(
+        &self, label: &mut impl core::fmt::Write, connections: &mut Vec<u32>, is_root: bool,
+    ) -> Result<(), bam::Error> {
+        // Header
+        if is_root {
+            write!(label, "{{CollisionSphere|")?;
+        }
+
+        // Fields
+        self.inner.write_data(label, connections, false)?;
+        write!(label, "|center: {}", self.center)?;
+        write!(label, "|radius: {}", self.radius)?;
+
+        // Footer
+        if is_root {
+            write!(label, "}}")?;
+        }
+        Ok(())
+    }
+}
+
 impl Deref for CollisionSphere {
     type Target = CollisionSolid;
 

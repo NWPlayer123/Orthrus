@@ -43,3 +43,36 @@ impl Node for BillboardEffect {
         })
     }
 }
+
+impl GraphDisplay for BillboardEffect {
+    fn write_data(
+        &self, label: &mut impl core::fmt::Write, connections: &mut Vec<u32>, _is_root: bool,
+    ) -> Result<(), bam::Error> {
+        // Header
+        write!(label, "{{BillboardEffect|")?;
+
+        // Fields
+        write!(label, "off: {}|", self.off)?;
+        write!(label, "up_vector: {}|", self.up_vector)?;
+        write!(label, "eye_relative: {}|", self.eye_relative)?;
+        write!(label, "axial_rotate: {}|", self.axial_rotate)?;
+        write!(label, "offset: {}|", self.offset)?;
+        write!(label, "look_at_point: {}|", self.look_at_point)?;
+        write!(label, "look_at: [")?;
+        let mut first = true;
+        for node in &self.look_at.path_refs {
+            if !first {
+                write!(label, ", ")?;
+            }
+            write!(label, "node_{}", *node)?;
+            connections.push(*node);
+            first = false;
+        }
+        write!(label, "]|")?;
+        write!(label, "fixed_depth: {}", self.fixed_depth)?;
+
+        // Footer
+        write!(label, "}}")?;
+        Ok(())
+    }
+}

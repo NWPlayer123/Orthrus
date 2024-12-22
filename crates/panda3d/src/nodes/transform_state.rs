@@ -29,6 +29,7 @@ bitflags! {
 pub(crate) struct TransformState {
     pub flags: TransformFlags,
     pub position: Vec3,
+    // TODO: combine these into an enum? save 0x8
     /// Newer rotation that doesn't encounter a gimbal lock
     pub quaternion: Quat,
     /// Classic rotation using Heading/Pitch/Roll
@@ -109,5 +110,45 @@ impl Default for TransformState {
             rotation: Vec3::ZERO,
             matrix: Mat4::IDENTITY,
         }
+    }
+}
+
+impl GraphDisplay for TransformState {
+    fn write_data(
+        &self, label: &mut impl core::fmt::Write, _connections: &mut Vec<u32>, is_root: bool,
+    ) -> Result<(), bam::Error> {
+        // Header
+        if is_root {
+            write!(label, "{{TransformState|")?;
+        }
+
+        // Fields
+        let flags = self.flags.iter_names().map(|(name, _)| name).collect::<Vec<_>>().join(", ");
+        write!(label, "flags: [{}]", flags)?;
+
+        if self.flags.contains(TransformFlags::ComponentsGiven) {
+            write!(label, "|position: {}", self.position)?;
+            if self.flags.contains(TransformFlags::QuaternionGiven) {
+                write!(label, "|rotation: {}", self.quaternion)?;
+            } else {
+                write!(label, "|rotation: {}", self.rotation)?;
+            }
+            write!(label, "|scale: {}", self.scale)?;
+            write!(label, "|shear: {}", self.shear)?;
+        }
+
+        if self.flags.contains(TransformFlags::MatrixKnown) {
+            write!(
+                label,
+                "|{{matrix|{}\\n{}\\n{}\\n{}}}",
+                self.matrix.w_axis, self.matrix.x_axis, self.matrix.y_axis, self.matrix.z_axis
+            )?;
+        }
+
+        // Footer
+        if is_root {
+            write!(label, "}}")?;
+        }
+        Ok(())
     }
 }

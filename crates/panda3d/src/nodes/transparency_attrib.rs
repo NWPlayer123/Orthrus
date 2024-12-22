@@ -34,6 +34,26 @@ impl Node for TransparencyAttrib {
     }
 }
 
+impl GraphDisplay for TransparencyAttrib {
+    fn write_data(
+        &self, label: &mut impl core::fmt::Write, _connections: &mut Vec<u32>, is_root: bool,
+    ) -> Result<(), bam::Error> {
+        // Header
+        if is_root {
+            write!(label, "{{TransparencyAttrib|")?;
+        }
+
+        // Fields
+        write!(label, "mode: {:?}", self.mode)?;
+
+        // Footer
+        if is_root {
+            write!(label, "}}")?;
+        }
+        Ok(())
+    }
+}
+
 impl Deref for TransparencyAttrib {
     type Target = TransparencyMode;
 
