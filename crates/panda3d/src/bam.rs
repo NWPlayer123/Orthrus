@@ -414,6 +414,7 @@ impl BinaryAsset {
             "TransformBlendTable" => self.create_node::<TransformBlendTable>(data),
             "TransformState" => self.create_node::<TransformState>(data),
             "TransparencyAttrib" => self.create_node::<TransparencyAttrib>(data),
+            "UserVertexTransform" => self.create_node::<UserVertexTransform>(data),
             _ => todo!("{type_name}"),
         }
     }

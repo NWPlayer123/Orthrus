@@ -1,14 +1,15 @@
+//! This file is designed to provide loading Panda3D BAM assets into the Bevy game engine. This obviously
+//! comes with some complexities, as Panda3D and specifically Toontown's scene graph minutia are poorly
+//! documented.
+//!
+//! For example, all Toontown models begin with a ModelRoot or ModelNode that serves as the root node of
+//! the .egg file they were converted from. Additionally, specific nodes serve specific purposes. A
+//! Character node is designed to be a high level animatable node that multiple meshes attach to, as well
+//! as a singular (TODO: check) PartBundle that holds all skinning data
+
 use std::collections::BTreeMap;
 
-use bevy_internal::animation::{AnimationTarget, AnimationTargetId};
-/// This file is designed to provide loading Panda3D BAM assets into the Bevy game engine. This obviously
-/// comes with some complexities, as Panda3D and specifically Toontown's scene graph minutia are poorly
-/// documented.
-///
-/// For example, all Toontown models begin with a ModelRoot or ModelNode that serves as the root node of
-/// the .egg file they were converted from. Additionally, specific nodes serve specific purposes. A
-/// Character node is designed to be a high level animatable node that multiple meshes attach to, as well
-/// as a singular (TODO: check) PartBundle that holds all skinning data
+use bevy_internal::animation::{animated_field, AnimationTarget, AnimationTargetId};
 use bevy_internal::asset::io::Reader;
 use bevy_internal::asset::{AssetLoader, LoadContext, RenderAssetUsages};
 use bevy_internal::image::{ImageAddressMode, ImageFilterMode, ImageSamplerBorderColor};
@@ -34,13 +35,13 @@ use crate::bevy_sgi::SgiImageLoader;
 use crate::nodes::color_attrib::ColorType;
 use crate::nodes::cull_face_attrib::CullMode;
 use crate::nodes::dispatch::NodeRef;
+use crate::nodes::model_node::PreserveTransform;
 use crate::nodes::part_bundle::BlendType;
 use crate::nodes::prelude::*;
 use crate::nodes::sampler_state::{FilterType, WrapMode};
 use crate::nodes::transform_blend::TransformEntry;
 use crate::nodes::transform_state::TransformFlags;
 use crate::nodes::transparency_attrib::TransparencyMode;
-//use crate::bevy::Effects;
 use crate::prelude::*;
 
 // TODO on this whole file, try to reduce nesting, should be able to create an internal Error type, return
@@ -184,7 +185,6 @@ impl BinaryAsset {
                 let (entity, effects) =
                     self.handle_panda_node(loader.world, parent, effects, net_nodes, node, node_index).await;
 
-                // TODO: figure out if this ever happens
                 if node.bundle_refs.len() != 1 {
                     warn!(name: "unexpected_character_node", target: "Panda3DLoader",
                         "Character Node {} has more than one associated CharacterJointBundle, ignoring.", node_index);
@@ -195,7 +195,7 @@ impl BinaryAsset {
                 // non-recursive function to simplify this mess?
                 let mut net_nodes = BTreeMap::new();
                 let (inverse_bindposes, joints) = self.convert_joint_bundle(
-                    loader.world,
+                    loader,
                     entity,
                     None,
                     &mut net_nodes,
@@ -206,7 +206,7 @@ impl BinaryAsset {
                 let label = format!("Bindpose{}", loader.assets.bindposes.len());
                 let inverse_bindposes = loader
                     .context
-                    .labeled_asset_scope(label, |_| SkinnedMeshInverseBindposes::from(inverse_bindposes));
+                    .add_labeled_asset(label, SkinnedMeshInverseBindposes::from(inverse_bindposes));
                 loader.assets.bindposes.push(inverse_bindposes.clone());
                 // We need to attach this to any children Entities we spawn for them to have the correct mesh
                 // joint data.
@@ -228,6 +228,24 @@ impl BinaryAsset {
                     ))
                     .await;
                 }
+            }
+            Some(NodeRef::AnimBundleNode(node)) => {
+                // AnimBundleNodes are helper nodes with an attached AnimBundle that stores an animation. This
+                // doesn't technically exist as a node, so let's not create an entity for it.
+
+                if node.draw_control_mask != 0
+                    || node.draw_show_mask != 0xFFFFFFFF
+                    || node.into_collide_mask != 0
+                    || node.bounds_type != BoundsType::Default
+                    || !node.tag_data.is_empty()
+                    || !node.child_refs.is_empty()
+                    || !node.stashed_refs.is_empty()
+                {
+                    warn!(name: "unhandled_node_attribs", target: "Panda3DLoader",
+                        "PandaNode attribs attached to node {} are non-zero! Please fix.", node_index);
+                }
+
+                self.convert_anim_bundle(loader, None, None, None, node.anim_bundle_ref as usize);
             }
             Some(NodeRef::GeomNode(node)) => {
                 // We need to create and attach actual mesh data to this node.
@@ -364,8 +382,9 @@ impl BinaryAsset {
     /// Recursively converts a CharacterJointBundle into the data needed for animating [`SkinnedMesh`]es, as
     /// well as any associated net_nodes.
     fn convert_joint_bundle(
-        &self, world: &mut World, parent: Entity, animation_context: Option<AnimationContext>,
-        net_nodes: &mut BTreeMap<usize, Entity>, node_index: usize,
+        &self, loader: &mut AssetLoaderData<'_, '_>, parent: Entity,
+        animation_context: Option<AnimationContext>, net_nodes: &mut BTreeMap<usize, Entity>,
+        node_index: usize,
     ) -> (Vec<Mat4>, Vec<Entity>) {
         let mut inverse_bindposes = Vec::new();
         let mut joints = Vec::new();
@@ -409,14 +428,16 @@ impl BinaryAsset {
                 // We first need to create a new AnimationPlayer and attach it to our parent. It cannot have
                 // animation tables assigned to itself, so we'll only add an AnimationTarget to the skeleton
                 // on down.
-                world.entity_mut(parent).insert(AnimationPlayer::default());
+                loader.world.entity_mut(parent).insert(AnimationPlayer::default());
+                loader.assets.animators.push(parent);
 
                 let parent_name = Name::new(node.name.clone());
                 let name = Name::new(part_group.name.clone());
                 let animation_context =
                     AnimationContext { root: parent, path: smallvec![parent_name, name.clone()] };
 
-                let skeleton = world
+                let skeleton = loader
+                    .world
                     .spawn((
                         AnimationTarget {
                             id: AnimationTargetId::from_names(animation_context.path.iter()),
@@ -429,14 +450,14 @@ impl BinaryAsset {
                     .id();
 
                 // Make sure to parent it correctly
-                world.entity_mut(parent).add_child(skeleton);
+                loader.world.entity_mut(parent).add_child(skeleton);
 
                 inverse_bindposes.push(node.root_transform.inverse());
                 joints.push(skeleton);
 
                 for child_ref in &part_group.child_refs {
                     let (child_inverse_bindposes, child_joints) = self.convert_joint_bundle(
-                        world,
+                        loader,
                         skeleton,
                         Some(animation_context.clone()),
                         net_nodes,
@@ -450,7 +471,8 @@ impl BinaryAsset {
                 // We're at an actual skeletal joint.
 
                 let name = Name::new(node.name.clone());
-                let joint = world
+                let joint = loader
+                    .world
                     .spawn((
                         Transform::from_matrix(node.default_value),
                         Visibility::default(),
@@ -459,7 +481,7 @@ impl BinaryAsset {
                     .id();
 
                 // Make sure to parent it correctly
-                world.entity_mut(parent).add_child(joint);
+                loader.world.entity_mut(parent).add_child(joint);
 
                 inverse_bindposes.push(node.initial_net_transform_inverse);
                 joints.push(joint);
@@ -467,7 +489,8 @@ impl BinaryAsset {
                 // We should always have a valid AnimationContext, and if we don't, we have bigger worries.
                 let mut animation_context = animation_context.unwrap();
                 animation_context.path.push(name);
-                world.entity_mut(joint).insert(AnimationTarget {
+                println!("Joint {:?}", animation_context.path);
+                loader.world.entity_mut(joint).insert(AnimationTarget {
                     id: AnimationTargetId::from_names(animation_context.path.iter()),
                     player: animation_context.root,
                 });
@@ -488,7 +511,8 @@ impl BinaryAsset {
                     // Make sure we don't pollute our parent's context
                     let mut animation_context = animation_context.clone();
                     animation_context.path.push(name.clone());
-                    let net_node = world
+                    let net_node = loader
+                        .world
                         .spawn((
                             transform,
                             Visibility::default(),
@@ -505,7 +529,7 @@ impl BinaryAsset {
 
                 for child_ref in &node.child_refs {
                     let (child_inverse_bindposes, child_joints) = self.convert_joint_bundle(
-                        world,
+                        loader,
                         joint,
                         Some(animation_context.clone()),
                         net_nodes,
@@ -547,13 +571,13 @@ impl BinaryAsset {
         let label = format!("Material{}", loader.assets.materials.len());
         // This should be fine, if attrib_refs is empty, it'll just return a default Material.
         let material = self.create_material(loader, render_state).await;
-        let material = loader.context.labeled_asset_scope(label, |_| material);
+        let material = loader.context.add_labeled_asset(label, material);
         loader.assets.materials.push(material.clone());
 
         // TODO: remove unwrap
         let label = format!("Mesh{}", loader.assets.meshes.len());
         let mesh = self.create_mesh(loader, joint_data, entity, geom_ref, geom_node).unwrap();
-        let mesh = loader.context.labeled_asset_scope(label, |_| mesh);
+        let mesh = loader.context.add_labeled_asset(label, mesh);
         loader.assets.meshes.push(mesh.clone());
 
         loader.world.entity_mut(entity).insert((Mesh3d(mesh), MeshMaterial3d(material)));
@@ -769,7 +793,7 @@ impl BinaryAsset {
 
                         // Register our (potentially) new image with the AssetServer properly, and store it
                         let label = format!("Image{}", loader.assets.textures.len());
-                        let image = loader.context.labeled_asset_scope(label, |_| image);
+                        let image = loader.context.add_labeled_asset(label, image);
                         loader.assets.textures.push(image.clone());
 
                         image
@@ -1166,6 +1190,187 @@ impl BinaryAsset {
         }
         Ok(mesh)
     }
+
+    fn convert_anim_bundle(
+        &self, loader: &mut AssetLoaderData<'_, '_>, animation: Option<&mut AnimationClip>,
+        animation_context: Option<AnimationContext>, frame_data: Option<(usize, f32)>, node_index: usize,
+    ) {
+        fn expand_channel_data(table: &[f32], default: f32, num_frames: usize) -> Vec<f32> {
+            match table.len() {
+                0 => vec![default; num_frames],
+                1 => vec![table[0]; num_frames],
+                _ => table.to_vec(),
+            }
+        }
+
+        match self.nodes.get(node_index) {
+            Some(NodeRef::AnimBundle(node)) => {
+                // We're at the base of an AnimBundle, so let's start building an AnimationClip
+                let mut animation = AnimationClip::default();
+                animation.set_duration(f32::from(node.num_frames) / node.fps);
+
+                // Let's also pull up the AnimGroups, since we know what they look like
+                if node.child_refs.len() != 2 {
+                    warn!(name: "unexpected_anim_bundle", target: "Panda3DLoader",
+                        "Unexpected number of child nodes on Node {}, unable to make animation!", node_index);
+                    return;
+                }
+
+                // Then, let's process skeleton/transform animation data
+                let Some(skeleton) = self.nodes.get_as::<AnimGroup>(node.child_refs[0] as usize) else {
+                    warn!(name: "not_an_anim_group", target: "Panda3DLoader",
+                        "Tried to acquire node {}, but it wasn't an AnimGroup! Unable to make animation, returning.", node.child_refs[0]);
+                    return;
+                };
+                if skeleton.name != "<skeleton>" {
+                    warn!(name: "unexpected_anim_group", target: "Panda3DLoader",
+                        "Expected node {} to have <skeleton> as a name but it didn't, ignoring.", node.child_refs[0]);
+                }
+
+                let animation_context = AnimationContext {
+                    root: Entity::PLACEHOLDER,
+                    path: smallvec![Name::new(node.name.clone()), Name::new(skeleton.name.clone())],
+                };
+
+                for child_ref in &skeleton.child_refs {
+                    self.convert_anim_bundle(
+                        loader,
+                        Some(&mut animation),
+                        Some(animation_context.clone()),
+                        Some((node.num_frames as usize, node.fps)),
+                        *child_ref as usize,
+                    );
+                }
+
+                // Finally, let's process morph target animations
+                let Some(morph) = self.nodes.get_as::<AnimGroup>(node.child_refs[1] as usize) else {
+                    warn!(name: "not_an_anim_group", target: "Panda3DLoader",
+                        "Tried to acquire node {}, but it wasn't an AnimGroup! Unable to make animation, returning.", node.child_refs[1]);
+                    return;
+                };
+                if !morph.child_refs.is_empty() {
+                    warn!(name: "morph_anims_unimplemented", target: "Panda3DLoader",
+                        "Node {} has Morph Target Animations, but they're currently unimplemented, please fix!", node_index);
+                }
+
+                let label = format!("Animation{}", loader.assets.animations.len());
+                let clip = loader.context.add_labeled_asset(label, animation);
+                loader.assets.animations.push(clip);
+            }
+            Some(NodeRef::AnimChannelMatrixXfmTable(node)) => {
+                if let (Some(mut animation_context), Some(animation)) = (animation_context, animation) {
+                    let name = Name::new(node.name.clone());
+                    animation_context.path.push(name);
+
+                    println!("Animation {:?}", animation_context.path);
+
+                    let anim_target_id = AnimationTargetId::from_names(animation_context.path.iter());
+
+                    let (num_frames, fps) = frame_data.unwrap();
+                    let frame_times = (0..num_frames).map(|i| i as f32 / fps);
+
+                    // Let's just check shear now since it's easier
+                    if !node.tables[3].is_empty() || !node.tables[4].is_empty() || !node.tables[5].is_empty()
+                    {
+                        warn!(name: "shear_animation_unsupported", target: "Panda3DLoader",
+                            "Shear animation detected on node {}, currently unsupported.", node_index);
+                    }
+
+                    for n in [0, 2, 3] {
+                        let default = match n {
+                            0 => 1.0, // Scale
+                            2 => 0.0, // Rotation
+                            3 => 0.0, // Translation
+                            _ => unreachable!(),
+                        };
+
+                        let channels = [
+                            expand_channel_data(&node.tables[n * 3], default, num_frames),
+                            expand_channel_data(&node.tables[n * 3 + 1], default, num_frames),
+                            expand_channel_data(&node.tables[n * 3 + 2], default, num_frames),
+                        ];
+
+                        if !channels[0].is_empty() || !channels[1].is_empty() || !channels[2].is_empty() {
+                            match n {
+                                0 => {
+                                    // Scale
+                                    let scale_values: Vec<Vec3> = (0..num_frames)
+                                        .map(|i| Vec3::new(channels[0][i], channels[1][i], channels[2][i]))
+                                        .collect();
+
+                                    animation.add_curve_to_target(
+                                        anim_target_id,
+                                        AnimatableCurve::new(
+                                            animated_field!(Transform::scale),
+                                            UnevenSampleAutoCurve::new(frame_times.clone().zip(scale_values))
+                                                .unwrap(),
+                                        ),
+                                    );
+                                }
+                                2 => {
+                                    // Rotation
+                                    let rotation_values: Vec<Quat> = (0..num_frames)
+                                        .map(|i| {
+                                            Quat::from_euler(
+                                                EulerRot::ZXY,
+                                                channels[0][i].to_radians(), // heading
+                                                channels[1][i].to_radians(), // pitch
+                                                channels[2][i].to_radians(), // roll
+                                            )
+                                        })
+                                        .collect();
+
+                                    animation.add_curve_to_target(
+                                        anim_target_id,
+                                        AnimatableCurve::new(
+                                            animated_field!(Transform::rotation),
+                                            UnevenSampleAutoCurve::new(
+                                                frame_times.clone().zip(rotation_values),
+                                            )
+                                            .unwrap(),
+                                        ),
+                                    );
+                                }
+                                3 => {
+                                    // Translation
+                                    let translation_values: Vec<Vec3> = (0..num_frames)
+                                        .map(|i| Vec3::new(channels[0][i], channels[1][i], channels[2][i]))
+                                        .collect();
+
+                                    animation.add_curve_to_target(
+                                        anim_target_id,
+                                        AnimatableCurve::new(
+                                            animated_field!(Transform::translation),
+                                            UnevenSampleAutoCurve::new(
+                                                frame_times.clone().zip(translation_values),
+                                            )
+                                            .unwrap(),
+                                        ),
+                                    );
+                                }
+                                _ => unreachable!(),
+                            }
+                        }
+                    }
+
+                    for child_ref in &node.child_refs {
+                        self.convert_anim_bundle(
+                            loader,
+                            Some(animation),
+                            Some(animation_context.clone()),
+                            frame_data,
+                            *child_ref as usize,
+                        );
+                    }
+                }
+            }
+            Some(node) => println!("Unexpected node {:?} in convert_anim_bundle", node),
+            None => {
+                warn!(name: "unexpected_node_index", target: "Panda3DLoader",
+                    "Tried to access node {}, but it doesn't exist, ignoring.", node_index);
+            }
+        }
+    }
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -1181,6 +1386,9 @@ pub struct Panda3DAsset {
     pub materials: Vec<Handle<Panda3DMaterial>>,
     pub textures: Vec<Handle<Image>>,
     pub bindposes: Vec<Handle<SkinnedMeshInverseBindposes>>,
+    /// All entities that have an AnimationPlayer attached
+    pub animators: Vec<Entity>,
+    pub animations: Vec<Handle<AnimationClip>>,
 }
 
 struct AssetLoaderData<'loader, 'context> {
@@ -1205,31 +1413,47 @@ impl AssetLoader for Panda3DLoader {
         let mut bytes = Vec::new();
         reader.read_to_end(&mut bytes).await?;
 
-        // Then, let's parse out our scene graph. TODO: make an async function?
+        // Then, let's parse out our scene graph.
         let bam = BinaryAsset::load(bytes)?;
 
-        // Now we need to post-process it into a scene we can actually spawn
+        // Now we need to post-process it into a scene the user can actually spawn
         let mut assets = Self::Asset::default();
-        assets.scene = load_context.labeled_asset_scope("Scene0".to_string(), |context| {
-            let mut world = World::default();
+        let mut world = World::default();
 
-            let mut loader = AssetLoaderData {
-                world: &mut world,
-                context,
-                assets: &mut assets,
-                image_cache: HashMap::new(),
-            };
+        let mut loader = AssetLoaderData {
+            world: &mut world,
+            context: load_context,
+            assets: &mut assets,
+            image_cache: HashMap::new(),
+        };
 
-            // Let's first pull out the root node, since it's a placeholder.
-            let Some(root_node) = bam.nodes.get_as::<ModelNode>(0) else {
-                warn!(name: "not_a_model_node", target: "Panda3DLoader", "Root Node isn't a ModelNode! Aborting loading.");
-                return Scene::new(world);
-            };
+        // Let's first pull out the root node, since it's a placeholder.
+        let Some(root_node) = bam.nodes.get_as::<ModelNode>(0) else {
+            warn!(name: "not_a_model_node", target: "Panda3DLoader", "Root Node isn't a ModelNode! Aborting loading.");
+            return Ok(assets);
+        };
 
-            block_on(bam.recurse_nodes(&mut loader, None, None, None, None, root_node.child_refs[0].0 as usize));
+        if root_node.draw_control_mask != 0
+            || root_node.draw_show_mask != 0xFFFFFFFF
+            || root_node.into_collide_mask != 0
+            || root_node.bounds_type != BoundsType::Default
+            || root_node.transform != PreserveTransform::None
+            || root_node.attributes != 0
+            || root_node.child_refs.len() != 1
+        {
+            warn!(name: "unexpected_root_node", target: "Panda3DLoader", "Root Node doesn't have default parameters! May not be loaded correctly.");
+        }
 
-            Scene::new(world)
-        });
+        block_on(bam.recurse_nodes(
+            &mut loader,
+            None,
+            None,
+            None,
+            None,
+            root_node.child_refs[0].0 as usize,
+        ));
+
+        assets.scene = load_context.add_labeled_asset("Scene0".to_string(), Scene::new(world));
 
         Ok(assets)
     }

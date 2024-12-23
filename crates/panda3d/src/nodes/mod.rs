@@ -57,3 +57,4 @@ pub(crate) mod transform_blend;
 pub(crate) mod transform_blend_table;
 pub(crate) mod transform_state;
 pub(crate) mod transparency_attrib;
+pub(crate) mod user_vertex_transform;

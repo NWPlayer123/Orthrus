@@ -165,4 +165,5 @@ stored_types!(
     TransformBlendTable,
     TransformState,
     TransparencyAttrib,
+    UserVertexTransform,
 );
