@@ -1,27 +1,27 @@
+//! Adds support for the Resource Pack (PCK) format used by the Godot game engine.
+//!
+//! This module is designed to assume little-endian files, as Godot will almost always be on a
+//! little-endian platform, but it does have the capability to save a file as big-endian. If you
+//! encounter this, please let me know!
+//!
+//! # Format
+//! The PCK format is designed to be easily parsable, and able to be embedded "inside" an executable for
+//! ease of distribution. There are multiple paths to locating a PCK inside a provided file. First, it
+//! will check if the file just a plain PCK by checking for the "GDPC" magic. If it doesn't find that, it
+//! will try to open the file as an executable and find a section labeled "pck". If it can't find that,
+//! it will check the last 4 bytes of the file. If it matches the "GDPC" magic, it will load the
+//! mini-header at the end of the file to obtain the relative offset to the start of the PCK.
+
+use orthrus_core::prelude::*;
+#[allow(unused_imports)]
+use orthrus_windows::pe::PortableExecutable;
+use snafu::prelude::*;
 #[cfg(feature = "std")]
 use std::{
     fs::File,
     io::{prelude::*, BufReader},
     path::Path,
 };
-
-/// Adds support for the Resource Pack (PCK) format used by the Godot game engine.
-///
-/// This module is designed to assume little-endian files, as Godot will almost always be on a
-/// little-endian platform, but it does have the capability to save a file as big-endian. If you
-/// encounter this, please let me know!
-///
-/// # Format
-/// The PCK format is designed to be easily parsable, and able to be embedded "inside" an executable for
-/// ease of distribution. There are multiple paths to locating a PCK inside a provided file. First, it
-/// will check if the file just a plain PCK by checking for the "GDPC" magic. If it doesn't find that, it
-/// will try to open the file as an executable and find a section labeled "pck". If it can't find that,
-/// it will check the last 4 bytes of the file. If it matches the "GDPC" magic, it will load the
-/// mini-header at the end of the file to obtain the relative offset to the start of the PCK.
-use orthrus_core::prelude::*;
-#[allow(unused_imports)]
-use orthrus_windows::pe::PortableExecutable;
-use snafu::prelude::*;
 
 #[derive(Debug, Snafu)]
 pub enum Error {

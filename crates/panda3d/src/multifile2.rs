@@ -68,7 +68,7 @@ impl core::fmt::Display for Version {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Header {
     version: Version,
     scale_factor: u32,
@@ -83,11 +83,11 @@ struct Metadata {
     files: Vec<SubfileHeader>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub struct Multifile {
     header: Header,
-    files: BTreeMap<String, Subfile>,
+    pub(crate) files: BTreeMap<String, Subfile>,
 }
 
 impl Multifile {
@@ -97,7 +97,7 @@ impl Multifile {
     pub const MAGIC: [u8; 6] = *b"pmf\0\n\r";
 
     /// Helper function that searches for the start of the actual Multifile, skipping any header prefix, which
-    /// allow for comment lines starting with '#'. Returns the size of the header prefix.
+    /// allows for comment lines starting with '#'. Returns the size of the header prefix.
     #[inline]
     fn parse_header_prefix<T: ReadExt + SeekExt>(data: &mut T) -> Result<u64, self::Error> {
         let mut pos = 0;
@@ -105,6 +105,7 @@ impl Multifile {
         // Check the initial byte of the line, keep looking til we find one without a comment.
         while let b'#' = data.read_u8()? {
             pos += 1;
+
             // If we are in a comment line, search for a '\n'
             loop {
                 let byte = data.read_u8()?;
@@ -113,6 +114,7 @@ impl Multifile {
                     break;
                 }
             }
+
             // Once we find the end of a line, skip any whitespace at the start of the next line
             loop {
                 let byte = data.read_u8()?;
@@ -171,8 +173,8 @@ impl Multifile {
     pub fn load<T: IntoDataStream>(input: T, offset: u64) -> Result<Self, self::Error> {
         let mut data = input.into_stream(Endian::Little);
         data.set_position(offset)?;
-        let header_size = Self::parse_header_prefix(&mut data)?;
-        data.set_position(header_size)?;
+        let _header_size = Self::parse_header_prefix(&mut data)?;
+        // After running parse_header_prefix, we should be at the start of a Multifile header.
         let metadata = Self::load_metadata(&mut data)?;
 
         // Now, let's actually build our sorted list of files (ideally, this will already be sorted inside
@@ -194,17 +196,17 @@ impl Multifile {
         Ok(Multifile { header: metadata.header, files })
     }
 
-    /// Loads the entire `Multifile` metadata and returns it as an instance. Used for sharing a ReadExt +
-    /// SeekExt stream across multiple operations.
+    /// Loads all `Multifile` header data and returns it. Used for sharing a ReadExt + SeekExt across multiple
+    /// operations.
     ///
-    /// This assumes that the input data is already at the start of a Multifile, i.e. we've already skipped
-    /// any potential header prefix or offset.
+    /// This function assumes that the input is already at the start of a Multifile, i.e. we've already
+    /// skipped any potential header prefix or offset.
     fn load_metadata<T: ReadExt + SeekExt>(data: &mut T) -> Result<Metadata, self::Error> {
         let header = Multifile::read_header(data)?;
 
-        // This is designed to work with an "optimized" Multifile. This means that all Subfile metadata is at
-        // the beginning of the file, with the actual file data following, so that seeking is minimized. Here,
-        // we accumulate all metadata, and then parse it into a BTreeMap to optimize cache efficiency.
+        // This is designed for "optimized" Multifiles. This means that all Subfile metadata is at the start
+        // of the section, followed by the actual file data, so that seeking is minimized. We read into a list
+        // here to minimize the work being done.
         let mut files = Vec::new();
 
         let mut next_index = data.read_u32()? * header.scale_factor;
@@ -219,7 +221,8 @@ impl Multifile {
         Ok(Metadata { header, files })
     }
 
-    /// Extracts all non-special Subfiles to the specified output directory.
+    /// Extracts all non-special Subfiles to the specified output directory. Returns the number of files that
+    /// were saved.
     #[inline]
     #[cfg(feature = "std")]
     pub fn extract_all<P: AsRef<Path>>(&mut self, output: P) -> Result<usize, self::Error> {
@@ -352,24 +355,24 @@ impl SubfileHeader {
             filename.push((255 - *c).into());
         }
 
-        Ok(SubfileHeader { offset, length, attributes, original_length, timestamp, filename })
+        Ok(Self { offset, length, attributes, original_length, timestamp, filename })
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[allow(dead_code)]
-struct Subfile {
+pub(crate) struct Subfile {
     attributes: Attributes,
     original_length: u32,
     timestamp: u32,
-    data: Vec<u8>,
+    pub(crate) data: Vec<u8>,
 }
 
 impl Subfile {
     #[inline]
     fn load<T: ReadExt + SeekExt>(data: &mut T, header: &SubfileHeader) -> Result<Self, self::Error> {
         data.set_position(header.offset.into())?;
-        Ok(Subfile {
+        Ok(Self {
             attributes: header.attributes,
             original_length: header.original_length,
             timestamp: header.timestamp,

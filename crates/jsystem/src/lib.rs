@@ -13,3 +13,4 @@ mod no_std {
 pub mod prelude;
 pub mod rarc;
 pub mod rarc2;
+pub mod error;

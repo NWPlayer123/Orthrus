@@ -6,48 +6,72 @@ use bitflags::bitflags;
 use orthrus_core::prelude::*;
 use snafu::prelude::*;
 
-/// Error conditions when working with Resource Archives.
-#[derive(Debug, Snafu)]
-#[non_exhaustive]
-pub enum Error {
+use crate::prelude::*;
+
+#[derive(Debug)]
+pub struct ResourceArchive {}
+
+impl ResourceArchive {
+    /// Unique identifier that tells us if we're reading a Resource Archive.
+    pub const MAGIC: [u8; 4] = *b"RARC";
+
+    /// Opens a file on disk, loads its contents, and parses it into a new `ResourceArchive` instance. The
+    /// instance can then be used for further operations.
+    #[inline]
     #[cfg(feature = "std")]
-    #[snafu(display("Filesystem Error {}", source))]
-    FileError { source: std::io::Error },
-
-    /// Thrown if trying to read the file out of its current bounds.
-    #[snafu(display("Reached the end of the current stream!"))]
-    EndOfFile,
-
-    /// Thrown if the header contains a magic number other than "RARC".
-    #[snafu(display("Invalid Magic! Expected {:?}.", ResourceArchive::MAGIC))]
-    InvalidMagic,
-
-    /// Thrown when encountering unexpected values.
-    #[snafu(display(
-        "Unexpected value encountered at position {:#X}! Reason: {}",
-        position,
-        reason
-    ))]
-    InvalidData { position: u64, reason: &'static str },
-}
-
-impl From<DataError> for Error {
-    #[inline]
-    fn from(error: DataError) -> Self {
-        match error {
-            #[cfg(feature = "std")]
-            DataError::Io { source } => Self::FileError { source },
-            DataError::EndOfFile => Self::EndOfFile,
-            _ => todo!(),
-        }
+    pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
+        let data = BufReader::new(File::open(path)?);
+        Self::load(data)
     }
-}
 
-#[cfg(feature = "std")]
-impl From<std::io::Error> for Error {
     #[inline]
-    fn from(error: std::io::Error) -> Self {
-        Error::FileError { source: error }
+    pub fn load<T: IntoDataStream>(input: T) -> Result<Self, Error> {
+        let mut data = input.into_stream(Endian::Big);
+        let header = Header::new(&mut data)?;
+        println!("{header:?}");
+        let data_header = DataHeader::new(&mut data)?;
+        println!("{data_header:?}");
+        let mut directory_nodes = Vec::with_capacity(data_header.directory_count as usize);
+        for _ in 0..data_header.directory_count {
+            let directory = DirectoryNode::new(&mut data)?;
+            //println!("{directory:?}");
+            directory_nodes.push(directory);
+        }
+        let mut file_nodes = Vec::with_capacity(data_header.file_count as usize);
+        for _ in 0..data_header.file_count {
+            let file = FileNode::new(&mut data)?;
+            //println!("{file:?}");
+            file_nodes.push(file);
+        }
+        // The String Table is 0x10 aligned, so we need to make sure we are too
+        data.set_position(0x20 + u64::from(data_header.string_table_offset))?;
+        let string_table = data.read_slice(data_header.string_table_size as usize)?;
+        for directory in directory_nodes {
+            let end = string_table[directory.string_offset as usize..]
+                .iter()
+                .position(|&b| b == 0)
+                .map(|pos| pos + directory.string_offset as usize)
+                .unwrap();
+            println!(
+                "{:?}:",
+                CString::new(&string_table[directory.string_offset as usize..end]).unwrap()
+            );
+            println!("{directory:?}");
+        }
+        println!();
+        for file in file_nodes {
+            let end = string_table[file.string_offset as usize..]
+                .iter()
+                .position(|&b| b == 0)
+                .map(|pos| pos + file.string_offset as usize)
+                .unwrap();
+            println!(
+                "{:?}:",
+                CString::new(&string_table[file.string_offset as usize..end]).unwrap()
+            );
+            println!("{file:?}");
+        }
+        Ok(Self {})
     }
 }
 
@@ -70,13 +94,13 @@ pub struct Header {
 
 impl Header {
     #[inline]
-    fn new<T: ReadExt + SeekExt>(data: &mut T) -> Result<Self, self::Error> {
+    fn new<T: ReadExt + SeekExt>(data: &mut T) -> Result<Self, Error> {
         // Load implicitly big endian magic, check to see if we need to swap endians
         let magic = data.read_exact::<4>()?;
         match &magic {
             b"RARC" => data.set_endian(Endian::Big),
             b"CRAR" => data.set_endian(Endian::Little),
-            _ => InvalidMagicSnafu {}.fail()?,
+            _ => InvalidMagicSnafu { expected: ResourceArchive::MAGIC }.fail()?,
         }
 
         let file_size = data.read_u32()?;
@@ -125,7 +149,7 @@ pub struct DataHeader {
 
 impl DataHeader {
     #[inline]
-    fn new<T: ReadExt + SeekExt>(data: &mut T) -> Result<Self, self::Error> {
+    fn new<T: ReadExt + SeekExt>(data: &mut T) -> Result<Self, Error> {
         let directory_count = data.read_u32()?;
         ensure!(
             data.read_u32()? == 0x20,
@@ -174,7 +198,7 @@ pub struct DirectoryNode {
 
 impl DirectoryNode {
     #[inline]
-    fn new<T: ReadExt>(data: &mut T) -> Result<Self, self::Error> {
+    fn new<T: ReadExt>(data: &mut T) -> Result<Self, Error> {
         let directory_name = data.read_exact::<4>()?;
         let string_offset = data.read_u32()?;
         let name_hash = data.read_u16()?;
@@ -215,7 +239,7 @@ pub struct FileNode {
 }
 
 impl FileNode {
-    fn new<T: ReadExt + SeekExt>(data: &mut T) -> Result<Self, self::Error> {
+    fn new<T: ReadExt + SeekExt>(data: &mut T) -> Result<Self, Error> {
         let node_index = data.read_u16()?;
         let node_hash = data.read_u16()?;
         let attributes = match Attributes::from_bits(data.read_u8()?) {
@@ -260,72 +284,5 @@ impl FileNode {
             node_offset,
             node_size,
         })
-    }
-}
-
-#[derive(Debug)]
-pub struct ResourceArchive {}
-
-impl ResourceArchive {
-    /// Unique identifier that tells us if we're reading a Resource Archive.
-    pub const MAGIC: [u8; 4] = *b"RARC";
-
-    /// Opens a file on disk, loads its contents, and parses it into a new `ResourceArchive` instance. The
-    /// instance can then be used for further operations.
-    #[inline]
-    #[cfg(feature = "std")]
-    pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, self::Error> {
-        let data = BufReader::new(File::open(path)?);
-        Self::load(data)
-    }
-
-    #[inline]
-    pub fn load<T: IntoDataStream>(input: T) -> Result<Self, self::Error> {
-        let mut data = input.into_stream(Endian::Big);
-        let header = Header::new(&mut data)?;
-        println!("{header:?}");
-        let data_header = DataHeader::new(&mut data)?;
-        println!("{data_header:?}");
-        let mut directory_nodes = Vec::with_capacity(data_header.directory_count as usize);
-        for _ in 0..data_header.directory_count {
-            let directory = DirectoryNode::new(&mut data)?;
-            //println!("{directory:?}");
-            directory_nodes.push(directory);
-        }
-        let mut file_nodes = Vec::with_capacity(data_header.file_count as usize);
-        for _ in 0..data_header.file_count {
-            let file = FileNode::new(&mut data)?;
-            //println!("{file:?}");
-            file_nodes.push(file);
-        }
-        // The String Table is 0x10 aligned, so we need to make sure we are too
-        data.set_position(0x20 + u64::from(data_header.string_table_offset))?;
-        let string_table = data.read_slice(data_header.string_table_size as usize)?;
-        for directory in directory_nodes {
-            let end = string_table[directory.string_offset as usize..]
-                .iter()
-                .position(|&b| b == 0)
-                .map(|pos| pos + directory.string_offset as usize)
-                .unwrap();
-            println!(
-                "{:?}:",
-                CString::new(&string_table[directory.string_offset as usize..end]).unwrap()
-            );
-            println!("{directory:?}");
-        }
-        println!();
-        for file in file_nodes {
-            let end = string_table[file.string_offset as usize..]
-                .iter()
-                .position(|&b| b == 0)
-                .map(|pos| pos + file.string_offset as usize)
-                .unwrap();
-            println!(
-                "{:?}:",
-                CString::new(&string_table[file.string_offset as usize..end]).unwrap()
-            );
-            println!("{file:?}");
-        }
-        Ok(Self {})
     }
 }

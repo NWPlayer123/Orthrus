@@ -24,11 +24,11 @@
 //!
 //! | Offset | Field | Type | Notes |
 //! |--------|-------|------|-------|
-//! | 0x0     | Magic number   | u8\[6] | Unique identifier ("pmf\\0\\n\\r") to let us know we're reading a Multifile. |
-//! | 0x4     | Major version  | u16    | Major version number for the Multifile revision (currently 1). |
-//! | 0x8     | Minor version  | u16    | Minor version number for the Multifile revision (currently 1). |
-//! | 0xC     | Scale factor   | u32    | Allows for scaling all file offsets to support larger-than-4GB files. |
-//! | \[0x10] | Unix timestamp | u32    | The time the Multifile was last modified ***(revision 1.1+)***. |
+//! | 0x0    | Magic number   | u8\[6] | Unique identifier ("pmf\\0\\n\\r") to let us know we're reading a Multifile. |
+//! | 0x6    | Major version  | u16    | Major version number for the Multifile revision (currently 1). |
+//! | 0x8    | Minor version  | u16    | Minor version number for the Multifile revision (currently 1). |
+//! | 0xA    | Scale factor   | u32    | Allows for scaling all file offsets to support larger-than-4GB files. |
+//! | \[0xE] | Unix timestamp | u32    | The time the Multifile was last modified ***(revision 1.1+)***. |
 //!
 //! ## Subfile Header
 //!

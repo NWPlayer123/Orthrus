@@ -8,7 +8,5 @@
 #[doc(inline)]
 pub use crate::rarc2::ResourceArchive;
 
-pub mod rarc {
-    #[doc(inline)]
-    pub use crate::rarc2::Error;
-}
+pub use crate::error::Error;
+pub(crate) use crate::error::*;

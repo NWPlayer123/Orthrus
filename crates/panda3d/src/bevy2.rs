@@ -8,9 +8,12 @@
 //! as a singular (TODO: check) PartBundle that holds all skinning data
 
 use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
 
 use bevy_internal::animation::{animated_field, AnimationTarget, AnimationTargetId};
-use bevy_internal::asset::io::Reader;
+use bevy_internal::asset::io::{
+    AssetReader, AssetReaderError, AssetSource, PathStream, Reader, SliceReader, VecReader
+};
 use bevy_internal::asset::{AssetLoader, LoadContext, RenderAssetUsages};
 use bevy_internal::image::{ImageAddressMode, ImageFilterMode, ImageSamplerBorderColor};
 use bevy_internal::pbr::{
@@ -25,6 +28,7 @@ use bevy_internal::render::render_resource::{
     AsBindGroup, Face, RenderPipelineDescriptor, SpecializedMeshPipelineError, TextureFormat,
 };
 use bevy_internal::tasks::block_on;
+use bevy_tasks::futures_lite::stream;
 use hashbrown::HashMap;
 use orthrus_core::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -32,6 +36,7 @@ use smallvec::{smallvec, SmallVec};
 use snafu::prelude::*;
 
 use crate::bevy_sgi::SgiImageLoader;
+use crate::multifile2::Multifile;
 use crate::nodes::color_attrib::ColorType;
 use crate::nodes::cull_face_attrib::CullMode;
 use crate::nodes::dispatch::NodeRef;
@@ -1388,10 +1393,10 @@ impl BinaryAsset {
 pub struct LoadSettings {}
 
 #[derive(Debug, Default)]
-pub struct Panda3DLoader;
+pub struct PandaLoader;
 
 #[derive(Asset, TypePath, Debug, Default)]
-pub struct Panda3DAsset {
+pub struct PandaAsset {
     pub scene: Handle<Scene>,
     pub meshes: Vec<Handle<Mesh>>,
     pub materials: Vec<Handle<Panda3DMaterial>>,
@@ -1405,13 +1410,13 @@ pub struct Panda3DAsset {
 struct AssetLoaderData<'loader, 'context> {
     world: &'loader mut World,
     context: &'loader mut LoadContext<'context>,
-    assets: &'loader mut Panda3DAsset,
+    assets: &'loader mut PandaAsset,
     // Stores all Texture NodeIDs and their Image# so we don't try to load image files twice
     image_cache: HashMap<usize, usize>,
 }
 
-impl AssetLoader for Panda3DLoader {
-    type Asset = Panda3DAsset;
+impl AssetLoader for PandaLoader {
+    type Asset = PandaAsset;
     type Error = bam::Error;
     type Settings = LoadSettings;
 
@@ -1474,13 +1479,135 @@ impl AssetLoader for Panda3DLoader {
     }
 }
 
+#[derive(Clone)]
+enum PandaStorage {
+    Extracted { root: std::path::PathBuf },
+    Multifile { phases: BTreeMap<String, Multifile> },
+}
+
+#[derive(Clone)]
+pub struct PandaAssetReader {
+    storage: PandaStorage,
+}
+
+impl PandaAssetReader {
+    fn new_extracted(root: PathBuf) -> Self {
+        Self { storage: PandaStorage::Extracted { root } }
+    }
+
+    fn new_multifile(phases: BTreeMap<String, Multifile>) -> Self {
+        Self { storage: PandaStorage::Multifile { phases } }
+    }
+}
+
+impl AssetReader for PandaAssetReader {
+    async fn read<'a>(&'a self, path: &'a Path) -> Result<Box<dyn Reader + 'a>, AssetReaderError> {
+        println!("AssetReader::read(path: {path:?})");
+        match &self.storage {
+            PandaStorage::Extracted { root } => {
+                let full_path = root.join(path);
+                let data = std::fs::read(full_path)?;
+                Ok(Box::new(VecReader::new(data)))
+            }
+            PandaStorage::Multifile { phases } => {
+                // Assuming we use paths ala `panda://phase_4/maps/texture.png` and we get the raw path
+                let path_str = path.to_str()
+                    .ok_or_else(|| AssetReaderError::NotFound(path.to_owned()))?;
+                // First folder will always be a Multifile phase filename
+                let (phase, file_path) = path_str.split_once('/')
+                    .ok_or_else(|| AssetReaderError::NotFound(path.to_owned()))?;
+                
+                let file = phases.get(phase)
+                    .and_then(|mf| mf.files.get(file_path))
+                    .ok_or_else(|| AssetReaderError::NotFound(path.to_owned()))?;
+                
+                Ok(Box::new(SliceReader::new(&file.data)))
+            },
+        }
+    }
+
+    async fn read_meta<'a>(&'a self, path: &'a Path) -> Result<impl Reader + 'a, AssetReaderError> {
+        match &self.storage {
+            PandaStorage::Extracted { root } => {
+                let mut meta_path = root.join(path);
+                let mut extension = path.extension().unwrap_or_default().to_os_string();
+                extension.push(".meta");
+                meta_path.set_extension(extension);
+                let data = std::fs::read(meta_path)?;
+                Ok(VecReader::new(data))
+            }
+            PandaStorage::Multifile { .. } => {
+                // Multifiles don't support .meta files
+                Err(AssetReaderError::NotFound(path.to_owned()))
+            }
+        }
+    }
+
+    async fn read_directory<'a>(&'a self, path: &'a Path) -> Result<Box<PathStream>, AssetReaderError> {
+        match &self.storage {
+            PandaStorage::Extracted { root } => {
+                let full_path = root.join(path);
+                match std::fs::read_dir(full_path) {
+                    Ok(read_dir) => {
+                        let paths = read_dir.filter_map(|entry| entry.ok()).map(|entry| entry.path());
+
+                        Ok(Box::new(stream::iter(paths)))
+                    }
+                    Err(error) => Err(error.into()),
+                }
+            }
+            PandaStorage::Multifile { phases } => {
+                if path.as_os_str().is_empty() || path == Path::new("/") {
+                    let paths = phases.keys().map(|phase| PathBuf::from(phase)).collect::<Vec<_>>();
+
+                    return Ok(Box::new(stream::iter(paths)));
+                }
+
+                Err(AssetReaderError::NotFound(path.to_owned()))
+            }
+        }
+    }
+
+    async fn is_directory<'a>(&'a self, path: &'a Path) -> Result<bool, AssetReaderError> {
+        match &self.storage {
+            PandaStorage::Extracted { root } => {
+                let full_path = root.join(path);
+                match std::fs::metadata(&full_path) {
+                    Ok(meta) => Ok(meta.is_dir()),
+                    Err(error) => Err(error.into())
+                }
+            },
+            PandaStorage::Multifile { phases } => {
+                if path.as_os_str().is_empty() || path == Path::new("/") {
+                    return Ok(true);
+                }
+                if let Some(phase) = path.to_str() {
+                    return Ok(phases.contains_key(phase));
+                }
+                Ok(false)
+            },
+        }
+    }
+}
+
 pub struct Panda3DPlugin;
 
 impl Plugin for Panda3DPlugin {
     fn build(&self, app: &mut App) {
-        app.init_asset_loader::<Panda3DLoader>()
+        let reader = if cfg!(debug_assertions) {
+            PandaAssetReader::new_extracted("assets".into())
+        } else {
+            PandaAssetReader::new_multifile(BTreeMap::new())
+        };
+
+        app.register_asset_source(
+            "panda",
+            AssetSource::build()
+                .with_reader(move || Box::new(reader.clone()))
+                .with_watch_warning("Some assets cannot be hot-reloaded")
+        ).init_asset_loader::<PandaLoader>()
             .init_asset_loader::<SgiImageLoader>()
-            .init_asset::<Panda3DAsset>()
+            .init_asset::<PandaAsset>()
             .add_plugins(MaterialPlugin::<Panda3DMaterial>::default());
     }
 }
