@@ -9,9 +9,6 @@ repository = "https://github.com/NWPlayer123/Orthrus"
 license = "MPL-2.0"
 keywords = ["modding", "gamedev"]
 
-[lints]
-workspace = true
-
 [profile.release]
 strip = true
 lto = true
@@ -64,6 +61,3 @@ bitflags = "2.6"
 hashbrown = "0.15"
 paste = "1.0"
 smallvec = { version = "1.13", features = ["union"] }
-
-[workspace.lints.rust]
-unused_crate_dependencies = "deny"

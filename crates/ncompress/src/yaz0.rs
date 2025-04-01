@@ -145,6 +145,9 @@ impl Yaz0 {
     /// Returns [`InvalidMagic`](Error::InvalidMagic) if the header does not match a Yaz0 file.
     #[inline]
     pub fn read_header(data: &[u8]) -> Result<Header> {
+        // Make sure we have enough data to actually check a header
+        ensure!(data.len() <= 0xC, EndOfFileSnafu);
+
         let magic = &data[0..4];
         ensure!(magic == Self::MAGIC, InvalidMagicSnafu);
 

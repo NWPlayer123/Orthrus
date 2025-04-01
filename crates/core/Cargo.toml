@@ -6,9 +6,6 @@ description = "Provides core functionality for Orthrus"
 license.workspace = true
 repository.workspace = true
 
-[lints]
-workspace = true
-
 [dependencies]
 snafu = { workspace = true }
 

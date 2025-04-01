@@ -282,6 +282,18 @@ impl BinaryAsset {
                     .await;
                 }
             }
+            Some(NodeRef::SequenceNode(node)) => {
+                // SequenceNode handles a special "animation" that swaps visibility on a series of nodes, so
+                // we translate that by adding a custom Component, a system that listens for any nodes with
+                // that Component, and we set ourselves to Visibility::Hidden so any child nodes inherit that
+                // visibility by default, and we can swap whatever the current node is to "play" the
+                // animation.
+                let (entity, effects) =
+                    self.handle_panda_node(loader.world, parent, effects, net_nodes, node, node_index).await;
+                if let Some(mut visibility) = loader.world.entity_mut(entity).get_mut::<Visibility>() {
+                    *visibility = Visibility::Hidden;
+                }
+            }
             Some(node) => println!("Unexpected node {:?} in recurse_nodes", node),
             None => {
                 warn!(name: "unexpected_node_index", target: "Panda3DLoader",
@@ -489,7 +501,6 @@ impl BinaryAsset {
                 // We should always have a valid AnimationContext, and if we don't, we have bigger worries.
                 let mut animation_context = animation_context.unwrap();
                 animation_context.path.push(name);
-                println!("Joint {:?}", animation_context.path);
                 loader.world.entity_mut(joint).insert(AnimationTarget {
                     id: AnimationTargetId::from_names(animation_context.path.iter()),
                     player: animation_context.root,

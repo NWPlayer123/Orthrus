@@ -12,6 +12,7 @@ use x509_cert::certificate::Certificate;
 /// # Errors
 /// Returns an error if `bytes` is larger than `0xFFF_FFFF`, or if the decoding fails. See
 /// [`der::ErrorKind`] for more details.
+// TODO: replace with der::from_der_partial once der 0.8 lands
 pub fn read_certificate(bytes: &[u8]) -> Result<(Certificate, usize)> {
     // SliceReader will only fail if larger than 0xFFF_FFFF.
     let mut reader = SliceReader::new(bytes)?;

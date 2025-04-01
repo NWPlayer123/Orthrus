@@ -159,6 +159,7 @@ stored_types!(
     PartGroup,
     RenderEffects,
     RenderState,
+    SequenceNode,
     Texture,
     TextureAttrib,
     TextureStage,
