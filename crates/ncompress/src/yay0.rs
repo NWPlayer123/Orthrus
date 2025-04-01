@@ -148,7 +148,7 @@ impl Yay0 {
     #[inline]
     pub fn read_header(data: &[u8]) -> Result<Header> {
         // Make sure we have enough data to actually check a header
-        ensure!(data.len() <= 0x10, EndOfFileSnafu);
+        ensure!(data.len() >= 0x10, EndOfFileSnafu);
 
         let magic = &data[0..4];
         ensure!(magic == Self::MAGIC, InvalidMagicSnafu);
