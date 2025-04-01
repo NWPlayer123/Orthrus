@@ -64,8 +64,8 @@ impl AnimInterface {
 
 impl GraphDisplay for AnimInterface {
     fn write_data(
-            &self, label: &mut impl core::fmt::Write, _connections: &mut Vec<u32>, is_root: bool,
-        ) -> Result<(), bam::Error> {
+        &self, label: &mut impl core::fmt::Write, _connections: &mut Vec<u32>, is_root: bool,
+    ) -> Result<(), bam::Error> {
         // Header
         if is_root {
             write!(label, "{{AnimInterface|")?;

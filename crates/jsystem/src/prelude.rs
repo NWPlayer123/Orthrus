@@ -5,8 +5,7 @@
 //! use orthrus_jsystem::prelude::*;
 //! ```
 
-#[doc(inline)]
-pub use crate::rarc2::ResourceArchive;
-
 pub use crate::error::Error;
 pub(crate) use crate::error::*;
+#[doc(inline)]
+pub use crate::rarc2::ResourceArchive;

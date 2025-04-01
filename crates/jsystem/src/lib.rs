@@ -10,7 +10,7 @@ mod no_std {
     pub use alloc::{format, vec};
 }
 
+pub mod error;
 pub mod prelude;
 pub mod rarc;
 pub mod rarc2;
-pub mod error;

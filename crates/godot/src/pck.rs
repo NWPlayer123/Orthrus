@@ -12,16 +12,17 @@
 //! it will check the last 4 bytes of the file. If it matches the "GDPC" magic, it will load the
 //! mini-header at the end of the file to obtain the relative offset to the start of the PCK.
 
-use orthrus_core::prelude::*;
-#[allow(unused_imports)]
-use orthrus_windows::pe::PortableExecutable;
-use snafu::prelude::*;
 #[cfg(feature = "std")]
 use std::{
     fs::File,
     io::{prelude::*, BufReader},
     path::Path,
 };
+
+use orthrus_core::prelude::*;
+#[allow(unused_imports)]
+use orthrus_windows::pe::PortableExecutable;
+use snafu::prelude::*;
 
 #[derive(Debug, Snafu)]
 pub enum Error {

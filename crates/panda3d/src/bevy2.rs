@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 
 use bevy_internal::animation::{animated_field, AnimationTarget, AnimationTargetId};
 use bevy_internal::asset::io::{
-    AssetReader, AssetReaderError, AssetSource, PathStream, Reader, SliceReader, VecReader
+    AssetReader, AssetReaderError, AssetSource, PathStream, Reader, SliceReader, VecReader,
 };
 use bevy_internal::asset::{AssetLoader, LoadContext, RenderAssetUsages};
 use bevy_internal::image::{ImageAddressMode, ImageFilterMode, ImageSamplerBorderColor};
@@ -1511,18 +1511,18 @@ impl AssetReader for PandaAssetReader {
             }
             PandaStorage::Multifile { phases } => {
                 // Assuming we use paths ala `panda://phase_4/maps/texture.png` and we get the raw path
-                let path_str = path.to_str()
-                    .ok_or_else(|| AssetReaderError::NotFound(path.to_owned()))?;
+                let path_str = path.to_str().ok_or_else(|| AssetReaderError::NotFound(path.to_owned()))?;
                 // First folder will always be a Multifile phase filename
-                let (phase, file_path) = path_str.split_once('/')
-                    .ok_or_else(|| AssetReaderError::NotFound(path.to_owned()))?;
-                
-                let file = phases.get(phase)
+                let (phase, file_path) =
+                    path_str.split_once('/').ok_or_else(|| AssetReaderError::NotFound(path.to_owned()))?;
+
+                let file = phases
+                    .get(phase)
                     .and_then(|mf| mf.files.get(file_path))
                     .ok_or_else(|| AssetReaderError::NotFound(path.to_owned()))?;
-                
+
                 Ok(Box::new(SliceReader::new(&file.data)))
-            },
+            }
         }
     }
 
@@ -1574,9 +1574,9 @@ impl AssetReader for PandaAssetReader {
                 let full_path = root.join(path);
                 match std::fs::metadata(&full_path) {
                     Ok(meta) => Ok(meta.is_dir()),
-                    Err(error) => Err(error.into())
+                    Err(error) => Err(error.into()),
                 }
-            },
+            }
             PandaStorage::Multifile { phases } => {
                 if path.as_os_str().is_empty() || path == Path::new("/") {
                     return Ok(true);
@@ -1585,7 +1585,7 @@ impl AssetReader for PandaAssetReader {
                     return Ok(phases.contains_key(phase));
                 }
                 Ok(false)
-            },
+            }
         }
     }
 }
@@ -1604,11 +1604,12 @@ impl Plugin for Panda3DPlugin {
             "panda",
             AssetSource::build()
                 .with_reader(move || Box::new(reader.clone()))
-                .with_watch_warning("Some assets cannot be hot-reloaded")
-        ).init_asset_loader::<PandaLoader>()
-            .init_asset_loader::<SgiImageLoader>()
-            .init_asset::<PandaAsset>()
-            .add_plugins(MaterialPlugin::<Panda3DMaterial>::default());
+                .with_watch_warning("Some assets cannot be hot-reloaded"),
+        )
+        .init_asset_loader::<PandaLoader>()
+        .init_asset_loader::<SgiImageLoader>()
+        .init_asset::<PandaAsset>()
+        .add_plugins(MaterialPlugin::<Panda3DMaterial>::default());
     }
 }
 
