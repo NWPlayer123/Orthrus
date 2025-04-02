@@ -1,7 +1,6 @@
-use mimalloc::MiMalloc;
-
+#[cfg(target_env = "musl")]
 #[global_allocator]
-static GLOBAL: MiMalloc = MiMalloc;
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 use std::{io::prelude::*, path::PathBuf};
 
