@@ -23,9 +23,13 @@ use num_enum::FromPrimitive;
 use orthrus_core::prelude::*;
 use snafu::prelude::*;
 
-use crate::common::*;
-use crate::nodes::dispatch::{NodeStorage, StoredType};
-use crate::nodes::prelude::*;
+use crate::{
+    common::*,
+    nodes::{
+        dispatch::{NodeStorage, StoredType},
+        prelude::*,
+    },
+};
 
 /// Error conditions for when working with Multifile archives.
 #[derive(Debug, Snafu)]

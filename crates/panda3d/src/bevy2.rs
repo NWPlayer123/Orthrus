@@ -7,47 +7,70 @@
 //! Character node is designed to be a high level animatable node that multiple meshes attach to, as well
 //! as a singular (TODO: check) PartBundle that holds all skinning data
 
-use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::{
+    collections::BTreeMap,
+    path::{Path, PathBuf},
+};
 
-use bevy_internal::animation::{animated_field, AnimationTarget, AnimationTargetId};
-use bevy_internal::asset::io::{
-    AssetReader, AssetReaderError, AssetSource, PathStream, Reader, SliceReader, VecReader,
+use bevy_animation::{
+    animated_field,
+    animation_curves::{AnimatableCurve, AnimatedField},
+    AnimationClip, AnimationPlayer, AnimationTarget, AnimationTargetId,
 };
-use bevy_internal::asset::{AssetLoader, LoadContext, RenderAssetUsages};
-use bevy_internal::image::{ImageAddressMode, ImageFilterMode, ImageSamplerBorderColor};
-use bevy_internal::pbr::{
-    ExtendedMaterial, MaterialExtension, MaterialExtensionKey, MaterialExtensionPipeline,
+use bevy_app::{App, Plugin};
+use bevy_asset::{
+    io::{AssetReader, AssetReaderError, AssetSource, PathStream, Reader, SliceReader, VecReader},
+    Asset, AssetApp as _, AssetLoader, Handle, LoadContext, RenderAssetUsages,
 };
-use bevy_internal::prelude::*;
-use bevy_internal::render::mesh::skinning::{SkinnedMesh, SkinnedMeshInverseBindposes};
-use bevy_internal::render::mesh::{
-    Indices, MeshVertexBufferLayoutRef, PrimitiveTopology, VertexAttributeValues,
+use bevy_color::{Color, ColorToComponents as _, Srgba};
+use bevy_core::Name;
+use bevy_ecs::{entity::Entity, world::World};
+use bevy_hierarchy::BuildChildren as _;
+use bevy_image::{Image, ImageAddressMode, ImageFilterMode, ImageSamplerBorderColor};
+use bevy_log::warn;
+use bevy_math::{curve::UnevenSampleAutoCurve, EulerRot};
+use bevy_pbr::{
+    ExtendedMaterial, MaterialExtension, MaterialExtensionKey, MaterialExtensionPipeline, MaterialPlugin,
+    MeshMaterial3d, StandardMaterial,
 };
-use bevy_internal::render::render_resource::{
-    AsBindGroup, Face, RenderPipelineDescriptor, SpecializedMeshPipelineError, TextureFormat,
+use bevy_reflect::{Reflect, TypePath};
+use bevy_render::{
+    alpha::AlphaMode,
+    mesh::{
+        skinning::{SkinnedMesh, SkinnedMeshInverseBindposes},
+        Indices, Mesh, Mesh3d, MeshVertexBufferLayoutRef, PrimitiveTopology, VertexAttributeValues,
+    },
+    render_resource::{
+        AsBindGroup, Face, RenderPipelineDescriptor, SpecializedMeshPipelineError, TextureFormat,
+    },
+    view::Visibility,
 };
-use bevy_internal::tasks::block_on;
-use bevy_tasks::futures_lite::stream;
+use bevy_scene::Scene;
+use bevy_tasks::{block_on, futures_lite::stream};
+use bevy_transform::components::Transform;
 use hashbrown::HashMap;
 use orthrus_core::prelude::*;
 use serde::{Deserialize, Serialize};
 use smallvec::{smallvec, SmallVec};
 use snafu::prelude::*;
 
-use crate::bevy_sgi::SgiImageLoader;
-use crate::multifile2::Multifile;
-use crate::nodes::color_attrib::ColorType;
-use crate::nodes::cull_face_attrib::CullMode;
-use crate::nodes::dispatch::NodeRef;
-use crate::nodes::model_node::PreserveTransform;
-use crate::nodes::part_bundle::BlendType;
-use crate::nodes::prelude::*;
-use crate::nodes::sampler_state::{FilterType, WrapMode};
-use crate::nodes::transform_blend::TransformEntry;
-use crate::nodes::transform_state::TransformFlags;
-use crate::nodes::transparency_attrib::TransparencyMode;
-use crate::prelude::*;
+use crate::{
+    bevy_sgi::SgiImageLoader,
+    multifile2::Multifile,
+    nodes::{
+        color_attrib::ColorType,
+        cull_face_attrib::CullMode,
+        dispatch::NodeRef,
+        model_node::PreserveTransform,
+        part_bundle::BlendType,
+        prelude::*,
+        sampler_state::{FilterType, WrapMode},
+        transform_blend::TransformEntry,
+        transform_state::TransformFlags,
+        transparency_attrib::TransparencyMode,
+    },
+    prelude::*,
+};
 
 // TODO on this whole file, try to reduce nesting, should be able to create an internal Error type, return
 // result and error if we encounter unexpected data, instead of the current stupid if let Some() spam.
@@ -293,7 +316,7 @@ impl BinaryAsset {
                 // that Component, and we set ourselves to Visibility::Hidden so any child nodes inherit that
                 // visibility by default, and we can swap whatever the current node is to "play" the
                 // animation.
-                let (entity, effects) =
+                let (entity, _effects) =
                     self.handle_panda_node(loader.world, parent, effects, net_nodes, node, node_index).await;
                 if let Some(mut visibility) = loader.world.entity_mut(entity).get_mut::<Visibility>() {
                     *visibility = Visibility::Hidden;

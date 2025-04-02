@@ -6,10 +6,7 @@
 #[cfg(not(feature = "std"))]
 mod no_std {
     extern crate alloc;
-    pub use alloc::boxed::Box;
-    pub use alloc::collections::BTreeMap;
-    pub use alloc::string::String;
-    pub use alloc::vec::Vec;
+    pub use alloc::{boxed::Box, collections::BTreeMap, string::String, vec::Vec};
 }
 
 pub mod multifile;

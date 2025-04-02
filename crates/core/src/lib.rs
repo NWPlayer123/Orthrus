@@ -10,9 +10,7 @@
 #[expect(unused_imports, reason = "TODO: verify no_std still works")]
 mod no_std {
     extern crate alloc;
-    use alloc::boxed::Box;
-    use alloc::format;
-    use alloc::string::String;
+    use alloc::{boxed::Box, format, string::String};
 }
 
 pub mod prelude;

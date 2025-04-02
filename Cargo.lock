@@ -484,41 +484,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bevy_gizmos"
-version = "0.15.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c1614516d0922ad60e87cc39658422286ed684aaf4b3162d25051bc105eed814"
-dependencies = [
- "bevy_app",
- "bevy_asset",
- "bevy_color",
- "bevy_core_pipeline",
- "bevy_ecs",
- "bevy_gizmos_macros",
- "bevy_image",
- "bevy_math",
- "bevy_pbr",
- "bevy_reflect",
- "bevy_render",
- "bevy_time",
- "bevy_transform",
- "bevy_utils",
- "bytemuck",
-]
-
-[[package]]
-name = "bevy_gizmos_macros"
-version = "0.15.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0edb9e0dca64e0fc9d6b1d9e6e2178396e339e3e2b9f751e2504e3ea4ddf4508"
-dependencies = [
- "bevy_macro_utils",
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "bevy_hierarchy"
 version = "0.15.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -567,37 +532,6 @@ dependencies = [
  "bevy_utils",
  "derive_more",
  "smol_str",
-]
-
-[[package]]
-name = "bevy_internal"
-version = "0.15.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f1e0c1d980d276e11558184d0627c8967ad8b70dab3e54a0f377bb53b98515b6"
-dependencies = [
- "bevy_animation",
- "bevy_app",
- "bevy_asset",
- "bevy_color",
- "bevy_core",
- "bevy_derive",
- "bevy_diagnostic",
- "bevy_ecs",
- "bevy_gizmos",
- "bevy_hierarchy",
- "bevy_image",
- "bevy_input",
- "bevy_log",
- "bevy_math",
- "bevy_pbr",
- "bevy_ptr",
- "bevy_reflect",
- "bevy_render",
- "bevy_scene",
- "bevy_tasks",
- "bevy_time",
- "bevy_transform",
- "bevy_utils",
 ]
 
 [[package]]
@@ -817,7 +751,6 @@ dependencies = [
  "bevy_ecs",
  "bevy_hierarchy",
  "bevy_reflect",
- "bevy_render",
  "bevy_transform",
  "bevy_utils",
  "derive_more",
@@ -2120,7 +2053,7 @@ dependencies = [
 
 [[package]]
 name = "orthrus-core"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "der",
  "snafu",
@@ -2148,7 +2081,7 @@ dependencies = [
 
 [[package]]
 name = "orthrus-ncompress"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "orthrus-core",
  "snafu",
@@ -2169,8 +2102,20 @@ name = "orthrus-panda3d"
 version = "0.1.0"
 dependencies = [
  "approx",
- "bevy_internal",
+ "bevy_animation",
+ "bevy_app",
+ "bevy_asset",
+ "bevy_color",
+ "bevy_core",
+ "bevy_ecs",
+ "bevy_hierarchy",
+ "bevy_image",
+ "bevy_log",
  "bevy_math",
+ "bevy_pbr",
+ "bevy_reflect",
+ "bevy_render",
+ "bevy_scene",
  "bevy_tasks",
  "bevy_transform",
  "bitflags 2.9.0",

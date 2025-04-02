@@ -1,5 +1,4 @@
-use super::geom_enums::AnimationType;
-use super::prelude::*;
+use super::{geom_enums::AnimationType, prelude::*};
 
 #[derive(Debug, Default)]
 #[allow(dead_code)]

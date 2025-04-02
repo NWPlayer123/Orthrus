@@ -1,7 +1,6 @@
-use bevy_internal::asset::io::Reader;
-use bevy_internal::asset::{AssetLoader, LoadContext, RenderAssetUsages};
-use bevy_internal::prelude::*;
-use bevy_internal::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
+use bevy_asset::{io::Reader, AssetLoader, LoadContext, RenderAssetUsages};
+use bevy_image::Image;
+use bevy_render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use orthrus_core::prelude::*;
 use snafu::prelude::*;
 

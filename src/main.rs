@@ -3,8 +3,7 @@ use mimalloc::MiMalloc;
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
 
-use std::io::prelude::*;
-use std::path::PathBuf;
+use std::{io::prelude::*, path::PathBuf};
 
 use anyhow::Result;
 use env_logger::Builder;

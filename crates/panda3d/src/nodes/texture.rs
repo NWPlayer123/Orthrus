@@ -1,9 +1,8 @@
 use core::ops::{Deref, DerefMut};
 
-use super::auto_texture_scale::AutoTextureScale;
-use super::geom_enums::UsageHint;
-use super::prelude::*;
-use super::sampler_state::SamplerState;
+use super::{
+    auto_texture_scale::AutoTextureScale, geom_enums::UsageHint, prelude::*, sampler_state::SamplerState,
+};
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Default, FromPrimitive)]
 #[repr(u8)]

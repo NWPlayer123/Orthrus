@@ -12,11 +12,15 @@
 //! * [`WriteExt`] provides for endian-aware writing.
 //! * [`SeekExt`] provides for optional seeking, if `ReadExt` and `WriteExt` are not enough.
 
-use core::mem::MaybeUninit;
-use core::ops::{Deref, DerefMut};
-use std::fs::File;
-use std::io::{BufReader, Cursor, Empty};
-use std::sync::Arc;
+use core::{
+    mem::MaybeUninit,
+    ops::{Deref, DerefMut},
+};
+use std::{
+    fs::File,
+    io::{BufReader, Cursor, Empty},
+    sync::Arc,
+};
 
 use snafu::prelude::*;
 

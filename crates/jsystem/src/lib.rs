@@ -6,8 +6,7 @@
 #[cfg(not(feature = "std"))]
 mod no_std {
     extern crate alloc;
-    pub use alloc::boxed::Box;
-    pub use alloc::{format, vec};
+    pub use alloc::{boxed::Box, format, vec};
 }
 
 pub mod error;
