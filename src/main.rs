@@ -17,8 +17,8 @@ use owo_colors::OwoColorize;
 mod identify;
 mod menu;
 use menu::{
-    exactly_one_true, GodotModules, JSystemModules, Modules, NCompressModules, NintendoWareModules,
-    Panda3dModules,
+    GodotModules, JSystemModules, Modules, NCompressModules, NintendoWareModules, Panda3dModules,
+    exactly_one_true,
 };
 
 fn color_level(level: Level) -> String {

@@ -15,7 +15,7 @@
 #[cfg(feature = "std")]
 use std::{
     fs::File,
-    io::{prelude::*, BufReader},
+    io::{BufReader, prelude::*},
     path::Path,
 };
 

@@ -43,7 +43,7 @@ members = ["crates/*"]
 # repo will get very large in the future, with different people focusing on features in a specific
 # module
 [workspace.package]
-edition = "2021"
+edition = "2024"
 license = "MPL-2.0"
 repository = "https://github.com/NWPlayer123/Orthrus"
 

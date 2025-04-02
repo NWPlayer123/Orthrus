@@ -13,14 +13,13 @@ use std::{
 };
 
 use bevy_animation::{
-    animated_field,
+    AnimationClip, AnimationPlayer, AnimationTarget, AnimationTargetId, animated_field,
     animation_curves::{AnimatableCurve, AnimatedField},
-    AnimationClip, AnimationPlayer, AnimationTarget, AnimationTargetId,
 };
 use bevy_app::{App, Plugin};
 use bevy_asset::{
-    io::{AssetReader, AssetReaderError, AssetSource, PathStream, Reader, SliceReader, VecReader},
     Asset, AssetApp as _, AssetLoader, Handle, LoadContext, RenderAssetUsages,
+    io::{AssetReader, AssetReaderError, AssetSource, PathStream, Reader, SliceReader, VecReader},
 };
 use bevy_color::{Color, ColorToComponents as _, Srgba};
 use bevy_core::Name;
@@ -28,7 +27,7 @@ use bevy_ecs::{entity::Entity, world::World};
 use bevy_hierarchy::BuildChildren as _;
 use bevy_image::{Image, ImageAddressMode, ImageFilterMode, ImageSamplerBorderColor};
 use bevy_log::warn;
-use bevy_math::{curve::UnevenSampleAutoCurve, EulerRot};
+use bevy_math::{EulerRot, curve::UnevenSampleAutoCurve};
 use bevy_pbr::{
     ExtendedMaterial, MaterialExtension, MaterialExtensionKey, MaterialExtensionPipeline, MaterialPlugin,
     MeshMaterial3d, StandardMaterial,
@@ -37,8 +36,8 @@ use bevy_reflect::{Reflect, TypePath};
 use bevy_render::{
     alpha::AlphaMode,
     mesh::{
-        skinning::{SkinnedMesh, SkinnedMeshInverseBindposes},
         Indices, Mesh, Mesh3d, MeshVertexBufferLayoutRef, PrimitiveTopology, VertexAttributeValues,
+        skinning::{SkinnedMesh, SkinnedMeshInverseBindposes},
     },
     render_resource::{
         AsBindGroup, Face, RenderPipelineDescriptor, SpecializedMeshPipelineError, TextureFormat,
@@ -51,7 +50,7 @@ use bevy_transform::components::Transform;
 use hashbrown::HashMap;
 use orthrus_core::prelude::*;
 use serde::{Deserialize, Serialize};
-use smallvec::{smallvec, SmallVec};
+use smallvec::{SmallVec, smallvec};
 use snafu::prelude::*;
 
 use crate::{

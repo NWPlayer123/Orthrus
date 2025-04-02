@@ -263,37 +263,37 @@ impl ResourceArchive {
             flags:
                 - compressed
         ";
-                use yaml_peg::{dump, node, parse, repr::RcRepr};
-                let root = &parse::<RcRepr>(doc).unwrap()[0];
-                let files = root.get("files").unwrap();
-                for n in files.as_seq().unwrap() {
-                    let path = n.get("path").unwrap();
-                    let flags = n.get("flags").unwrap();
-                    println!("File Path: {:?}", path.as_str().unwrap());
-                    println!("{:?}", flags);
-                }
+        use yaml_peg::{dump, node, parse, repr::RcRepr};
+        let root = &parse::<RcRepr>(doc).unwrap()[0];
+        let files = root.get("files").unwrap();
+        for n in files.as_seq().unwrap() {
+            let path = n.get("path").unwrap();
+            let flags = n.get("flags").unwrap();
+            println!("File Path: {:?}", path.as_str().unwrap());
+            println!("{:?}", flags);
+        }
 
-                let doc = dump::<RcRepr>(
-                    &[node!({
-                        "files" => node!([
-                            node!({
-                                "path" => "path/to/file1",
-                                "flags" => node!([
-                                    "compressed", "encrypted"
-                                ])
-                            }),
-                            node!({
-                                "path" => "path/to/file2",
-                                "flags" => node!([
-                                    "compressed"
-                                ])
-                            }),
+        let doc = dump::<RcRepr>(
+            &[node!({
+                "files" => node!([
+                    node!({
+                        "path" => "path/to/file1",
+                        "flags" => node!([
+                            "compressed", "encrypted"
                         ])
-                    })],
-                    &[],
-                );
+                    }),
+                    node!({
+                        "path" => "path/to/file2",
+                        "flags" => node!([
+                            "compressed"
+                        ])
+                    }),
+                ])
+            })],
+            &[],
+        );
 
-                println!("{}", doc);*/
+        println!("{}", doc);*/
         Ok(())
     }
 }

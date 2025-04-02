@@ -2,7 +2,7 @@
 /// .exe file extension.
 use bitflags::bitflags;
 use zerocopy::{
-    BigEndian, FromBytes, Immutable, KnownLayout, LittleEndian, TryFromBytes, Unaligned, U16, U32,
+    BigEndian, FromBytes, Immutable, KnownLayout, LittleEndian, TryFromBytes, U16, U32, Unaligned,
 };
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, Default, FromBytes, KnownLayout, Immutable, Unaligned)]

@@ -1,4 +1,4 @@
-use bevy_asset::{io::Reader, AssetLoader, LoadContext, RenderAssetUsages};
+use bevy_asset::{AssetLoader, LoadContext, RenderAssetUsages, io::Reader};
 use bevy_image::Image;
 use bevy_render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use orthrus_core::prelude::*;
