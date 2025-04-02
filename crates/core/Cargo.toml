@@ -1,8 +1,8 @@
 [package]
 name = "orthrus-core"
 version = "0.3.1"
-edition = "2021"
 description = "Provides core functionality for Orthrus"
+edition.workspace = true
 license.workspace = true
 repository.workspace = true
 

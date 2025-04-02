@@ -1,8 +1,8 @@
 [package]
 name = "orthrus-panda3d"
 version = "0.1.0"
-edition = "2021"
 description = "Orthrus module supporting the Panda3D engine"
+edition.workspace = true
 license.workspace = true
 repository.workspace = true
 

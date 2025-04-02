@@ -2,12 +2,12 @@
 name = "orthrus"
 version = "0.2.0"
 authors = ["NWPlayer123 <nikki@aetheria.dev>"]
-edition = "2021"
 description = "A new way to modify games."
 readme = "README.md"
-repository = "https://github.com/NWPlayer123/Orthrus"
-license = "MPL-2.0"
 keywords = ["modding", "gamedev"]
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
 
 [profile.release]
 strip = true
@@ -43,6 +43,7 @@ members = ["crates/*"]
 # repo will get very large in the future, with different people focusing on features in a specific
 # module
 [workspace.package]
+edition = "2021"
 license = "MPL-2.0"
 repository = "https://github.com/NWPlayer123/Orthrus"
 

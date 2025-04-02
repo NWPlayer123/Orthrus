@@ -10,6 +10,5 @@ reorder_impl_items = true
 group_imports = "StdExternalCrate"
 use_field_init_shorthand = true
 chain_width = 100
-edition = "2021"
 struct_lit_width = 70
 fn_params_layout = "Compressed"
