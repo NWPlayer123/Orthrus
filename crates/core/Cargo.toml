@@ -10,7 +10,7 @@ repository.workspace = true
 snafu = { workspace = true }
 
 # Required for time module
-time = { version = "=0.3.39", features = ["local-offset"], optional = true }
+time = { version = "0.3", features = ["local-offset"], optional = true }
 
 # Required for certificate module
 der = { version = "0.7", optional = true }
