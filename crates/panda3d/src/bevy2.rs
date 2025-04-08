@@ -22,9 +22,7 @@ use bevy_asset::{
     io::{AssetReader, AssetReaderError, AssetSource, PathStream, Reader, SliceReader, VecReader},
 };
 use bevy_color::{Color, ColorToComponents as _, Srgba};
-use bevy_core::Name;
-use bevy_ecs::{entity::Entity, world::World};
-use bevy_hierarchy::BuildChildren as _;
+use bevy_ecs::{entity::Entity, name::Name, world::World};
 use bevy_image::{Image, ImageAddressMode, ImageFilterMode, ImageSamplerBorderColor};
 use bevy_log::warn;
 use bevy_math::{EulerRot, curve::UnevenSampleAutoCurve};
@@ -791,10 +789,14 @@ impl BinaryAsset {
                             // For the entire image, replace the alpha u8 with the one from alpha image
                             let height = rgb_image.texture_descriptor.size.height;
                             let width = rgb_image.texture_descriptor.size.width;
-                            for y in 0..height {
-                                for x in 0..width {
-                                    let alpha_pixel = alpha_image.data[(y * width + x) as usize];
-                                    rgb_image.data[((y * width + x) * 4) as usize + 3] = alpha_pixel;
+                            if let (Some(alpha_data), Some(rgb_data)) =
+                                (alpha_image.data.as_ref(), rgb_image.data.as_mut())
+                            {
+                                for y in 0..height {
+                                    for x in 0..width {
+                                        let alpha_pixel = alpha_data[(y * width + x) as usize];
+                                        rgb_data[((y * width + x) * 4) as usize + 3] = alpha_pixel;
+                                    }
                                 }
                             }
                             rgb_image

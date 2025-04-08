@@ -18,7 +18,6 @@
 #[cfg(feature = "std")]
 use std::{io::prelude::*, path::Path};
 
-use bevy_tasks::block_on;
 use hashbrown::HashMap;
 use num_enum::FromPrimitive;
 use orthrus_core::prelude::*;
@@ -283,7 +282,7 @@ impl BinaryAsset {
             // For now I'm combining them into a single function
             let type_name = self.type_registry.get_mut(&type_handle).expect("a").to_owned();
             //println!("Filling in {} from {:#X}", type_name, data.position()?);
-            block_on(self.fillin(data, &type_name))?;
+            self.fillin(data, &type_name)?;
         }
         if data.position()? != data.len()? {
             println!(
@@ -356,7 +355,7 @@ impl BinaryAsset {
     }
 
     //should really be using make_from_bam as an entrypoint
-    async fn fillin(&mut self, data: &mut Datagram<'_>, type_name: &str) -> Result<(), self::Error> {
+    fn fillin(&mut self, data: &mut Datagram<'_>, type_name: &str) -> Result<(), self::Error> {
         //println!("{type_name}");
         match type_name {
             "AnimBundle" => self.create_node::<AnimBundle>(data),
