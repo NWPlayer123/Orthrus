@@ -9,7 +9,7 @@ pub(crate) struct SparseArray {
 
 impl SparseArray {
     #[inline]
-    pub fn create(_loader: &mut BinaryAsset, data: &mut Datagram<'_>) -> Result<Self, bam::Error> {
+    pub fn create(_loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
         let num_subranges = data.read_u32()?;
         let mut subranges = Vec::with_capacity(num_subranges as usize);
         for _ in 0..num_subranges {

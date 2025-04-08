@@ -21,7 +21,7 @@ pub(crate) struct CollisionSolid {
 
 impl CollisionSolid {
     #[inline]
-    pub fn create(_loader: &mut BinaryAsset, data: &mut Datagram<'_>) -> Result<Self, bam::Error> {
+    pub fn create(_loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
         let mut flags = Flags::from_bits_truncate(data.read_u8()?);
 
         let effective_normal = match flags.contains(Flags::EffectiveNormal) {

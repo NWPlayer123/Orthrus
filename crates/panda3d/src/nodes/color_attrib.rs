@@ -35,7 +35,7 @@ impl ColorAttrib {
 
 impl Node for ColorAttrib {
     #[inline]
-    fn create(_loader: &mut BinaryAsset, data: &mut Datagram<'_>) -> Result<Self, bam::Error> {
+    fn create(_loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
         let color_type = ColorType::from(data.read_u8()?);
 
         //TODO: create custom color type?

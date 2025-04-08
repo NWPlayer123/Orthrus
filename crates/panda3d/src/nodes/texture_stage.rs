@@ -83,7 +83,7 @@ pub(crate) struct CombineConfig {
 //TODO: make the flag check functions const, need const PartialEq which is only in nightly rn
 impl CombineConfig {
     #[inline]
-    fn create(_loader: &mut BinaryAsset, data: &mut Datagram<'_>) -> Result<Self, bam::Error> {
+    fn create(_loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
         let mode = CombineMode::from(data.read_u8()?);
         let num_operands = data.read_u8()?;
         let source0 = CombineSource::from(data.read_u8()?);

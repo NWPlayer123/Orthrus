@@ -5,7 +5,7 @@ pub(crate) struct DecalEffect;
 
 impl Node for DecalEffect {
     #[inline]
-    fn create(_loader: &mut BinaryAsset, _data: &mut Datagram<'_>) -> Result<Self, bam::Error> {
+    fn create(_loader: &mut BinaryAsset, _data: &mut Datagram) -> Result<Self, bam::Error> {
         Ok(Self {})
     }
 }

@@ -61,7 +61,7 @@ impl TransformState {
 impl Node for TransformState {
     #[inline]
     #[allow(clippy::field_reassign_with_default)]
-    fn create(_loader: &mut BinaryAsset, data: &mut Datagram<'_>) -> Result<Self, bam::Error> {
+    fn create(_loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
         let mut state = Self::default();
 
         state.flags = TransformFlags::from_bits_truncate(data.read_u32()?);

@@ -29,7 +29,7 @@ pub(crate) struct TransparencyAttrib {
 
 impl Node for TransparencyAttrib {
     #[inline]
-    fn create(_loader: &mut BinaryAsset, data: &mut Datagram<'_>) -> Result<Self, bam::Error> {
+    fn create(_loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
         Ok(Self { mode: TransparencyMode::from(data.read_u8()?) })
     }
 }

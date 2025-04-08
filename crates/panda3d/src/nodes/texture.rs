@@ -205,7 +205,7 @@ impl Texture {
     #[inline]
     #[allow(clippy::field_reassign_with_default)]
     fn fillin_body(
-        loader: &mut BinaryAsset, data: &mut Datagram<'_>, texture_type: TextureType,
+        loader: &mut BinaryAsset, data: &mut Datagram, texture_type: TextureType,
     ) -> Result<TextureBody, bam::Error> {
         let mut body = TextureBody::default();
 
@@ -258,7 +258,7 @@ impl Texture {
     }
 
     #[inline]
-    fn fillin_data(loader: &mut BinaryAsset, data: &mut Datagram<'_>) -> Result<TextureData, bam::Error> {
+    fn fillin_data(loader: &mut BinaryAsset, data: &mut Datagram) -> Result<TextureData, bam::Error> {
         let size = UVec3::read(data)?;
 
         let pad_size = match loader.get_minor_version() >= 30 {

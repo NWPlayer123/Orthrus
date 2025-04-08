@@ -1,16 +1,17 @@
 //! Adds support for the Binary Asset format used by the Panda3D engine.
 //!
 //! # Overview
-//! There does not seem to be much documentation of the origins of this file format in the Panda3D
-//! codebase, but here is the general outline.
+//! There does not seem to be much documentation on the origins of this file format in the Panda3D codebase,
+//! so this module attempts to give an overview.
 //!
-//! This format is a generic one that can store any amount of Panda3D objects (all of which are
-//! derived from TypedWritable), and is most often used to store models and/or animations, hence the
-//! most common file extension being ".bam", which stands for Binary Animation and Models. There is
-//! also ".boo", which stands for Binary Other Objects.
+//! This format was designed to store any amount of Panda3D objects (all of which are derived from
+//! TypedWritable), and is most often used to store models and/or animations, hence the most common file
+//! extension being ".bam", which stands for Binary Animation and Models. There is also ".boo", which stands
+//! for Binary Other Objects.
 //!
-//! It is used to represent Panda3D's internal scene graph hierarchy in a binary file format, as
-//! compared to .egg which is meant to be human-readable and editable by other programs.
+//! It is used to directly represent Panda3D's internal scene graph hierarchy in a binary format, as compared
+//! to .egg which is meant to be a greatly simplified human-readable version that can be edited by other
+//! people or programs as well as being an "intermediate" format between more typical model formats.
 //!
 //! # Revisions
 
@@ -33,6 +34,7 @@ use crate::{
 
 /// Error conditions for when working with Multifile archives.
 #[derive(Debug, Snafu)]
+#[snafu(visibility(pub(crate)))]
 #[non_exhaustive]
 pub enum Error {
     #[snafu(display("Formatting Error {source}"))]
@@ -41,10 +43,6 @@ pub enum Error {
     /// Thrown if a [`std::io::Error`] happened when trying to read/write files.
     #[snafu(display("Filesystem Error {source}"))]
     FileError { source: std::io::Error },
-
-    /// Thrown if a [`DataError`] other than EndOfFile is encountered.
-    #[snafu(display("Decoding Error {source}"))]
-    DataError { source: DataError },
 
     /// Thrown if trying to read the file out of its current bounds.
     #[snafu(display("Reached the end of the current stream!"))]
@@ -67,6 +65,7 @@ pub enum Error {
     InvalidType { type_name: &'static str },
 }
 
+// Implemented so that the GraphViz implementations can easily coerce to this error
 impl From<core::fmt::Error> for Error {
     #[inline]
     fn from(source: core::fmt::Error) -> Self {
@@ -74,37 +73,16 @@ impl From<core::fmt::Error> for Error {
     }
 }
 
-#[cfg(feature = "std")]
-impl From<std::io::Error> for Error {
-    #[inline]
-    fn from(source: std::io::Error) -> Self {
-        Self::FileError { source }
-    }
-}
-
+// Implemented since read_/write_ are so integral to the program
 impl From<DataError> for Error {
     #[inline]
     fn from(error: DataError) -> Self {
         match error {
-            DataError::Io { source } => Error::FileError { source },
             DataError::EndOfFile => Error::EndOfFile,
+            DataError::Io { source } => Error::FileError { source },
             DataError::InvalidString { source } => Error::InvalidString { source },
-            _ => todo!(),
+            _ => unreachable!(),
         }
-    }
-}
-
-impl From<core::str::Utf8Error> for Error {
-    #[inline]
-    fn from(source: core::str::Utf8Error) -> Self {
-        Error::InvalidString { source: Utf8ErrorSource::Slice { source } }
-    }
-}
-
-impl From<std::string::FromUtf8Error> for Error {
-    #[inline]
-    fn from(source: std::string::FromUtf8Error) -> Self {
-        Error::InvalidString { source: Utf8ErrorSource::String { source } }
     }
 }
 
@@ -118,7 +96,7 @@ pub(crate) struct Header {
 
 impl Header {
     #[inline]
-    fn create(data: &mut Datagram) -> Result<Self, self::Error> {
+    fn create(mut data: Datagram) -> Result<Self, self::Error> {
         let version = Version { major: data.read_u16()?, minor: data.read_u16()? };
         let endian = match data.read_u8()? {
             0 => Endian::Big,
@@ -187,6 +165,7 @@ impl BinaryAsset {
     pub const MINIMUM_VERSION: Version = Version { major: 6, minor: 14 };
 
     #[must_use]
+    #[inline]
     pub fn get_minor_version(&self) -> u16 {
         self.header.version.minor
     }
@@ -194,66 +173,70 @@ impl BinaryAsset {
     #[cfg(feature = "std")]
     #[inline]
     pub fn open<P: AsRef<Path>>(input: P) -> Result<Self, self::Error> {
-        let data = std::fs::read(input)?;
+        let data = std::fs::read(input).context(FileSnafu)?;
         Self::load(data)
     }
 
     #[inline]
     pub fn load<I: Into<Box<[u8]>>>(input: I) -> Result<Self, self::Error> {
-        let mut data = DataCursor::new(input, Endian::Little);
+        fn inner(input: Box<[u8]>) -> Result<BinaryAsset, self::Error> {
+            let mut data = DataCursor::new(input, Endian::Little);
 
-        // Read the magic and make sure we're actually parsing a BAM file
-        let mut magic = [0u8; 6];
-        data.read_length(&mut magic)?;
-        ensure!(magic == Self::MAGIC, InvalidMagicSnafu { expected: Self::MAGIC });
+            // Read the magic and make sure we're actually parsing a BAM file
+            const LENGTH: usize = BinaryAsset::MAGIC.len();
+            ensure!(data.len()? >= LENGTH as u64, EndOfFileSnafu);
+            let magic = data.read_slice(LENGTH)?;
+            ensure!(
+                magic == BinaryAsset::MAGIC,
+                InvalidMagicSnafu { expected: BinaryAsset::MAGIC }
+            );
 
-        // The first datagram is always the header data
-        let mut datagram = Datagram::new(&mut data, Endian::Little, false)?;
-        let header = Header::create(&mut datagram)?;
-        ensure!(
-            header.version.major == Self::CURRENT_VERSION.major
-                && header.version.minor >= Self::MINIMUM_VERSION.minor
-                && header.version.minor <= Self::CURRENT_VERSION.minor,
-            InvalidVersionSnafu
-        );
+            // The first datagram is always the header data
+            let header = Header::create(Datagram::new(&mut data, Endian::Little, false)?)?;
+            ensure!(
+                header.version.major == BinaryAsset::CURRENT_VERSION.major
+                    && header.version.minor >= BinaryAsset::MINIMUM_VERSION.minor
+                    && header.version.minor <= BinaryAsset::CURRENT_VERSION.minor,
+                InvalidVersionSnafu
+            );
 
-        // Create the BinaryAsset instance so we can start constructing all the objects
-        let objects_left = match header.version.minor >= 21 {
-            true => ObjectsLeft::NestingLevel { nesting_level: 0 },
-            false => ObjectsLeft::ObjectCount { num_extra_objects: 0 },
-        };
-        let mut bamfile = Self {
-            header,
-            type_registry: HashMap::new(),
-            objects_left,
-            nodes: NodeStorage::new(),
-            arrays: Vec::new(),
-            ..Default::default()
-        };
+            // Create the BinaryAsset instance so we can start constructing all the objects
+            let objects_left = match header.version.minor >= 21 {
+                true => ObjectsLeft::NestingLevel { nesting_level: 0 },
+                false => ObjectsLeft::ObjectCount { num_extra_objects: 0 },
+            };
+            let mut bamfile = BinaryAsset { header, objects_left, ..Default::default() };
 
+            bamfile.load_inner(data)?;
+
+            Ok(bamfile)
+        }
+        inner(input.into())
+    }
+
+    #[inline]
+    fn load_inner(&mut self, mut data: DataCursor) -> Result<(), self::Error> {
         // Read the initial object
-        datagram = Datagram::new(&mut data, bamfile.header.endian, bamfile.header.use_double)?;
-        bamfile.read_object(&mut datagram)?;
+        let mut datagram = Datagram::new(&mut data, self.header.endian, self.header.use_double)?;
+        self.read_object(&mut datagram)?;
 
         loop {
             //println!("Reading datagram at {:X}", data.position()?);
-            match bamfile.objects_left {
+            match self.objects_left {
                 ObjectsLeft::ObjectCount { mut num_extra_objects } => {
                     if num_extra_objects > 0 {
-                        datagram =
-                            Datagram::new(&mut data, bamfile.header.endian, bamfile.header.use_double)?;
-                        bamfile.read_object(&mut datagram)?;
+                        datagram = Datagram::new(&mut data, self.header.endian, self.header.use_double)?;
+                        self.read_object(&mut datagram)?;
                         num_extra_objects -= 1;
-                        bamfile.objects_left = ObjectsLeft::ObjectCount { num_extra_objects }
+                        self.objects_left = ObjectsLeft::ObjectCount { num_extra_objects }
                     } else {
                         break;
                     }
                 }
                 ObjectsLeft::NestingLevel { nesting_level } => {
                     if nesting_level > 0 {
-                        datagram =
-                            Datagram::new(&mut data, bamfile.header.endian, bamfile.header.use_double)?;
-                        bamfile.read_object(&mut datagram)?;
+                        datagram = Datagram::new(&mut data, self.header.endian, self.header.use_double)?;
+                        self.read_object(&mut datagram)?;
                     } else {
                         break;
                     }
@@ -261,7 +244,7 @@ impl BinaryAsset {
             }
         }
 
-        Ok(bamfile)
+        Ok(())
     }
 
     fn read_object(&mut self, data: &mut Datagram) -> Result<(), self::Error> {
@@ -423,7 +406,7 @@ impl BinaryAsset {
         }
     }
 
-    fn create_node<T: Node + StoredType>(&mut self, data: &mut Datagram<'_>) -> Result<(), Error> {
+    fn create_node<T: Node + StoredType>(&mut self, data: &mut Datagram) -> Result<(), Error> {
         let node = T::create(self, data)?;
         //println!("{:#?}", node);
         self.nodes.push(node);
@@ -476,7 +459,7 @@ impl GraphWriter {
     }
 
     pub fn write_nodes<P: AsRef<Path>>(nodes: &NodeStorage, path: P) -> Result<(), Error> {
-        let mut graph_writer = Self::new(path)?;
+        let mut graph_writer = Self::new(path).context(FileSnafu)?;
 
         for n in 0..nodes.len() {
             let node = nodes.get(n).unwrap();
@@ -484,14 +467,14 @@ impl GraphWriter {
             let mut connections = Vec::new();
             node.write_graph_data(&mut label, &mut connections)?;
             let name = format!("node_{}", n);
-            graph_writer.write_node(&name, Some(&label))?;
+            graph_writer.write_node(&name, Some(&label)).context(FileSnafu)?;
             for connection in connections {
                 let to = format!("node_{}", connection);
-                graph_writer.write_edge(&name, &to, None)?;
+                graph_writer.write_edge(&name, &to, None).context(FileSnafu)?;
             }
         }
 
-        graph_writer.close()?;
+        graph_writer.close().context(FileSnafu)?;
         Ok(())
     }
 }

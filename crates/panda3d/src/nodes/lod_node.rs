@@ -11,7 +11,7 @@ pub(crate) struct Switch {
 
 impl Switch {
     #[inline]
-    fn create(_loader: &mut BinaryAsset, data: &mut Datagram<'_>) -> Result<Self, bam::Error> {
+    fn create(_loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
         let start = data.read_float()?;
         let end = data.read_float()?;
         Ok(Switch { start, end })

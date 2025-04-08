@@ -9,7 +9,7 @@ pub(crate) struct CullBinAttrib {
 
 impl Node for CullBinAttrib {
     #[inline]
-    fn create(_loader: &mut BinaryAsset, data: &mut Datagram<'_>) -> Result<Self, bam::Error> {
+    fn create(_loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
         let bin_name = data.read_string()?;
         let draw_order = data.read_i32()?;
         Ok(Self { bin_name, draw_order })

@@ -9,7 +9,7 @@ pub(crate) struct InternalName {
 
 impl Node for InternalName {
     #[inline]
-    fn create(_loader: &mut BinaryAsset, data: &mut Datagram<'_>) -> Result<Self, bam::Error> {
+    fn create(_loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
         Ok(Self { name: data.read_string()? })
     }
 }

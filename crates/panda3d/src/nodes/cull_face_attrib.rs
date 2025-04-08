@@ -38,7 +38,7 @@ impl CullFaceAttrib {
 
 impl Node for CullFaceAttrib {
     #[inline]
-    fn create(_loader: &mut BinaryAsset, data: &mut Datagram<'_>) -> Result<Self, bam::Error> {
+    fn create(_loader: &mut BinaryAsset, data: &mut Datagram) -> Result<Self, bam::Error> {
         let mode = CullMode::from(data.read_u8()?);
         let reverse = data.read_bool()?;
         Ok(Self { mode, reverse })
