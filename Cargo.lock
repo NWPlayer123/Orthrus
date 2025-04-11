@@ -2173,6 +2173,7 @@ dependencies = [
  "bevy_transform",
  "bitflags 2.9.0",
  "hashbrown",
+ "log",
  "num_enum",
  "orthrus-core",
  "paste",

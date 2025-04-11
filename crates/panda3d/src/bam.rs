@@ -33,56 +33,34 @@ use crate::{
 
 /// Error conditions for when working with Multifile archives.
 #[derive(Debug, Snafu)]
-#[snafu(visibility(pub(crate)))]
 #[non_exhaustive]
 pub enum Error {
-    #[snafu(display("Formatting Error {source}"))]
+    /// Thrown if unable to format data when creating GraphViz info.
+    #[snafu(transparent)]
     FormatError { source: core::fmt::Error },
 
-    /// Thrown if a [`std::io::Error`] happened when trying to read/write files.
-    #[snafu(display("Filesystem Error {source}"))]
+    /// Thrown if an error occurs when trying to read or write files.
+    #[snafu(transparent)]
     FileError { source: std::io::Error },
 
-    /// Thrown if trying to read the file out of its current bounds.
+    /// Thrown if an error occurs when trying to read or write data.
+    #[snafu(transparent)]
+    DataError { source: DataError },
+
+    /// Thrown if reading/writing tries to go out of bounds.
     #[snafu(display("Reached the end of the current stream!"))]
     EndOfFile,
 
-    /// Thrown if UTF-8 validation fails when trying to convert a string.
-    #[snafu(display("{source}"))]
-    InvalidString { source: Utf8ErrorSource },
-
     /// Thrown if the header contains a magic number other than "pbj\0\n\r".
-    #[snafu(display("Invalid Magic! Expected {expected:?}."))]
+    #[snafu(display("Unexpected Magic! Expected {expected:?}."))]
     InvalidMagic { expected: &'static [u8] },
 
     /// Thrown if the header version is too new to be supported.
-    #[snafu(display("Invalid Version! Expected <= v{}.", BinaryAsset::CURRENT_VERSION))]
+    #[snafu(display("Unexpected Version! Expected <= v{}.", BinaryAsset::CURRENT_VERSION))]
     InvalidVersion,
 
-    /// Thrown if unable to downcast to a specific type.
-    #[snafu(display("Node is not of type {type_name}"))]
-    InvalidType { type_name: &'static str },
-}
-
-// Implemented so that the GraphViz implementations can easily coerce to this error
-impl From<core::fmt::Error> for Error {
-    #[inline]
-    fn from(source: core::fmt::Error) -> Self {
-        Self::FormatError { source }
-    }
-}
-
-// Implemented since read_/write_ are so integral to the program
-impl From<DataError> for Error {
-    #[inline]
-    fn from(error: DataError) -> Self {
-        match error {
-            DataError::EndOfFile => Error::EndOfFile,
-            DataError::Io { source } => Error::FileError { source },
-            DataError::InvalidString { source } => Error::InvalidString { source },
-            _ => unreachable!(),
-        }
-    }
+    #[snafu(display("Invalid type handle {handle}!"))]
+    InvalidTypeHandle { handle: u16 },
 }
 
 #[derive(Debug, Default)]
@@ -142,16 +120,19 @@ impl Default for ObjectsLeft {
 
 #[derive(Debug, Default)]
 pub struct BinaryAsset {
-    /// Holds all BAM metadata needed for parsing
+    /// Holds BAM header data, including version and float type.
     pub(crate) header: Header,
-    /// Used to store whether the BAM stream has more objects to read
+    /// Used to keep track of how many more objects to read from the stream.
     pub(crate) objects_left: ObjectsLeft,
-    /// Used if there are more than 65535 Object IDs
+    /// Used if there are more than 65535 Object IDs.
     pub(crate) long_object_id: bool,
-    /// Used if there are more than 65535 Pointer to Array IDs
+    /// Used if there are more than 65535 PTA (Pointer to Array) IDs.
     pub(crate) long_pta_id: bool,
+    /// Stores the names of all types that have been encountered.
     pub(crate) type_registry: HashMap<u16, String>,
-    pub nodes: NodeStorage,
+    /// Stores the data for all nodes in the scene graph.
+    pub(crate) nodes: NodeStorage,
+    /// Stores any auxiliary data referenced by nodes.
     pub(crate) arrays: Vec<Vec<u32>>,
 }
 
@@ -172,7 +153,7 @@ impl BinaryAsset {
     #[cfg(feature = "std")]
     #[inline]
     pub fn open<P: AsRef<Path>>(input: P) -> Result<Self, self::Error> {
-        let data = std::fs::read(input).context(FileSnafu)?;
+        let data = std::fs::read(input)?;
         Self::load(data)
     }
 
@@ -204,53 +185,46 @@ impl BinaryAsset {
                 true => ObjectsLeft::NestingLevel { nesting_level: 0 },
                 false => ObjectsLeft::ObjectCount { num_extra_objects: 0 },
             };
-            let mut bamfile = BinaryAsset { header, objects_left, ..Default::default() };
+            let mut asset = BinaryAsset { header, objects_left, ..Default::default() };
 
-            bamfile.load_inner(data)?;
+            // Read the initial object
+            asset.read_object(&mut data)?;
 
-            Ok(bamfile)
+            loop {
+                match asset.objects_left {
+                    ObjectsLeft::ObjectCount { mut num_extra_objects } => {
+                        if num_extra_objects > 0 {
+                            asset.read_object(&mut data)?;
+                            num_extra_objects -= 1;
+                            asset.objects_left = ObjectsLeft::ObjectCount { num_extra_objects }
+                        } else {
+                            break;
+                        }
+                    }
+                    ObjectsLeft::NestingLevel { nesting_level } => {
+                        if nesting_level > 0 {
+                            asset.read_object(&mut data)?;
+                        } else {
+                            break;
+                        }
+                    }
+                }
+            }
+
+            Ok(asset)
         }
         inner(input.into())
     }
 
-    #[inline]
-    fn load_inner(&mut self, mut data: DataCursor) -> Result<(), self::Error> {
-        // Read the initial object
-        let mut datagram = Datagram::new(&mut data, self.header.endian, self.header.use_double)?;
-        self.read_object(&mut datagram)?;
+    fn read_object(&mut self, data: &mut DataCursor) -> Result<(), self::Error> {
+        let initial_position = data.position()?;
 
-        loop {
-            //println!("Reading datagram at {:X}", data.position()?);
-            match self.objects_left {
-                ObjectsLeft::ObjectCount { mut num_extra_objects } => {
-                    if num_extra_objects > 0 {
-                        datagram = Datagram::new(&mut data, self.header.endian, self.header.use_double)?;
-                        self.read_object(&mut datagram)?;
-                        num_extra_objects -= 1;
-                        self.objects_left = ObjectsLeft::ObjectCount { num_extra_objects }
-                    } else {
-                        break;
-                    }
-                }
-                ObjectsLeft::NestingLevel { nesting_level } => {
-                    if nesting_level > 0 {
-                        datagram = Datagram::new(&mut data, self.header.endian, self.header.use_double)?;
-                        self.read_object(&mut datagram)?;
-                    } else {
-                        break;
-                    }
-                }
-            }
-        }
+        log::trace!("Reading datagram at {:#X}", initial_position);
+        let mut datagram = Datagram::new(data, self.header.endian, self.header.use_double)?;
 
-        Ok(())
-    }
-
-    fn read_object(&mut self, data: &mut Datagram) -> Result<(), self::Error> {
-        // If we're reading a file 6.21 or newer, control flow codes are in the data stream, so
-        // match against the enum variant
+        // Since BAM v6.21, control flow codes are part of the data stream.
         if let ObjectsLeft::NestingLevel { ref mut nesting_level } = self.objects_left {
-            let object_code = ObjectCode::from(data.read_u8()?);
+            let object_code = ObjectCode::from(datagram.read_u8()?);
             match object_code {
                 ObjectCode::Push => {
                     *nesting_level += 1;
@@ -266,29 +240,32 @@ impl BinaryAsset {
             }
         }
 
-        // Check the type handle, see if we need to register any new types
-        let type_handle = self.read_handle(data)?;
-        // Read the Object ID and process it
-        let _object_id = self.read_object_id(data)? - 1;
-        //println!("Object ID {}", _object_id);
-        /*println!(
-            "Initial type data {:#X}, Data size {:#X}\n",
-            data.position()?,
-            data.len()?
-        );*/
+        // Check the type handle, see if we need to register any new types.
+        let type_handle = self.read_handle(&mut datagram)?;
+        // Object ID 0 is a special case, but we want zero-indexed, so we subtract one here.
+        let object_id = self.read_object_id(&mut datagram)? - 1;
+        log::debug!("Object ID {}", object_id);
 
         if type_handle != 0 {
-            // Now we need to read the data of the associated type using the "fillin" functions
-            // For now I'm combining them into a single function
-            let type_name = self.type_registry.get_mut(&type_handle).expect("a").to_owned();
-            //println!("Filling in {} from {:#X}", type_name, data.position()?);
-            self.fillin(data, &type_name)?;
+            // We've encountered a new object, so we need to create a node for it and fill in its parameters.
+            let type_name =
+                self.type_registry.get_mut(&type_handle).expect("We should always have a valid type handle!");
+
+            log::trace!(
+                "Filling in {} from {:#X}",
+                type_name,
+                initial_position + datagram.position()?
+            );
+            self.make_from_bam(&mut datagram, type_handle)?;
+        } else {
+            log::warn!("Encountered a type handle of 0, object updates are currently unhandled.");
         }
-        if data.position()? != data.len()? {
-            println!(
-                "Finished at {:#X}, Data size {:#X}\n",
-                data.position()?,
-                data.len()?
+
+        if datagram.position()? != datagram.len()? {
+            log::warn!(
+                "Not all data was parsed: Finished at {:#X}, Datagram size {:#X}.",
+                datagram.position()?,
+                datagram.len()?
             );
         }
         Ok(())
@@ -297,15 +274,16 @@ impl BinaryAsset {
     fn read_handle(&mut self, data: &mut Datagram) -> Result<u16, self::Error> {
         let type_handle = data.read_u16()?;
 
-        // Found a new type, read its string and register it
+        // Found a new type, read its string and register it.
         if !self.type_registry.contains_key(&type_handle) {
             let type_name = data.read_string()?;
-            //println!("Registering Type {type_name} -> {type_handle}");
+
+            log::trace!("Registering Type {type_name} -> {type_handle}");
             self.type_registry.insert(type_handle, type_name);
 
-            //Check for any parent classes we need to register
+            //Check for any types we've inherited from that we haven't registered yet.
             let parent_count = data.read_u8()?;
-            //println!("Parent Count: {parent_count}");
+            log::trace!("Inherited Count: {parent_count}");
             for _ in 0..parent_count {
                 self.read_handle(data)?;
             }
@@ -315,49 +293,49 @@ impl BinaryAsset {
     }
 
     fn read_object_id(&mut self, data: &mut Datagram) -> Result<u32, self::Error> {
-        let object_id;
-        if self.long_object_id {
-            object_id = data.read_u32()?;
-        } else {
-            object_id = data.read_u16()?.into();
-            if object_id == 0xFFFF {
-                self.long_object_id = true;
+        let object_id = match self.long_object_id {
+            true => data.read_u32()?,
+            false => {
+                let object_id = data.read_u16()?.into();
+                self.long_object_id |= object_id == 0xFFFF;
+                object_id
             }
-        }
+        };
         Ok(object_id)
     }
 
     pub(crate) fn read_pta_id(&mut self, data: &mut Datagram) -> Result<u32, self::Error> {
-        let pta_id;
-        if self.long_pta_id {
-            pta_id = data.read_u32()?;
-        } else {
-            pta_id = data.read_u16()?.into();
-            if pta_id == 0xFFFF {
-                self.long_pta_id = true;
+        let pta_id = match self.long_pta_id {
+            true => data.read_u32()?,
+            false => {
+                let pta_id = data.read_u16()?.into();
+                self.long_pta_id |= pta_id == 0xFFFF;
+                pta_id
             }
-        }
+        };
         Ok(pta_id)
     }
 
     pub(crate) fn read_pointer(&mut self, data: &mut Datagram) -> Result<Option<u32>, self::Error> {
         let object_id = self.read_object_id(data)?;
-        //println!("Object ID ptrto {}", object_id);
+        log::trace!("Object ID ptrto {}", object_id);
         if object_id != 0 {
-            // objects_left will only be ObjectCount on pre-6.21 so this should be safe
+            // self.objects_left will only be ObjectCount on pre-6.21 so this will only match that case.
             if let ObjectsLeft::ObjectCount { ref mut num_extra_objects } = self.objects_left {
-                *num_extra_objects -= 1;
+                *num_extra_objects += 1;
             }
-            // ObjectID 0 is reserved, but we still want to store indices as zero-indexed, so subtract 1
-            return Ok(Some(object_id - 1));
+            // Object ID 0 is a special case, but we want zero-indexed, so we subtract one here.
+            Ok(Some(object_id - 1))
+        } else {
+            Ok(None)
         }
-        Ok(None)
     }
 
-    //should really be using make_from_bam as an entrypoint
-    fn fillin(&mut self, data: &mut Datagram<'_>, type_name: &str) -> Result<(), self::Error> {
-        //println!("{type_name}");
-        match type_name {
+    fn make_from_bam(&mut self, data: &mut Datagram<'_>, type_handle: u16) -> Result<(), self::Error> {
+        let type_name =
+            self.type_registry.get_mut(&type_handle).expect("We should always have a valid type handle!");
+
+        match type_name.as_ref() {
             "AnimBundle" => self.create_node::<AnimBundle>(data),
             "AnimBundleNode" => self.create_node::<AnimBundleNode>(data),
             "AnimChannelMatrixXfmTable" => self.create_node::<AnimChannelMatrixXfmTable>(data),
@@ -407,7 +385,7 @@ impl BinaryAsset {
 
     fn create_node<T: Node + StoredType>(&mut self, data: &mut Datagram) -> Result<(), Error> {
         let node = T::create(self, data)?;
-        //println!("{:#?}", node);
+        log::debug!("{:#?}", node);
         self.nodes.push(node);
         Ok(())
     }
@@ -457,23 +435,23 @@ impl GraphWriter {
         writeln!(self.file, "}}")
     }
 
-    pub fn write_nodes<P: AsRef<Path>>(nodes: &NodeStorage, path: P) -> Result<(), Error> {
-        let mut graph_writer = Self::new(path).context(FileSnafu)?;
+    pub fn write_nodes<P: AsRef<Path>>(asset: &BinaryAsset, path: P) -> Result<(), Error> {
+        let mut graph_writer = Self::new(path)?;
 
-        for n in 0..nodes.len() {
-            let node = nodes.get(n).unwrap();
+        for n in 0..asset.nodes.len() {
+            let node = asset.nodes.get(n).unwrap();
             let mut label = String::new();
             let mut connections = Vec::new();
             node.write_graph_data(&mut label, &mut connections)?;
             let name = format!("node_{}", n);
-            graph_writer.write_node(&name, Some(&label)).context(FileSnafu)?;
+            graph_writer.write_node(&name, Some(&label))?;
             for connection in connections {
                 let to = format!("node_{}", connection);
-                graph_writer.write_edge(&name, &to, None).context(FileSnafu)?;
+                graph_writer.write_edge(&name, &to, None)?;
             }
         }
 
-        graph_writer.close().context(FileSnafu)?;
+        graph_writer.close()?;
         Ok(())
     }
 }

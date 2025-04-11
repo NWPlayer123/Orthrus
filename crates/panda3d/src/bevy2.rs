@@ -1451,7 +1451,7 @@ impl AssetLoader for PandaLoader {
 
         // First, let's parse the data into something we can work with. TODO: take the Reader directly?
         let mut bytes = Vec::new();
-        reader.read_to_end(&mut bytes).await.context(crate::bam::FileSnafu)?;
+        reader.read_to_end(&mut bytes).await?;
 
         // Then, let's parse out our scene graph.
         let bam = BinaryAsset::load(bytes)?;

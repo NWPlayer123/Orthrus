@@ -28,14 +28,14 @@ macro_rules! stored_types {
             }
 
             impl NodeStorage {
-                pub fn new() -> Self {
+                /*pub fn new() -> Self {
                     Self {
                         $(
                             [<$type:snake>]: Vec::new(),
                         )*
                         id_map: Vec::new(),
                     }
-                }
+                }*/
 
                 #[allow(dead_code)]
                 pub fn len(&self) -> usize {

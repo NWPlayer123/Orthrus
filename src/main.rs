@@ -151,7 +151,7 @@ fn main() -> Result<()> {
                 let asset = BinaryAsset::open(data.input)?;
 
                 if let Some(dotfile) = data.dotfile {
-                    orthrus_panda3d::bam::GraphWriter::write_nodes(&asset.nodes, dotfile)?;
+                    orthrus_panda3d::bam::GraphWriter::write_nodes(&asset, dotfile)?;
                 }
             }
         },

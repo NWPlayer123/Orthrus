@@ -47,11 +47,11 @@ pub enum Utf8ErrorSource {
 #[non_exhaustive]
 pub enum DataError {
     /// Thrown if reading/writing tries to go out of bounds.
-    #[snafu(display("Tried to read out-of-bounds"))]
+    #[snafu(display("Reached the end of the current stream!"))]
     EndOfFile,
 
     /// Thrown if UTF-8 validation fails when trying to convert a string.
-    #[snafu(display("{source}"))]
+    #[snafu(transparent)]
     InvalidString { source: Utf8ErrorSource },
 
     /// Thrown when an I/O operation fails on a [`DataStream`].

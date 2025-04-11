@@ -13,6 +13,7 @@ num_enum = { workspace = true }
 hashbrown = { workspace = true }
 bitflags = { workspace = true }
 paste = { workspace = true }
+log = { workspace = true }
 
 approx = { version = "0.5", default-features = false }
 bevy_transform = { version = "0.16.0-rc.3", default-features = false }
