@@ -7,12 +7,10 @@
 
 #[expect(non_snake_case)]
 pub mod Wii {
-    #[doc(inline)]
-    pub use crate::rvl::stream::StreamFile;
+    #[doc(inline)] pub use crate::rvl::stream::StreamFile;
 }
 
 #[expect(non_snake_case)]
 pub mod Switch {
-    #[doc(inline)]
-    pub use crate::switch::BFSAR;
+    #[doc(inline)] pub use crate::switch::BFSAR;
 }

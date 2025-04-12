@@ -1,14 +1,13 @@
 //! Adds support for the Yay0 compression format used for first-party N64 and early GameCube games.
 //!
-//! Because the Yay0 format is so lightweight, this module is designed to not have any persistence.
-//! It takes in data, and will return the de/compressed data contained inside.
+//! Because the Yay0 format is so lightweight, this module is designed to not have any persistence. It takes
+//! in data, and will return the de/compressed data contained inside.
 //!
 //! # Format
-//! The Yay0 format is part of the [Lempel-Ziv family of algorithms](https://w.wiki/F6n), which use
-//! a "sliding window" to allow for copying repetitive data from previously in the output buffer.
-//! The input is split into three sections. The first contains flag bytes that signal whether to
-//! copy from the input or from the output buffer, the second contains all copyable data, and the
-//! third contains all lookback+length pairs.
+//! The Yay0 format is part of the [Lempel-Ziv family of algorithms](https://w.wiki/F6n), which use a "sliding
+//! window" to allow for copying repetitive data from previously in the output buffer. The input is split into
+//! three sections. The first contains flag bytes that signal whether to copy from the input or from the
+//! output buffer, the second contains all copyable data, and the third contains all lookback+length pairs.
 //!
 //! ## Header
 //! The header is as follows, in big-endian format:
@@ -21,8 +20,8 @@
 //! | 0xC | Lookback offset  | u32    | Offset to the lookback data section. See [format](self#format) for details. |
 //!
 //! # Decompression
-//! The decompression algorithm is as follows, ran in a loop until you write enough bytes to fill
-//! the output buffer:
+//! The decompression algorithm is as follows, ran in a loop until you write enough bytes to fill the output
+//! buffer:
 //!
 //! * Set three pointers, one to header+0x10 for flag data, one to the copy data offset, and one to the
 //!   lookback offset.
@@ -55,14 +54,12 @@
 //! * [`worst_possible_size`](Yay0::worst_possible_size): Calculates the worst possible compression size for a
 //!   given filesize
 
-#[cfg(feature = "std")]
-use std::path::Path;
+#[cfg(feature = "std")] use std::path::Path;
 
 use orthrus_core::prelude::*;
 use snafu::prelude::*;
 
-#[cfg(not(feature = "std"))]
-use crate::no_std::*;
+#[cfg(not(feature = "std"))] use crate::no_std::*;
 
 /// Error conditions for when reading/writing Yay0 files
 #[derive(Debug, Snafu)]
@@ -160,12 +157,10 @@ impl Yay0 {
         Ok(Header { decompressed_size, lookback_offset, copy_data_offset })
     }
 
-    /// Calculates the filesize for the largest possible file that can be created with Yay0
-    /// compression.
+    /// Calculates the filesize for the largest possible file that can be created with Yay0 compression.
     ///
-    /// This consists of the 0x10 header, the length of the input file, and all flag bits needed,
-    /// rounded up, with all sections aligned to 4 bytes and the file aligned to a 0x10 byte
-    /// boundary.
+    /// This consists of the 0x10 header, the length of the input file, and all flag bits needed, rounded up,
+    /// with all sections aligned to 4 bytes and the file aligned to a 0x10 byte boundary.
     #[must_use]
     #[inline]
     pub const fn worst_possible_size(input_len: usize) -> usize {
@@ -236,12 +231,7 @@ impl Yay0 {
     /// let input = std::fs::read("../../examples/assets/tobudx.yay0_n64")?;
     /// let header = Yay0::read_header(&input)?;
     /// let mut output = vec![0u8; header.decompressed_size as usize];
-    /// Yay0::decompress(
-    ///     &input,
-    ///     &mut output,
-    ///     header.lookback_offset,
-    ///     header.copy_data_offset,
-    /// );
+    /// Yay0::decompress(&input, &mut output, header.lookback_offset, header.copy_data_offset);
     ///
     /// let expected = std::fs::read("../../examples/assets/tobudx.gb")?;
     /// assert_eq!(*output, *expected);
@@ -277,9 +267,9 @@ impl Yay0 {
                 let code = u16::from_be_bytes([input[lookback_offset], input[lookback_offset + 1]]);
                 lookback_offset += 2;
 
-                //Extract RLE information from the code byte, read another byte for size if we need
-                // to How far back in the output buffer do we need to copy from, how
-                // many bytes do we copy?
+                //Extract RLE information from the code byte, read another byte for size if we need to. How
+                // far back in the output buffer do we need to copy from, how many bytes do we
+                // copy?
                 let back = output_pos - usize::from((code & 0xFFF) + 1);
                 let size = match code >> 12 {
                     0 => {
@@ -310,11 +300,8 @@ impl Yay0 {
     /// # Examples
     /// ```
     /// # use orthrus_ncompress::prelude::*;
-    /// let output = Yay0::compress_from_path(
-    ///     "../../examples/assets/tobudx.gb",
-    ///     yay0::CompressionAlgo::MatchingOld,
-    ///     0,
-    /// )?;
+    /// let output =
+    ///     Yay0::compress_from_path("../../examples/assets/tobudx.gb", yay0::CompressionAlgo::MatchingOld, 0)?;
     ///
     /// let expected = std::fs::read("../../examples/assets/tobudx.yay0_n64")?;
     /// assert_eq!(*output, *expected);
@@ -350,8 +337,8 @@ impl Yay0 {
     /// ```
     ///
     /// # Errors
-    /// Returns [`FileTooBig`](Error::FileTooBig) if the input is too large for the filesize to be
-    /// stored in the header.
+    /// Returns [`FileTooBig`](Error::FileTooBig) if the input is too large for the filesize to be stored in
+    /// the header.
     #[inline]
     pub fn compress_from(input: &[u8], algo: CompressionAlgo, _align: u32) -> Result<Box<[u8]>> {
         ensure!(u32::try_from(input.len()).is_ok(), FileTooBigSnafu);
@@ -368,11 +355,9 @@ impl Yay0 {
         Ok(output.into_boxed_slice())
     }
 
-    /// Compresses the input using Nintendo's pre-Wii U algorithm, and returns the size of the
-    /// compressed data.
+    /// Compresses the input using Nintendo's pre-Wii U algorithm, and returns the compressed size.
     ///
-    /// This algorithm should create identically compressed files to those from first-party N64 and
-    /// GameCube games.
+    /// This algorithm should create identically compressed files to those from N64 and GameCube games.
     ///
     /// # Examples
     /// ```
@@ -388,16 +373,16 @@ impl Yay0 {
     /// ```
     #[inline]
     pub fn compress_n64(input: &[u8], output: &mut [u8]) -> usize {
-        //Set up all arrays so we can accumulate data before writing it, since we don't know how
-        // big each section can be
+        // Set up all arrays so we can accumulate data before writing it, since we don't know how big each
+        // section can be
         let mut flag_data = vec![0u8; input.len().div_ceil(8)];
         let mut flag_byte = 0;
         let mut flag_shift = 0x80;
         let mut flag_pos = 0;
         let mut copy_data = vec![0u8; input.len()];
         let mut copy_pos = 0;
-        //We only consider writing lookback if it's two bytes or more, so maximum will be two bytes
-        // = two bytes aka input.len()
+        // We only consider writing lookback if it's two bytes or more, so maximum will be two bytes aka
+        // input.len()
         let mut lookback_data = vec![0u8; input.len()];
         let mut lookback_pos = 0;
 

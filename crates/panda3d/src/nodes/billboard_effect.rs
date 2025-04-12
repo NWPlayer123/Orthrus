@@ -31,16 +31,7 @@ impl Node for BillboardEffect {
             false => false,
         };
 
-        Ok(Self {
-            off,
-            up_vector,
-            eye_relative,
-            axial_rotate,
-            offset,
-            look_at_point,
-            look_at,
-            fixed_depth,
-        })
+        Ok(Self { off, up_vector, eye_relative, axial_rotate, offset, look_at_point, look_at, fixed_depth })
     }
 }
 

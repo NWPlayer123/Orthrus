@@ -7,22 +7,16 @@
 //! use orthrus_ncompress::prelude::*;
 //! ```
 
-#[doc(inline)]
-pub use crate::yay0::Yay0;
+#[doc(inline)] pub use crate::yay0::Yay0;
 
-/// Includes [`yay0::Error`] for Result handling, [`yay0::Header`], and Yay0-specific compression
-/// algorithms.
+/// Includes [`yay0::Error`] for Result handling, [`yay0::Header`], and Yay0-specific compression algorithms.
 pub mod yay0 {
-    #[doc(inline)]
-    pub use crate::yay0::{CompressionAlgo, Error, Header};
+    #[doc(inline)] pub use crate::yay0::{CompressionAlgo, Error, Header};
 }
 
-#[doc(inline)]
-pub use crate::yaz0::Yaz0;
+#[doc(inline)] pub use crate::yaz0::Yaz0;
 
-/// Includes [`yaz0::Error`] for Result handling, [`yaz0::Header`], and Yaz0-specific compression
-/// algorithms.
+/// Includes [`yaz0::Error`] for Result handling, [`yaz0::Header`], and Yaz0-specific compression algorithms.
 pub mod yaz0 {
-    #[doc(inline)]
-    pub use crate::yaz0::{CompressionAlgo, Error, Header};
+    #[doc(inline)] pub use crate::yaz0::{CompressionAlgo, Error, Header};
 }

@@ -132,16 +132,8 @@ impl GraphDisplay for CombineConfig {
         // Fields
         write!(label, "mode: {:?}|", self.mode)?;
         write!(label, "num_operands: {:#04X}|", self.num_operands)?;
-        write!(
-            label,
-            "sources: [{:?}, {:?}, {:?}]|",
-            self.sources[0], self.sources[1], self.sources[2]
-        )?;
-        write!(
-            label,
-            "operands: [{:?}, {:?}, {:?}]",
-            self.operands[0], self.operands[1], self.operands[2]
-        )?;
+        write!(label, "sources: [{:?}, {:?}, {:?}]|", self.sources[0], self.sources[1], self.sources[2])?;
+        write!(label, "operands: [{:?}, {:?}, {:?}]", self.operands[0], self.operands[1], self.operands[2])?;
 
         // Footer
         write!(label, "}}}}")?;

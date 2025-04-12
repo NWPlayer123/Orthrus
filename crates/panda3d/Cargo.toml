@@ -16,26 +16,27 @@ paste = { workspace = true }
 log = { workspace = true }
 
 approx = { version = "0.5", default-features = false }
-bevy_transform = { version = "0.16.0-rc.3", default-features = false }
-bevy_math = { version = "0.16.0-rc.3", default-features = false, features = [
+bevy_transform = { version = "0.16.0-rc.4", default-features = false }
+bevy_math = { version = "0.16.0-rc.4", default-features = false, features = [
     "approx",
     "libm",
 ] }
 
 # Bevy-Specific Assets
-bevy_animation = { version = "0.16.0-rc.3", default-features = false, optional = true }
-bevy_app = { version = "0.16.0-rc.3", default-features = false, optional = true }
-bevy_asset = { version = "0.16.0-rc.3", default-features = false, optional = true }
-bevy_color = { version = "0.16.0-rc.3", default-features = false, optional = true }
-bevy_ecs = { version = "0.16.0-rc.3", default-features = false, optional = true }
-bevy_image = { version = "0.16.0-rc.3", default-features = false, optional = true }
-bevy_log = { version = "0.16.0-rc.3", default-features = false, optional = true }
-bevy_pbr = { version = "0.16.0-rc.3", default-features = false, optional = true }
-bevy_reflect = { version = "0.16.0-rc.3", default-features = false, optional = true }
-bevy_render = { version = "0.16.0-rc.3", default-features = false, optional = true }
-bevy_scene = { version = "0.16.0-rc.3", default-features = false, optional = true }
-bevy_tasks = { version = "0.16.0-rc.3", default-features = false, optional = true }
+bevy_animation = { version = "0.16.0-rc.4", default-features = false, optional = true }
+bevy_app = { version = "0.16.0-rc.4", default-features = false, optional = true }
+bevy_asset = { version = "0.16.0-rc.4", default-features = false, optional = true }
+bevy_color = { version = "0.16.0-rc.4", default-features = false, optional = true }
+bevy_ecs = { version = "0.16.0-rc.4", default-features = false, optional = true }
+bevy_image = { version = "0.16.0-rc.4", default-features = false, optional = true }
+#bevy_log = { version = "0.16.0-rc.4", default-features = false, optional = true }
+bevy_pbr = { version = "0.16.0-rc.4", default-features = false, optional = true }
+bevy_reflect = { version = "0.16.0-rc.4", default-features = false, optional = true }
+bevy_render = { version = "0.16.0-rc.4", default-features = false, optional = true }
+bevy_scene = { version = "0.16.0-rc.4", default-features = false, optional = true }
+bevy_tasks = { version = "0.16.0-rc.4", default-features = false, optional = true }
 #bevy_mod_billboard = "0.7"
+tracing = "0.1"
 serde = { version = "1", optional = true, features = ["derive"] }
 smallvec = { workspace = true, optional = true }
 
@@ -50,7 +51,7 @@ bevy = [
     "bevy_color",
     "bevy_ecs",
     "bevy_image",
-    "bevy_log",
+    #"bevy_log",
     "bevy_pbr",
     "bevy_reflect",
     "bevy_render",

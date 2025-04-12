@@ -6,14 +6,12 @@
 //! # Format
 //! Refer to the [Multifile format](crate::multifile#format) for more details.
 
-#[cfg(feature = "std")]
-use std::path::{Path, PathBuf};
+#[cfg(feature = "std")] use std::path::{Path, PathBuf};
 
 use bitflags::bitflags;
 use orthrus_core::prelude::*;
 
-#[cfg(not(feature = "std"))]
-use crate::no_std::*;
+#[cfg(not(feature = "std"))] use crate::no_std::*;
 use crate::{common::Version, multifile::Result};
 
 bitflags! {
@@ -30,8 +28,8 @@ bitflags! {
     }
 }
 
-/// Utility struct for handling Subfile data, for use with
-/// [`Multifile`](crate::multifile::Multifile) archives. Currently only for internal use.
+/// Utility struct for handling Subfile data, for use with [`Multifile`](crate::multifile::Multifile)
+/// archives. Currently only for internal use.
 ///
 /// For more details on the Multifile format, see the [module documentation](self#format).
 #[derive(Default, Debug)]
@@ -80,8 +78,8 @@ impl Subfile {
     /// Writes the [`Subfile`] data to disk, using the data from the associated [`Multifile`].
     ///
     /// # Errors
-    /// Returns an error if unable to create the necessary directories, or unable to create a file
-    /// to write to. See [`create_dir_all`](std::fs::create_dir_all) and [`write`](std::fs::write).
+    /// Returns an error if unable to create the necessary directories, or unable to create a file to write
+    /// to. See [`create_dir_all`](std::fs::create_dir_all) and [`write`](std::fs::write).
     #[cfg(feature = "std")]
     #[inline]
     pub(crate) fn write_file<P: AsRef<Path>>(&mut self, data: &[u8], output: P) -> Result<()> {

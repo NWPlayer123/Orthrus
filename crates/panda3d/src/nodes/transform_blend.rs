@@ -49,11 +49,7 @@ impl GraphDisplay for TransformBlend {
                 write!(label, "|")?;
             }
             //connections.push(entry.transform_ref);
-            write!(
-                label,
-                "{{transform: {}|weight: {}}}",
-                entry.transform_ref, entry.weight
-            )?;
+            write!(label, "{{transform: {}|weight: {}}}", entry.transform_ref, entry.weight)?;
             first = false;
         }
 

@@ -2,8 +2,7 @@ use core::ops::{Deref, DerefMut};
 
 use super::prelude::*;
 
-/// The PreserveTransform attribute tells us how a flatten operation can affect the transform data
-/// on this node.
+/// The PreserveTransform attribute tells us how a flatten operation can affect the transform on this node.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Default, FromPrimitive)]
 #[repr(u8)]
 pub(crate) enum PreserveTransform {

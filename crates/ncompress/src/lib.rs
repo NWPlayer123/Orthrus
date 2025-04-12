@@ -1,5 +1,5 @@
-//! This crate contains modules for [Orthrus](https://crates.io/crates/orthrus) that add support for
-//! Nintendo compression formats that are shared across multiple games or systems.
+//! This crate contains modules for [Orthrus](https://crates.io/crates/orthrus) that add support for Nintendo
+//! compression formats that are shared across multiple games or systems.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 

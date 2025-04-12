@@ -3,15 +3,15 @@
 use der::{Decode, Reader, Result, SliceReader};
 use x509_cert::certificate::Certificate;
 
-/// Parses X.509 certificate data, returning the valid [`Certificate`] and how many bytes remain
-/// after parsing.
+/// Parses X.509 certificate data, returning the valid [`Certificate`] and how many bytes remain after
+/// parsing.
 ///
-/// This is intended to be used as an analog for `d2i_X509` from the OpenSSL API, allowing you to
-/// parse a blob containing certificate data without knowing its actual length.
+/// This is intended to be used as an analog for `d2i_X509` from the OpenSSL API, allowing you to parse a blob
+/// containing certificate data without knowing its actual length.
 ///
 /// # Errors
-/// Returns an error if `bytes` is larger than `0xFFF_FFFF`, or if the decoding fails. See
-/// [`der::ErrorKind`] for more details.
+/// Returns an error if `bytes` is larger than `0xFFF_FFFF`, or if the decoding fails. See [`der::ErrorKind`]
+/// for more details.
 // TODO: replace with der::from_der_partial once der 0.8 lands
 pub fn read_certificate(bytes: &[u8]) -> Result<(Certificate, usize)> {
     // SliceReader will only fail if larger than 0xFFF_FFFF.

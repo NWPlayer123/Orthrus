@@ -15,8 +15,7 @@
 //!
 //! # Revisions
 
-#[cfg(feature = "std")]
-use std::{io::prelude::*, path::Path};
+#[cfg(feature = "std")] use std::{io::prelude::*, path::Path};
 
 use hashbrown::HashMap;
 use num_enum::FromPrimitive;
@@ -166,10 +165,7 @@ impl BinaryAsset {
             const LENGTH: usize = BinaryAsset::MAGIC.len();
             ensure!(data.len()? >= LENGTH as u64, EndOfFileSnafu);
             let magic = data.read_slice(LENGTH)?;
-            ensure!(
-                magic == BinaryAsset::MAGIC,
-                InvalidMagicSnafu { expected: BinaryAsset::MAGIC }
-            );
+            ensure!(magic == BinaryAsset::MAGIC, InvalidMagicSnafu { expected: BinaryAsset::MAGIC });
 
             // The first datagram is always the header data
             let header = Header::create(Datagram::new(&mut data, Endian::Little, false)?)?;
@@ -251,11 +247,7 @@ impl BinaryAsset {
             let type_name =
                 self.type_registry.get_mut(&type_handle).expect("We should always have a valid type handle!");
 
-            log::trace!(
-                "Filling in {} from {:#X}",
-                type_name,
-                initial_position + datagram.position()?
-            );
+            log::trace!("Filling in {} from {:#X}", type_name, initial_position + datagram.position()?);
             self.make_from_bam(&mut datagram, type_handle)?;
         } else {
             log::warn!("Encountered a type handle of 0, object updates are currently unhandled.");
@@ -402,12 +394,9 @@ impl GraphWriter {
 
         let graph_name = path.as_ref().file_stem().and_then(|s| s.to_str()).unwrap_or("graph");
 
-        writeln!(file, "digraph \"{}\" {{", graph_name)?;
+        writeln!(file, r#"digraph \"{}\" {{"#, graph_name)?;
         //writeln!(file, "    graph [rankdir=LR]")?;
-        writeln!(
-            file,
-            "    node [shape=record, style=rounded, fontname=\"Consolas\", fontsize=20]"
-        )?;
+        writeln!(file, "    node [shape=record, style=rounded, fontname=\"Consolas\", fontsize=20]")?;
         writeln!(file)?;
 
         Ok(GraphWriter { file })

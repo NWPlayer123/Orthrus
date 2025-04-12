@@ -1,15 +1,14 @@
 //! Adds support for the Audio Stream format used by NintendoWare for Revolution (NW4R).
 //!
 //! # Revisions
-//! **Version 0.1** Used for prerelease games (see Trauma Center: Second Opinion) **Version 1.0** Used by the
-//! majority of NW4R games
+//! * **Version 0.1** Used for prerelease games (see Trauma Center: Second Opinion)
+//! * **Version 1.0** Used by the majority of NW4R games
 //!
 //! # Format
 //! The BRSTM format, much like the rest of the NintendoWare binary formats, consists of a [shared
 //! header](super#shared-header), along with a number of "blocks" specific to each format.
 
-#[cfg(feature = "std")]
-use std::{fs::File, io::BufReader, path::Path};
+#[cfg(feature = "std")] use std::{fs::File, io::BufReader, path::Path};
 
 use orthrus_core::prelude::*;
 use snafu::prelude::*;
@@ -235,11 +234,13 @@ mod head_block {
                         let channels = data.read_slice(channel_count.into())?.into_owned();
                         TrackInfoEx { volume, pan, channels }
                     }
-                    _ => InvalidDataSnafu {
-                        position: start_position + u64::from(data_ref.value),
-                        reason: "Invalid Track Type",
+                    _ => {
+                        InvalidDataSnafu {
+                            position: start_position + u64::from(data_ref.value),
+                            reason: "Invalid Track Type",
+                        }
+                        .fail()?
                     }
-                    .fail()?,
                 });
             }
 

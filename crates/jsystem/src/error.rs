@@ -19,11 +19,7 @@ pub enum Error {
     InvalidMagic { expected: [u8; 4] },
 
     /// Thrown when encountering unexpected values.
-    #[snafu(display(
-        "Unexpected value encountered at position {:#X}! Reason: {}",
-        position,
-        reason
-    ))]
+    #[snafu(display("Unexpected value encountered at position {:#X}! Reason: {}", position, reason))]
     InvalidData { position: u64, reason: &'static str },
 }
 

@@ -32,35 +32,20 @@ impl DatagramRead for UVec3 {
 impl DatagramRead for Vec4 {
     #[inline]
     fn read(data: &mut Datagram) -> Result<Self, bam::Error> {
-        Ok(vec4(
-            data.read_float()?,
-            data.read_float()?,
-            data.read_float()?,
-            data.read_float()?,
-        ))
+        Ok(vec4(data.read_float()?, data.read_float()?, data.read_float()?, data.read_float()?))
     }
 }
 
 impl DatagramRead for Mat4 {
     #[inline]
     fn read(data: &mut Datagram) -> Result<Self, bam::Error> {
-        Ok(mat4(
-            Vec4::read(data)?,
-            Vec4::read(data)?,
-            Vec4::read(data)?,
-            Vec4::read(data)?,
-        ))
+        Ok(mat4(Vec4::read(data)?, Vec4::read(data)?, Vec4::read(data)?, Vec4::read(data)?))
     }
 }
 
 impl DatagramRead for Quat {
     #[inline]
     fn read(data: &mut Datagram) -> Result<Self, bam::Error> {
-        Ok(quat(
-            data.read_float()?,
-            data.read_float()?,
-            data.read_float()?,
-            data.read_float()?,
-        ))
+        Ok(quat(data.read_float()?, data.read_float()?, data.read_float()?, data.read_float()?))
     }
 }

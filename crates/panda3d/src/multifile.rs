@@ -1,7 +1,7 @@
 //! Adds support for the Multifile archive format used by the Panda3D engine.
 //!
-//! This module is designed to support both "standalone" or one-shot operations that don't require
-//! you to keep track of an object, and holding a Multifile in-memory for more complex operations.
+//! This module is designed to support both "standalone" or one-shot operations that don't require you to keep
+//! track of an object, and holding a Multifile in-memory for more complex operations.
 //!
 //! # Revisions
 //! * **Version 1.0**: Initial Multifile Support
@@ -9,15 +9,14 @@
 //!   Subfiles. Subfiles with a timestamp of zero will use the Multifile timestamp.
 //!
 //! # Format
-//! The Multifile format is designed as a header, and then a number of [`Subfile`]s connected via a
-//! linked list structure.
+//! The Multifile format is designed as a header, and then a number of [`Subfile`]s connected via a linked
+//! list structure.
 //!
-//! It has primitive support for larger-than-32-bit filesizes, using a "scale factor" that
-//! multiplies all offsets by a specific amount, which introduces extra padding to meet alignment
-//! requirements.
+//! It has primitive support for larger-than-32-bit filesizes, using a "scale factor" that multiplies all
+//! offsets by a specific amount, which introduces extra padding to meet alignment requirements.
 //!
-//! It supports comment lines before the Multifile data using a '#' at the start which allows a
-//! Multifile to be ran directly from the command line on Unix systems.
+//! It supports comment lines before the Multifile data using a '#' at the start which allows a Multifile to
+//! be ran directly from the command line on Unix systems.
 //!
 //! ## Multifile Header
 //! The header is as follows, in little-endian format:
@@ -32,12 +31,12 @@
 //!
 //! ## Subfile Header
 //!
-//! Directly following the Multifile header is a Subfile header. The first "entry" of each header is
-//! an offset to the next header, which forms a linked list, with the last entry being a 0. All
-//! offsets are relative to the file start, and must be multiplied by the scale factor.
+//! Directly following the Multifile header is a Subfile header. The first "entry" of each header is an offset
+//! to the next header, which forms a linked list, with the last entry being a 0. All offsets are relative to
+//! the file start, and must be multiplied by the scale factor.
 //!
-//! *Note that the linked list is not treated as part of the Subfile header, it is only for
-//! navigating the Multifile, and is only included here for convenience.*
+//! *Note that the linked list is not treated as part of the Subfile header, it is only for navigating the
+//! Multifile, and is only included here for convenience.*
 //!
 //! | Offset | Field | Type | Notes |
 //! |--------|-------|------|-------|
@@ -63,8 +62,8 @@
 //! | `Text`         | 1 << 6 (64) | The Subfile contains text instead of binary data. |
 //!
 //! ## Certificate Format
-//! The Multifile certificate is a binary blob that can contain multiple certificates in a
-//! certificate chain, along with the actual signature of the Multifile.
+//! The Multifile certificate is a binary blob that can contain multiple certificates in a certificate chain,
+//! along with the actual signature of the Multifile.
 //!
 //! | Offset | Field | Type | Notes |
 //! |--------|-------|------|-------|
@@ -81,30 +80,28 @@
 //! This module can be used either with borrowed data or as an in-memory archive.
 //!
 //! ## Stateful Functions
-//! A Multifile can be created through [`open`](Multifile::open), which will read a file from
-//! disk, and [`load`](Multifile::load), which will read the provided file.
+//! A Multifile can be created through [`open`](Multifile::open), which will read a file from disk, and
+//! [`load`](Multifile::load), which will read the provided file.
 //!
 //! Once created, the following functions can be used to manipulate the archive:
 //!
 //! * [`extract_all`](Multifile::extract_all): Save all contained [`Subfile`]s to a given folder
 //!
 //! ## Stateless Functions
-//! These functions can be used without having to first create a Multifile, used for the
-//! following one-shot operations:
+//! These functions can be used without having to first create a Multifile, used for the following one-shot
+//! operations:
 //!
 //! * [`extract_from_path`](Multifile::extract_from_path): Reads a Multifile from disk, and saves all
 //!   [`Subfile`]s to a given folder
 //! * [`extract_from`](Multifile::extract_from): Reads the provided Multifile, and saves all [`Subfile`]s to a
 //!   given folder
 
-#[cfg(feature = "std")]
-use std::path::Path;
+#[cfg(feature = "std")] use std::path::Path;
 
 use orthrus_core::prelude::*;
 use snafu::prelude::*;
 
-#[cfg(not(feature = "std"))]
-use crate::no_std::*;
+#[cfg(not(feature = "std"))] use crate::no_std::*;
 use crate::{common::Version, subfile::*};
 
 /// Error conditions for when working with Multifile archives.
@@ -160,9 +157,9 @@ struct Header {
     timestamp: u32,
 }
 
-// The current least terrible way to implement state in this system is to just store the entire
-// Multifile's data, and have each Subfile keep an offset+length. In the future, once safe transmute
-// is a thing, I can "take" each header and what's left will be all the relevant file data.
+// The current least terrible way to implement state in this system is to just store the entire Multifile's
+// data, and have each Subfile keep an offset+length. In the future, once safe transmute is a thing, I can
+// "take" each header and what's left will be all the relevant file data.
 
 /// Used for working with Multifile archives, supports both stateless and stateful operations.
 ///
@@ -182,8 +179,8 @@ impl Multifile {
     /// Unique identifier that tells us if we're reading a Multifile archive.
     pub const MAGIC: [u8; 6] = *b"pmf\0\n\r";
 
-    /// Helper function that reads the pre-header for a given file, if any, which allows for comment
-    /// lines starting with '#'. Returns the position in the stream that the actual data starts.
+    /// Helper function that reads the pre-header for a given file, if any, which allows for comment lines
+    /// starting with '#'. Returns the position in the stream that the actual data starts.
     #[inline]
     fn parse_header_prefix(input: &[u8]) -> usize {
         let mut pos = 0;
@@ -210,9 +207,8 @@ impl Multifile {
     /// Returns the metadata from a Multifile header.
     ///
     /// # Errors
-    /// Returns [`InvalidMagic`](Error::InvalidMagic) if the magic number does not match a
-    /// Multifile, or [`UnknownVersion`](Error::UnknownVersion) if the Multifile version is
-    /// too new to be supported.
+    /// Returns [`InvalidMagic`](Error::InvalidMagic) if the magic number does not match a Multifile, or
+    /// [`UnknownVersion`](Error::UnknownVersion) if the Multifile version is too new to be supported.
     #[inline]
     fn read_header<T: ReadExt>(data: &mut T) -> Result<Header> {
         //Read the magic and make sure we're actually parsing a Multifile
@@ -242,13 +238,13 @@ impl Multifile {
         self.files.len()
     }
 
-    /// Opens a file on disk, loads its contents, and parses it into a new instance of
-    /// Multifile. The returned instance can then be used for further operations.
+    /// Opens a file on disk, loads its contents, and parses it into a new instance of Multifile. The returned
+    /// instance can then be used for further operations.
     ///
     /// # Errors
-    /// Returns [`InvalidMagic`](Error::InvalidMagic) if the magic number does not match a
-    /// Multifile, [`UnknownVersion`](Error::UnknownVersion) if the Multifile version is too
-    /// new to be supported, or [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds.
+    /// Returns [`InvalidMagic`](Error::InvalidMagic) if the magic number does not match a Multifile,
+    /// [`UnknownVersion`](Error::UnknownVersion) if the Multifile version is too new to be supported, or
+    /// [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds.
     #[cfg(feature = "std")]
     #[inline]
     pub fn open<P: AsRef<Path>>(input: P, offset: u64) -> Result<Self> {
@@ -256,13 +252,13 @@ impl Multifile {
         Self::load(data, offset)
     }
 
-    /// Loads the data from the given file and parses it into a new instance of Multifile. The
-    /// returned instance can then be used for further operations.
+    /// Loads the data from the given file and parses it into a new instance of Multifile. The returned
+    /// instance can then be used for further operations.
     ///
     /// # Errors
-    /// Returns [`InvalidMagic`](Error::InvalidMagic) if the magic number does not match a
-    /// Multifile, [`UnknownVersion`](Error::UnknownVersion) if the Multifile version is too
-    /// new to be supported, or [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds.
+    /// Returns [`InvalidMagic`](Error::InvalidMagic) if the magic number does not match a Multifile,
+    /// [`UnknownVersion`](Error::UnknownVersion) if the Multifile version is too new to be supported, or
+    /// [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds.
     #[inline]
     pub fn load<I: Into<Box<[u8]>>>(input: I, offset: u64) -> Result<Self> {
         let mut data = DataCursor::new(input, Endian::Little);
@@ -270,12 +266,8 @@ impl Multifile {
         data.set_position(Self::parse_header_prefix(&data) as u64)?;
 
         let header = Self::read_header(&mut data)?;
-        let mut multifile = Self {
-            data,
-            files: Vec::new(),
-            version: header.version,
-            timestamp: header.timestamp,
-        };
+        let mut multifile =
+            Self { data, files: Vec::new(), version: header.version, timestamp: header.timestamp };
 
         // Loop through each Subfile, using next_index as a linked list
         let mut next_index = multifile.data.read_u32()? * header.scale_factor;
@@ -300,10 +292,9 @@ impl Multifile {
     /// [`extract_from_path`](Self::extract_from_path).
     ///
     /// # Errors
-    /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds, or an error if
-    /// unable to create the necessary directories (see
-    /// [`create_dir_all`](std::fs::create_dir_all)), or failing to create a file to write to (see
-    /// [`write`](std::fs::write))
+    /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds, or an error if unable to
+    /// create the necessary directories (see [`create_dir_all`](std::fs::create_dir_all)), or failing to
+    /// create a file to write to (see [`write`](std::fs::write))
     #[inline]
     #[cfg(feature = "std")]
     pub fn extract_all<P: AsRef<Path>>(&mut self, output: P) -> Result<usize> {
@@ -318,14 +309,14 @@ impl Multifile {
         Ok(saved_files)
     }
 
-    /// Loads a Multifile from disk and extracts all [`Subfile`]s. For use with other functions,
-    /// see [`extract`](Self::extract_all).
+    /// Loads a Multifile from disk and extracts all [`Subfile`]s. For use with other functions, see
+    /// [`extract`](Self::extract_all).
     ///
     /// # Errors
-    /// Returns [`NotFound`](Error::NotFound) if the input file doesn't exist,
-    /// [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds, or an error if unable to
-    /// create the necessary directories (see [`create_dir_all`](std::fs::create_dir_all)), or
-    /// failing to create a file to write to (see [`write`](std::fs::write)).
+    /// Returns [`NotFound`](Error::NotFound) if the input file doesn't exist, [`EndOfFile`](Error::EndOfFile)
+    /// if trying to read out of bounds, or an error if unable to create the necessary directories (see
+    /// [`create_dir_all`](std::fs::create_dir_all)), or failing to create a file to write to (see
+    /// [`write`](std::fs::write)).
     #[cfg(feature = "std")]
     #[inline]
     pub fn extract_from_path<P: AsRef<Path>>(input: P, output: P, offset: u64) -> Result<()> {
@@ -338,10 +329,9 @@ impl Multifile {
     /// [`extract`](Self::extract_all).
     ///
     /// # Errors
-    /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds, or an error if
-    /// unable to create the necessary directories (see
-    /// [`create_dir_all`](std::fs::create_dir_all)), or failing to create a file to write to (see
-    /// [`write`](std::fs::write)).
+    /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds, or an error if unable to
+    /// create the necessary directories (see [`create_dir_all`](std::fs::create_dir_all)), or failing to
+    /// create a file to write to (see [`write`](std::fs::write)).
     #[cfg(feature = "std")]
     #[inline]
     pub fn extract_from<P: AsRef<Path>>(input: &[u8], output: P, offset: u64) -> Result<()> {
@@ -379,8 +369,8 @@ impl Multifile {
 
     /// Parses file data containing Multifile signatures and certificate chains.
     ///
-    /// Currently only useful to check that the signature data can be parsed correctly, does not
-    /// verify the contents against the signature.
+    /// Currently only useful to check that the signature data can be parsed correctly, does not verify the
+    /// contents against the signature.
     ///
     /// # Errors
     /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds.
@@ -391,10 +381,8 @@ impl Multifile {
         let signature_size = file_data.read_u32()?;
         file_data.set_position(4 + u64::from(signature_size))?;
         let cert_count = file_data.read_u32()?;
-        let mut cert_blob = DataCursor::new(
-            vec![0u8; (file_data.len()? - file_data.position()?) as usize],
-            Endian::Little,
-        );
+        let mut cert_blob =
+            DataCursor::new(vec![0u8; (file_data.len()? - file_data.position()?) as usize], Endian::Little);
         file_data.read_length(&mut cert_blob)?;
 
         for _ in 0..cert_count {
@@ -430,21 +418,9 @@ impl FileIdentifier for Multifile {
         //Manually build additional details
         let details = format!(
             "{}{}{}",
-            if num_compressed > 0 {
-                format!("{num_compressed} compressed")
-            } else {
-                String::new()
-            },
-            if num_compressed > 0 && num_encrypted > 0 {
-                ", "
-            } else {
-                ""
-            },
-            if num_encrypted > 0 {
-                format!("{num_encrypted} encrypted")
-            } else {
-                String::new()
-            }
+            if num_compressed > 0 { format!("{num_compressed} compressed") } else { String::new() },
+            if num_compressed > 0 && num_encrypted > 0 { ", " } else { "" },
+            if num_encrypted > 0 { format!("{num_encrypted} encrypted") } else { String::new() }
         );
 
         if details.is_empty() {

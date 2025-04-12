@@ -11,8 +11,7 @@ use bitflags::bitflags;
 use orthrus_core::prelude::*;
 use snafu::prelude::*;
 
-#[cfg(not(feature = "std"))]
-use crate::no_std::*;
+#[cfg(not(feature = "std"))] use crate::no_std::*;
 
 /// Error conditions when working with Multifile archives.
 #[derive(Debug, Snafu)]
@@ -177,8 +176,8 @@ impl Multifile {
         // After running parse_header_prefix, we should be at the start of a Multifile header.
         let metadata = Self::load_metadata(&mut data)?;
 
-        // Now, let's actually build our sorted list of files (ideally, this will already be sorted inside
-        // the Multifile)
+        // Now, let's actually build our sorted list of files (ideally, this will already be sorted inside the
+        // Multifile)
         let mut files = BTreeMap::new();
         for mut header in metadata.files {
             // First, let's verify that our optional parameters are valid

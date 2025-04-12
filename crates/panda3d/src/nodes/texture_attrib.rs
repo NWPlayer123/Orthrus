@@ -29,10 +29,12 @@ impl StageNode {
         };
 
         let sampler = match loader.get_minor_version() >= 36 {
-            true => match data.read_bool()? {
-                true => Some(SamplerState::create(loader, data)?),
-                false => None,
-            },
+            true => {
+                match data.read_bool()? {
+                    true => Some(SamplerState::create(loader, data)?),
+                    false => None,
+                }
+            }
             false => None,
         };
 

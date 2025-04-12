@@ -79,10 +79,7 @@ impl SgiHeader {
         );
 
         let dimension = data.read_u16()?;
-        ensure!(
-            (1..=3).contains(&dimension),
-            InvalidDimensionSnafu { value: dimension }
-        );
+        ensure!((1..=3).contains(&dimension), InvalidDimensionSnafu { value: dimension });
 
         let width = data.read_u16()?;
         let height = data.read_u16()?;
@@ -287,11 +284,7 @@ impl AssetLoader for SgiImageLoader {
         }
 
         Ok(Image::new(
-            Extent3d {
-                width: header.width as u32,
-                height: header.height as u32,
-                depth_or_array_layers: 1,
-            },
+            Extent3d { width: header.width as u32, height: header.height as u32, depth_or_array_layers: 1 },
             dimension,
             output_data,
             format,

@@ -69,8 +69,7 @@ impl Effects {
 struct AnimationContext {
     // The nearest ancestor animation root.
     root: Entity,
-    // The path to the animation root. This is used for constructing the
-    // animation target UUIDs.
+    // The path to the animation root. This is used for constructing the animation target UUIDs.
     path: SmallVec<[Name; 8]>,
 }
 
@@ -160,7 +159,8 @@ impl BinaryAsset {
             PandaObject::ModelNode(node) => {
                 // We're either at the scene root, or an arbitrary child node, create a new node, process all
                 // its attributes, and then recurse to any children.
-                //println!("{} {} {:?}", node_index, node.node.name, node);
+                
+                // println!("{} {} {:?}", node_index, node.node.name, node);
                 let entity = world.spawn(Name::new(node.node.name.clone())).id();
                 if let Some(parent) = parent {
                     world.entity_mut(parent).add_child(entity);

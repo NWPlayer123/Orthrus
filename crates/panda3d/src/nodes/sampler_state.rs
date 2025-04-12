@@ -124,11 +124,7 @@ impl GraphDisplay for SamplerState {
         write!(label, "{{SamplerState|{{")?;
 
         // Fields
-        write!(
-            label,
-            "wrap: [{:?}, {:?}, {:?}]|",
-            self.wrap_u, self.wrap_v, self.wrap_w
-        )?;
+        write!(label, "wrap: [{:?}, {:?}, {:?}]|", self.wrap_u, self.wrap_v, self.wrap_w)?;
         write!(label, "min_filter: {:?}|", self.min_filter)?;
         write!(label, "mag_filter: {:?}|", self.mag_filter)?;
         write!(label, "aniso_degree: {:?}|", self.aniso_degree)?;

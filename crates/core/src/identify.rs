@@ -1,12 +1,10 @@
 //! Identification system that allows types to return information if they recognize a given type.
 //!
-//! This has two systems: basic identification, which should only perform operations if they won't
-//! take a significant amount of time, and "deep identification", which is allowed to perform any
-//! computation even if it may take multiple seconds, along with allowing recursion into nested
-//! types.
+//! This has two systems: basic identification, which should only perform operations if they won't take a
+//! significant amount of time, and "deep identification", which is allowed to perform any computation even if
+//! it may take multiple seconds, along with allowing recursion into nested types.
 
-#[cfg(not(feature = "std"))]
-use crate::no_std::*;
+#[cfg(not(feature = "std"))] use crate::no_std::*;
 
 /// Contains the relevant file info to return after identification.
 #[derive(Default)]
@@ -33,8 +31,7 @@ pub trait FileIdentifier {
     #[must_use]
     fn identify(data: &[u8]) -> Option<FileInfo>;
 
-    /// Attempts to identify a specific type and any sub-type, and return human-readable info about
-    /// it.
+    /// Attempts to identify a specific type and any sub-type, and return human-readable info about it.
     #[must_use]
     #[inline]
     fn identify_deep(data: &[u8]) -> Option<FileInfo> {

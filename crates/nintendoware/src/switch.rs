@@ -1,8 +1,7 @@
 #![allow(dead_code)] //Tell rust to shut up
 
 use core::marker::PhantomData;
-#[cfg(feature = "std")]
-use std::path::Path;
+#[cfg(feature = "std")] use std::path::Path;
 
 use bitflags::bitflags;
 use num_enum::FromPrimitive;
@@ -127,8 +126,10 @@ impl Read for BinaryHeader {
         let endian = match header.byte_order {
             ByteOrderMark::Little => Endian::Little,
             ByteOrderMark::Big => Endian::Big,
-            _ => InvalidDataSnafu { position: data.position()? - 2, reason: "Invalid Byte Order Mark" }
-                .fail()?,
+            _ => {
+                InvalidDataSnafu { position: data.position()? - 2, reason: "Invalid Byte Order Mark" }
+                    .fail()?
+            }
         };
         data.set_endian(endian);
 
@@ -308,10 +309,7 @@ struct SendValue {
 
 impl Read for SendValue {
     fn read<T: ReadExt>(data: &mut T) -> Result<Self> {
-        Ok(Self {
-            main_send: data.read_u8()?,
-            fx_send: [data.read_u8()?, data.read_u8()?, data.read_u8()?],
-        })
+        Ok(Self { main_send: data.read_u8()?, fx_send: [data.read_u8()?, data.read_u8()?, data.read_u8()?] })
     }
 }
 
@@ -434,11 +432,13 @@ impl Read for StreamSoundInfo {
                 Identifier::STREAM_TRACK_INFO => {
                     tracks.push(StreamTrackInfo::read(data)?);
                 }
-                _ => InvalidDataSnafu {
-                    position: data.position()?,
-                    reason: "Unexpected Track Info Reference!",
+                _ => {
+                    InvalidDataSnafu {
+                        position: data.position()?,
+                        reason: "Unexpected Track Info Reference!",
+                    }
+                    .fail()?
                 }
-                .fail()?,
             }
         }
 
@@ -448,15 +448,7 @@ impl Read for StreamSoundInfo {
         data.set_position(offset + u64::from(extension_ref.offset))?;
         let extension = StreamSoundExtension::read(data)?;
 
-        Ok(Self {
-            valid_tracks,
-            channel_count,
-            pitch,
-            prefetch_id,
-            tracks,
-            send_value,
-            extension,
-        })
+        Ok(Self { valid_tracks, channel_count, pitch, prefetch_id, tracks, send_value, extension })
     }
 }
 
@@ -832,14 +824,14 @@ impl StringBlock {
 
                     // Read the string and store it, includes the trailing \0
                     let string = data.read_slice(reference.size as usize)?.to_vec();
-                    strings.push(
-                        String::from_utf8(string).map_err(|source| DataError::InvalidString {
-                            source: Utf8ErrorSource::String { source },
-                        })?,
-                    );
+                    strings.push(String::from_utf8(string).map_err(|source| {
+                        DataError::InvalidString { source: Utf8ErrorSource::String { source } }
+                    })?);
                 }
-                _ => InvalidDataSnafu { position: data.position()?, reason: "Unexpected String Identifier!" }
-                    .fail()?,
+                _ => {
+                    InvalidDataSnafu { position: data.position()?, reason: "Unexpected String Identifier!" }
+                        .fail()?
+                }
             }
         }
 
@@ -851,10 +843,7 @@ impl Read for StringBlock {
     fn read<T: ReadExt + SeekExt>(data: &mut T) -> Result<Self> {
         // Read the header and make sure we're actually reading a String Block
         let header = SectionHeader::read(data)?;
-        ensure!(
-            header.magic == Self::MAGIC,
-            InvalidMagicSnafu { expected: Self::MAGIC }
-        );
+        ensure!(header.magic == Self::MAGIC, InvalidMagicSnafu { expected: Self::MAGIC });
 
         // Store the relative position for all offsets
         let offset = data.position()?;
@@ -878,11 +867,13 @@ impl Read for StringBlock {
                 Identifier::PATRICIA_TREE => {
                     strings.tree = PatriciaTree::read(data)?;
                 }
-                _ => InvalidDataSnafu {
-                    position: data.position()?,
-                    reason: "Unexpected String Block Identifier!",
+                _ => {
+                    InvalidDataSnafu {
+                        position: data.position()?,
+                        reason: "Unexpected String Block Identifier!",
+                    }
+                    .fail()?
                 }
-                .fail()?,
             }
         }
 
@@ -933,11 +924,13 @@ impl InfoBlock {
                                 let sound_info = SoundInfo::read(data)?;
                                 info.sounds.push(sound_info);
                             }
-                            _ => InvalidDataSnafu {
-                                position: data.position()?,
-                                reason: "Unexpected Sound Info Identifier!",
+                            _ => {
+                                InvalidDataSnafu {
+                                    position: data.position()?,
+                                    reason: "Unexpected Sound Info Identifier!",
+                                }
+                                .fail()?
                             }
-                            .fail()?,
                         }
                     }
                 }
@@ -948,11 +941,13 @@ impl InfoBlock {
                 Identifier::GROUP_INFO_SECTION => {}
                 Identifier::FILE_INFO_SECTION => {}
                 Identifier::SOUND_ARCHIVE_PLAYER_INFO => {}
-                _ => InvalidDataSnafu {
-                    position: data.position()?,
-                    reason: "Unexpected Info Section Identifier!",
+                _ => {
+                    InvalidDataSnafu {
+                        position: data.position()?,
+                        reason: "Unexpected Info Section Identifier!",
+                    }
+                    .fail()?
                 }
-                .fail()?,
             }
         }
 
@@ -994,10 +989,7 @@ impl BFSAR {
         println!("{:?}", header);
 
         //Now we need to verify that it's what we actually expected
-        ensure!(
-            header.magic == Self::MAGIC,
-            InvalidMagicSnafu { expected: Self::MAGIC }
-        );
+        ensure!(header.magic == Self::MAGIC, InvalidMagicSnafu { expected: Self::MAGIC });
 
         ensure!(
             header.size == 0x40,
@@ -1056,8 +1048,10 @@ impl BFSAR {
                     info = InfoBlock::read(&mut data)?;
                 }
                 Identifier::FILE_BLOCK => {}
-                _ => InvalidDataSnafu { position: data.position()?, reason: "Unexpected BFSAR Section!" }
-                    .fail()?,
+                _ => {
+                    InvalidDataSnafu { position: data.position()?, reason: "Unexpected BFSAR Section!" }
+                        .fail()?
+                }
             }
         }
 

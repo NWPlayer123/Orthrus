@@ -46,14 +46,7 @@ impl Node for PartBundle {
             unimplemented!("We need to handle _modifies_anim_bundles in PartBundle for this file");
         }
 
-        Ok(Self {
-            inner,
-            anim_preload_ref,
-            blend_type,
-            anim_blend_flag,
-            frame_blend_flag,
-            root_transform,
-        })
+        Ok(Self { inner, anim_preload_ref, blend_type, anim_blend_flag, frame_blend_flag, root_transform })
     }
 }
 

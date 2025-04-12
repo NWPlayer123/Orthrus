@@ -7,5 +7,4 @@
 
 pub use crate::error::Error;
 pub(crate) use crate::error::*;
-#[doc(inline)]
-pub use crate::rarc2::ResourceArchive;
+#[doc(inline)] pub use crate::rarc2::ResourceArchive;

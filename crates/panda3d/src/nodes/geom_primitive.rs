@@ -50,15 +50,7 @@ impl Node for GeomPrimitive {
             }
         };
 
-        Ok(Self {
-            shade_model,
-            first_vertex,
-            num_vertices,
-            index_type,
-            usage_hint,
-            vertices_ref,
-            ends_ref,
-        })
+        Ok(Self { shade_model, first_vertex, num_vertices, index_type, usage_hint, vertices_ref, ends_ref })
     }
 }
 

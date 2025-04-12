@@ -28,8 +28,8 @@ pub(crate) enum CompressionMode {
     Off,
     On,
 
-    // Specific compression modes. You should only use these when you really want to use a
-    // specific compression algorithm.
+    // Specific compression modes. You should only use these when you really want to use a specific
+    // compression algorithm.
     /// 3DFX Texture Compression 1: older compression format
     FXT1,
     /// DirectX Texture Compression BC1: RGB with optional binary alpha
@@ -338,7 +338,7 @@ impl Node for Texture {
             true => Some(Texture::fillin_data(loader, data)?),
             false => {
                 //Otherwise, the raw image data isn't stored, so we need to load the relevant image from VFS
-                //texture.data = std::fs::read(), remove the Option<>
+                // texture.data = std::fs::read(), remove the Option<>
                 None
             }
         };

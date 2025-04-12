@@ -36,13 +36,7 @@ impl Node for CharacterJoint {
 
         let initial_net_transform_inverse = Mat4::read(data)?;
 
-        Ok(Self {
-            inner,
-            character_ref,
-            net_node_refs,
-            local_node_refs,
-            initial_net_transform_inverse,
-        })
+        Ok(Self { inner, character_ref, net_node_refs, local_node_refs, initial_net_transform_inverse })
     }
 }
 

@@ -24,12 +24,9 @@ use std::{
 
 use snafu::prelude::*;
 
-#[cfg(feature = "alloc")]
-extern crate alloc;
-#[cfg(feature = "alloc")]
-use alloc::borrow::Cow;
-#[cfg(feature = "std")]
-use std::{
+#[cfg(feature = "alloc")] extern crate alloc;
+#[cfg(feature = "alloc")] use alloc::borrow::Cow;
+#[cfg(feature = "std")] use std::{
     io::{ErrorKind, Read, Seek, SeekFrom, Write},
     path::Path,
 };
@@ -508,10 +505,7 @@ impl DataCursor {
     #[inline]
     pub fn copy_within(&mut self, src: core::ops::Range<usize>, dest: usize) -> Result<(), DataError> {
         let length = src.end.saturating_sub(src.start);
-        ensure!(
-            src.end <= self.data.len() && dest.saturating_add(length) <= self.data.len(),
-            EndOfFileSnafu
-        );
+        ensure!(src.end <= self.data.len() && dest.saturating_add(length) <= self.data.len(), EndOfFileSnafu);
 
         if src.contains(&dest) {
             for i in 0..length {
@@ -609,10 +603,7 @@ impl ReadExt for DataCursor {
     #[inline]
     #[cfg(not(feature = "alloc"))]
     fn read_slice(&mut self, length: usize) -> Result<&[u8], DataError> {
-        ensure!(
-            self.position.saturating_add(length) <= self.data.len(),
-            EndOfFileSnafu
-        );
+        ensure!(self.position.saturating_add(length) <= self.data.len(), EndOfFileSnafu);
 
         // SAFETY: We're within bounds of `self.data` and will always have a valid alignment.
         let result = unsafe {
@@ -626,10 +617,7 @@ impl ReadExt for DataCursor {
     #[inline]
     #[cfg(feature = "alloc")]
     fn read_slice(&mut self, length: usize) -> Result<Cow<[u8]>, DataError> {
-        ensure!(
-            self.position.saturating_add(length) <= self.data.len(),
-            EndOfFileSnafu
-        );
+        ensure!(self.position.saturating_add(length) <= self.data.len(), EndOfFileSnafu);
 
         // SAFETY: We're within bounds of `self.data` and will always have a valid alignment.
         let result = unsafe {
@@ -829,10 +817,7 @@ impl ReadExt for DataCursorRef<'_> {
     #[inline]
     #[cfg(not(feature = "alloc"))]
     fn read_slice(&mut self, length: usize) -> Result<&[u8], DataError> {
-        ensure!(
-            self.position.saturating_add(length) <= self.data.len(),
-            EndOfFileSnafu
-        );
+        ensure!(self.position.saturating_add(length) <= self.data.len(), EndOfFileSnafu);
 
         // SAFETY: We're within bounds of `self.data` and will always have a valid alignment.
         let result = unsafe {
@@ -846,10 +831,7 @@ impl ReadExt for DataCursorRef<'_> {
     #[inline]
     #[cfg(feature = "alloc")]
     fn read_slice(&mut self, length: usize) -> Result<Cow<[u8]>, DataError> {
-        ensure!(
-            self.position.saturating_add(length) <= self.data.len(),
-            EndOfFileSnafu
-        );
+        ensure!(self.position.saturating_add(length) <= self.data.len(), EndOfFileSnafu);
 
         // SAFETY: We're within bounds of `self.data` and will always have a valid alignment.
         let result = unsafe {
@@ -949,10 +931,7 @@ impl<'a> DataCursorMut<'a> {
     #[inline]
     pub fn copy_within(&mut self, src: core::ops::Range<usize>, dest: usize) -> Result<(), DataError> {
         let length = src.end.saturating_sub(src.start);
-        ensure!(
-            src.end <= self.data.len() && dest.saturating_add(length) <= self.data.len(),
-            EndOfFileSnafu
-        );
+        ensure!(src.end <= self.data.len() && dest.saturating_add(length) <= self.data.len(), EndOfFileSnafu);
 
         if src.contains(&dest) {
             for i in 0..length {
@@ -1050,10 +1029,7 @@ impl ReadExt for DataCursorMut<'_> {
     #[inline]
     #[cfg(not(feature = "alloc"))]
     fn read_slice(&mut self, length: usize) -> Result<&[u8], DataError> {
-        ensure!(
-            self.position.saturating_add(length) <= self.data.len(),
-            EndOfFileSnafu
-        );
+        ensure!(self.position.saturating_add(length) <= self.data.len(), EndOfFileSnafu);
 
         // SAFETY: We're within bounds of `self.data` and will always have a valid alignment.
         let result = unsafe {
@@ -1067,10 +1043,7 @@ impl ReadExt for DataCursorMut<'_> {
     #[inline]
     #[cfg(feature = "alloc")]
     fn read_slice(&mut self, length: usize) -> Result<Cow<[u8]>, DataError> {
-        ensure!(
-            self.position.saturating_add(length) <= self.data.len(),
-            EndOfFileSnafu
-        );
+        ensure!(self.position.saturating_add(length) <= self.data.len(), EndOfFileSnafu);
 
         // SAFETY: We're within bounds of `self.data` and will always have a valid alignment.
         let result = unsafe {
@@ -1147,9 +1120,8 @@ impl AsMut<[u8]> for DataCursorMut<'_> {
 
 /// A stream that allows endian-aware read and write.
 ///
-/// This struct is generic over any type `T` that implements some combination of
-/// `Read`, `Write`, and `Seek`. Methods are conditionally available based on
-/// the traits implemented by `T`.
+/// This struct is generic over any type `T` that implements some combination of `Read`, `Write`, and `Seek`.
+/// Methods are conditionally available based on the traits implemented by `T`.
 #[derive(Debug)]
 pub struct DataStream<T> {
     inner: T,
@@ -1199,8 +1171,8 @@ impl<T: Seek> SeekExt for DataStream<T> {
         let old_pos = self.stream_position().context(IoSnafu)?;
         let len = self.seek(SeekFrom::End(0)).context(IoSnafu)?;
 
-        // Avoid seeking a third time when we were already at the end of the
-        // stream. The branch is usually way cheaper than a seek operation.
+        // Avoid seeking a third time when we were already at the end of the stream. The branch is usually way
+        // cheaper than a seek operation.
         if old_pos != len {
             self.seek(SeekFrom::Start(old_pos)).context(IoSnafu)?;
         }
@@ -1219,8 +1191,8 @@ impl<T: Seek> SeekExt for DataStream<T> {
         let old_pos = self.stream_position().context(IoSnafu)?;
         let len = self.seek(SeekFrom::End(0)).context(IoSnafu)?;
 
-        // Avoid seeking a third time when we were already at the end of the
-        // stream. The branch is usually way cheaper than a seek operation.
+        // Avoid seeking a third time when we were already at the end of the stream. The branch is usually way
+        // cheaper than a seek operation.
         if old_pos != len {
             self.seek(SeekFrom::Start(old_pos)).context(IoSnafu)?;
         }

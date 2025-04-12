@@ -7,26 +7,21 @@
 //! use orthrus_panda3d::prelude::*;
 //! ```
 
-#[doc(inline)]
-pub use crate::multifile::Multifile;
+#[doc(inline)] pub use crate::multifile::Multifile;
 
 /// Includes [`multifile::Error`] for Result handling.
 pub mod multifile {
-    #[doc(inline)]
-    pub use crate::multifile::Error;
+    #[doc(inline)] pub use crate::multifile::Error;
 }
 
-#[doc(inline)]
-pub use crate::bam::BinaryAsset;
+#[doc(inline)] pub use crate::bam::BinaryAsset;
 
 /// Includes [`bam::Error`] for Result handling.
 pub mod bam {
-    #[doc(inline)]
-    pub use crate::bam::Error;
+    #[doc(inline)] pub use crate::bam::Error;
 }
 
 /// Includes [`panda3d::Version`] for file format versions.
 pub mod panda3d {
-    #[doc(inline)]
-    pub use crate::common::Version;
+    #[doc(inline)] pub use crate::common::Version;
 }

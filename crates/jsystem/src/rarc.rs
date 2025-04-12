@@ -1,5 +1,4 @@
-#[cfg(feature = "std")]
-use std::path::Path;
+#[cfg(feature = "std")] use std::path::Path;
 
 use bitflags::bitflags;
 use orthrus_core::prelude::*;
@@ -111,12 +110,12 @@ impl ResourceArchive {
     /// Unique identifier that tells us if we're reading a Resource Archive.
     pub const MAGIC: [u8; 4] = *b"RARC";
 
-    /// Opens a file on disk, loads its contents, and parses it into a new instance, which can then
-    /// be used for further operations.
+    /// Opens a file on disk, loads its contents, and parses it into a new instance, which can then be used
+    /// for further operations.
     ///
     /// # Errors
-    /// Returns [`InvalidMagic`](Error::InvalidMagic) if the magic number does not match a Resource
-    /// Archive or [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds.
+    /// Returns [`InvalidMagic`](Error::InvalidMagic) if the magic number does not match a Resource Archive or
+    /// [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds.
     #[cfg(feature = "std")]
     #[inline]
     pub fn open<P: AsRef<Path>>(input: P) -> Result<Self> {
@@ -127,9 +126,8 @@ impl ResourceArchive {
     /// Returns the metadata from a Resource Archive header.
     ///
     /// # Errors
-    /// Returns [`InvalidMagic`](Error::InvalidMagic) if the magic number does not match a Resource
-    /// Archive or [`UnknownFormat`](Error::UnknownFormat) if the header is larger than 0x20 in
-    /// size.
+    /// Returns [`InvalidMagic`](Error::InvalidMagic) if the magic number does not match a Resource Archive or
+    /// [`UnknownFormat`](Error::UnknownFormat) if the header is larger than 0x20 in size.
     #[inline]
     fn read_header<T: ReadExt + SeekExt>(data: &mut T) -> Result<Header> {
         //Store the starting position since all offsets are relative
@@ -155,13 +153,7 @@ impl ResourceArchive {
         //We have 4 bytes of padding we ignore here.
         data.set_position(data_offset.into())?;
 
-        Ok(Header {
-            file_size,
-            data_offset,
-            data_size,
-            mram_preload_size,
-            aram_preload_size,
-        })
+        Ok(Header { file_size, data_offset, data_size, mram_preload_size, aram_preload_size })
     }
 
     /// Returns the metadata from a Resource Archive data header.
@@ -204,12 +196,12 @@ impl ResourceArchive {
         })
     }
 
-    /// Loads the data from the given file and parses it into a new instance, which can then be used
-    /// for further operations.
+    /// Loads the data from the given file and parses it into a new instance, which can then be used for
+    /// further operations.
     ///
     /// # Errors
-    /// Returns [`InvalidMagic`](Error::InvalidMagic) if the magic number does not match a Resource
-    /// Archive or [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds.
+    /// Returns [`InvalidMagic`](Error::InvalidMagic) if the magic number does not match a Resource Archive or
+    /// [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds.
     #[inline]
     pub fn load<I: Into<Box<[u8]>>>(input: I) -> Result<Self> {
         let mut data = DataCursor::new(input, Endian::Big);
@@ -219,14 +211,14 @@ impl ResourceArchive {
         Err(Error::EndOfFile)
     }
 
-    /// Loads a Multifile from disk and extracts all [`Subfile`]s. For use with other functions,
-    /// see [`extract`](Self::extract_all).
+    /// Loads a Multifile from disk and extracts all [`Subfile`]s. For use with other functions, see
+    /// [`extract`](Self::extract_all).
     ///
     /// # Errors
-    /// Returns [`NotFound`](Error::NotFound) if the input file doesn't exist,
-    /// [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds, or an error if unable to
-    /// create the necessary directories (see [`create_dir_all`](std::fs::create_dir_all)), or
-    /// failing to create a file to write to (see [`write`](std::fs::write)).
+    /// Returns [`NotFound`](Error::NotFound) if the input file doesn't exist, [`EndOfFile`](Error::EndOfFile)
+    /// if trying to read out of bounds, or an error if unable to create the necessary directories (see
+    /// [`create_dir_all`](std::fs::create_dir_all)), or failing to create a file to write to (see
+    /// [`write`](std::fs::write)).
     #[cfg(feature = "std")]
     #[inline]
     pub fn extract_from_path<P: AsRef<Path>>(input: P, output: P) -> Result<()> {
@@ -239,10 +231,9 @@ impl ResourceArchive {
     /// [`extract`](Self::extract_all).
     ///
     /// # Errors
-    /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds, or an error if
-    /// unable to create the necessary directories (see
-    /// [`create_dir_all`](std::fs::create_dir_all)), or failing to create a file to write to (see
-    /// [`write`](std::fs::write)).
+    /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds, or an error if unable to
+    /// create the necessary directories (see [`create_dir_all`](std::fs::create_dir_all)), or failing to
+    /// create a file to write to (see [`write`](std::fs::write)).
     #[cfg(feature = "std")]
     #[inline]
     pub fn extract_from<P: AsRef<Path>>(input: &[u8], _output: P) -> Result<()> {
@@ -250,8 +241,8 @@ impl ResourceArchive {
         let _header = Self::read_header(&mut data)?;
         let _data_header = Self::read_data_header(&mut data)?;
 
-        //Now we should load a reference to the string table so we can build file/folder data to do
-        //a single pass over the actual file data when writing
+        //Now we should load a reference to the string table so we can build file/folder data to do a single
+        //pass over the actual file data when writing
 
         /*let doc = "
         files:

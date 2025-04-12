@@ -10,13 +10,11 @@ pub use crate::data::{
     DataCursor, DataCursorMut, DataCursorRef, DataError, DataStream, Endian, IntoDataStream, ReadExt,
     SeekExt, Utf8ErrorSource, WriteExt,
 };
-#[doc(inline)]
-pub use crate::identify::{FileIdentifier, FileInfo, IdentifyFn};
+#[doc(inline)] pub use crate::identify::{FileIdentifier, FileInfo, IdentifyFn};
 
 /// Includes [`util::format_size`], which allows for pretty-print of various lengths.
 pub mod util {
-    #[doc(inline)]
-    pub use crate::util::format_size;
+    #[doc(inline)] pub use crate::util::format_size;
 }
 
 /// Includes all time functionality, for working with timestamps and the current time.
@@ -29,6 +27,5 @@ pub mod time {
 /// Includes [`cert::read_certificate`], which allows for reading X.509 certificates.
 #[cfg(feature = "certificate")]
 pub mod cert {
-    #[doc(inline)]
-    pub use crate::certificate::read_certificate;
+    #[doc(inline)] pub use crate::certificate::read_certificate;
 }

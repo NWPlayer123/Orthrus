@@ -5,10 +5,8 @@
 //! use orthrus_godot::prelude::*;
 //! ```
 
-#[doc(inline)]
-pub use crate::pck::ResourcePack;
+#[doc(inline)] pub use crate::pck::ResourcePack;
 
 pub mod pck {
-    #[doc(inline)]
-    pub use crate::pck::Error;
+    #[doc(inline)] pub use crate::pck::Error;
 }

@@ -19,12 +19,9 @@ pub mod prelude;
 pub mod data;
 pub mod util;
 
-#[cfg(feature = "std")]
-pub mod identify;
+#[cfg(feature = "std")] pub mod identify;
 
 // Optional crates
-#[cfg(feature = "certificate")]
-pub mod certificate;
+#[cfg(feature = "certificate")] pub mod certificate;
 
-#[cfg(feature = "time")]
-pub mod time;
+#[cfg(feature = "time")] pub mod time;

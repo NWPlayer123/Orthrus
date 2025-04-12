@@ -4,8 +4,7 @@
 pub use time::Error;
 use time::{OffsetDateTime, UtcOffset};
 
-#[cfg(not(feature = "std"))]
-use crate::no_std::*;
+#[cfg(not(feature = "std"))] use crate::no_std::*;
 
 /// Convert a timestamp into a formatted [`String`].
 #[cfg(feature = "alloc")]

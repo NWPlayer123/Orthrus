@@ -1,14 +1,14 @@
-//! Adds support for the Yaz0 compression format used for first-party N64, GameCube, Wii, Wii U, and
-//! Switch games.
+//! Adds support for the Yaz0 compression format used for first-party N64, GameCube, Wii, Wii U, and Switch
+//! games.
 //!
-//! Because the Yaz0 format is so lightweight, this module is designed to not have any persistence.
-//! It takes in data, and will return the de/compressed data contained inside.
+//! Because the Yaz0 format is so lightweight, this module is designed to not have any persistence. It takes
+//! in data, and will return the de/compressed data contained inside.
 //!
 //! # Format
-//! The Yaz0 format is part of the [Lempel-Ziv family of algorithms](https://w.wiki/F6n), which use
-//! a "sliding window" to allow for copying repetitive data from previously in the output buffer.
-//! The input stream consists of lookback+length pairs, unique bytes to copy, and "flag bytes" which
-//! determine which of the two operations to do.
+//! The Yaz0 format is part of the [Lempel-Ziv family of algorithms](https://w.wiki/F6n), which use a "sliding
+//! window" to allow for copying repetitive data from previously in the output buffer. The input stream
+//! consists of lookback+length pairs, unique bytes to copy, and "flag bytes" which determine which of the two
+//! operations to do.
 //!
 //! ## Header
 //! The header is as follows, in big-endian format:
@@ -21,8 +21,8 @@
 //! | 0xC | Padding      | u8\[4\] | Alignment to a 0x10 byte boundary. Always 0. |
 //!
 //! # Decompression
-//! The decompression algorithm is as follows, ran in a loop until you write enough bytes to fill
-//! the output buffer:
+//! The decompression algorithm is as follows, ran in a loop until you write enough bytes to fill the output
+//! buffer:
 //!
 //! * Read one byte from the input, which is 8 flag bits from high to low.
 //! * For each flag bit, if it is a 1, copy one byte from the input to the output.
@@ -53,14 +53,12 @@
 //! * [`worst_possible_size`](Yaz0::worst_possible_size): Calculates the worst possible compression size for a
 //!   given filesize
 
-#[cfg(feature = "std")]
-use std::path::Path;
+#[cfg(feature = "std")] use std::path::Path;
 
 use orthrus_core::prelude::*;
 use snafu::prelude::*;
 
-#[cfg(not(feature = "std"))]
-use crate::no_std::*;
+#[cfg(not(feature = "std"))] use crate::no_std::*;
 
 /// Error conditions for when reading/writing Yaz0 files
 #[derive(Debug, Snafu)]
@@ -159,11 +157,9 @@ impl Yaz0 {
         Ok(Header { decompressed_size, alignment })
     }
 
-    /// Calculates the filesize for the largest possible file that can be created with Yaz0
-    /// compression.
+    /// Calculates the filesize for the largest possible file that can be created with Yaz0 compression.
     ///
-    /// This consists of the 0x10 header, the length of the input file, and all flag bits needed,
-    /// rounded up.
+    /// This consists of the 0x10 header, the length of the input file, and all flag bits needed, rounded up.
     #[must_use]
     #[inline]
     pub const fn worst_possible_size(input_len: usize) -> usize {
@@ -265,9 +261,8 @@ impl Yaz0 {
                 let code = u16::from_be_bytes([input[input_pos], input[input_pos + 1]]);
                 input_pos += 2;
 
-                //Extract RLE information from the code byte, read another byte for size if we need
-                // to How far back in the output buffer do we need to copy from, how
-                // many bytes do we copy?
+                //Extract RLE information from the code byte, read another byte for size if we need to. How
+                // far back in the output buffer do we need to copy from, how many bytes do we copy?
                 let back = output_pos - usize::from((code & 0xFFF) + 1);
                 let size = match code >> 12 {
                     0 => {
@@ -298,11 +293,8 @@ impl Yaz0 {
     /// # Examples
     /// ```
     /// # use orthrus_ncompress::prelude::*;
-    /// let output = Yaz0::compress_from_path(
-    ///     "../../examples/assets/tobudx.gb",
-    ///     yaz0::CompressionAlgo::MatchingOld,
-    ///     0,
-    /// )?;
+    /// let output =
+    ///     Yaz0::compress_from_path("../../examples/assets/tobudx.gb", yaz0::CompressionAlgo::MatchingOld, 0)?;
     ///
     /// let expected = std::fs::read("../../examples/assets/tobudx.yaz0_n64")?;
     /// assert_eq!(*output, *expected);
@@ -338,12 +330,11 @@ impl Yaz0 {
     /// ```
     ///
     /// # Warnings
-    /// Alignment should be zero for N64, GameCube, and Wii, and should be non-zero on Wii U and
-    /// Switch.
+    /// Alignment should be zero for N64, GameCube, and Wii, and should be non-zero on Wii U and Switch.
     ///
     /// # Errors
-    /// Returns [`FileTooBig`](Error::FileTooBig) if the input is too large for the filesize to be
-    /// stored in the header.
+    /// Returns [`FileTooBig`](Error::FileTooBig) if the input is too large for the filesize to be stored in
+    /// the header.
     #[inline]
     pub fn compress_from(input: &[u8], algo: CompressionAlgo, _align: u32) -> Result<Box<[u8]>> {
         ensure!(u32::try_from(input.len()).is_ok(), FileTooBigSnafu);
@@ -360,12 +351,11 @@ impl Yaz0 {
         Ok(output.into_boxed_slice())
     }
 
-    /// Compresses the input using Nintendo's pre-Wii U algorithm, and returns the size of the
-    /// compressed data.
+    /// Compresses the input using Nintendo's pre-Wii U algorithm, and returns the compressed size.
     ///
-    /// This algorithm should create identically compressed files to those from N64, GameCube, and
-    /// Wii Nintendo games. It does not allow for setting the alignment, as theoretically no
-    /// files created using this algorithm should have a header with alignment.
+    /// This algorithm should create identically compressed files to those from N64, GameCube, and Wii
+    /// Nintendo games. It does not allow for setting the alignment, as theoretically no files created using
+    /// this algorithm should have a header with alignment.
     ///
     /// # Examples
     /// ```

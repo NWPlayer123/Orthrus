@@ -1,5 +1,5 @@
-/// This module provides functionality to load Portable Executable (PE) files, normally denoted with a
-/// .exe file extension.
+/// This module provides functionality to load Portable Executable (PE) files, normally denoted
+/// with a .exe file extension.
 use bitflags::bitflags;
 use zerocopy::{
     BigEndian, FromBytes, Immutable, KnownLayout, LittleEndian, TryFromBytes, U16, U32, Unaligned,

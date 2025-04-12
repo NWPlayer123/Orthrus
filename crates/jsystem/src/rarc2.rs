@@ -1,6 +1,5 @@
 use std::ffi::CString;
-#[cfg(feature = "std")]
-use std::{fs::File, io::BufReader, path::Path};
+#[cfg(feature = "std")] use std::{fs::File, io::BufReader, path::Path};
 
 use bitflags::bitflags;
 use orthrus_core::prelude::*;
@@ -52,10 +51,7 @@ impl ResourceArchive {
                 .position(|&b| b == 0)
                 .map(|pos| pos + directory.string_offset as usize)
                 .unwrap();
-            println!(
-                "{:?}:",
-                CString::new(&string_table[directory.string_offset as usize..end]).unwrap()
-            );
+            println!("{:?}:", CString::new(&string_table[directory.string_offset as usize..end]).unwrap());
             println!("{directory:?}");
         }
         println!();
@@ -65,10 +61,7 @@ impl ResourceArchive {
                 .position(|&b| b == 0)
                 .map(|pos| pos + file.string_offset as usize)
                 .unwrap();
-            println!(
-                "{:?}:",
-                CString::new(&string_table[file.string_offset as usize..end]).unwrap()
-            );
+            println!("{:?}:", CString::new(&string_table[file.string_offset as usize..end]).unwrap());
             println!("{file:?}");
         }
         Ok(Self {})
@@ -117,14 +110,7 @@ impl Header {
             InvalidDataSnafu { position: data.position()? - 4, reason: "This padding should be zero" }
         );
 
-        Ok(Self {
-            magic,
-            file_size,
-            data_offset,
-            data_size,
-            mram_data_size,
-            aram_data_size,
-        })
+        Ok(Self { magic, file_size, data_offset, data_size, mram_data_size, aram_data_size })
     }
 }
 
@@ -153,10 +139,7 @@ impl DataHeader {
         let directory_count = data.read_u32()?;
         ensure!(
             data.read_u32()? == 0x20,
-            InvalidDataSnafu {
-                position: data.position()? - 4,
-                reason: "Directory Offset Must Be 0x20"
-            }
+            InvalidDataSnafu { position: data.position()? - 4, reason: "Directory Offset Must Be 0x20" }
         );
         let file_count = data.read_u32()?;
         let file_offset = data.read_u32()?;
@@ -244,8 +227,10 @@ impl FileNode {
         let node_hash = data.read_u16()?;
         let attributes = match Attributes::from_bits(data.read_u8()?) {
             Some(attributes) => attributes,
-            None => InvalidDataSnafu { position: data.position()? - 1, reason: "Unknown Attributes Set" }
-                .fail()?,
+            None => {
+                InvalidDataSnafu { position: data.position()? - 1, reason: "Unknown Attributes Set" }
+                    .fail()?
+            }
         };
         ensure!(
             data.read_u8()? == 0,
@@ -276,13 +261,6 @@ impl FileNode {
             );
         }
 
-        Ok(Self {
-            node_index,
-            node_hash,
-            attributes,
-            string_offset,
-            node_offset,
-            node_size,
-        })
+        Ok(Self { node_index, node_hash, attributes, string_offset, node_offset, node_size })
     }
 }

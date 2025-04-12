@@ -35,14 +35,7 @@ impl Node for Geom {
             false => BoundsType::Default,
         };
 
-        Ok(Self {
-            data_ref,
-            primitive_refs,
-            primitive_type,
-            shade_model,
-            geom_rendering,
-            bounds_type,
-        })
+        Ok(Self { data_ref, primitive_refs, primitive_type, shade_model, geom_rendering, bounds_type })
     }
 }
 
