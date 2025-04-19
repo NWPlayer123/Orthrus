@@ -1,6 +1,6 @@
 use super::prelude::*;
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Default, FromPrimitive)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Default, FromPrimitive, Serialize, Deserialize)]
 #[repr(u8)]
 pub(crate) enum WrapMode {
     /// Clamp coordinate to [0, 1]
@@ -15,7 +15,7 @@ pub(crate) enum WrapMode {
     Invalid,
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Default, FromPrimitive)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Default, FromPrimitive, Serialize, Deserialize)]
 #[repr(u8)]
 pub(crate) enum FilterType {
     // Both min filter and mag filter

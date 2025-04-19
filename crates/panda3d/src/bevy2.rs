@@ -7,14 +7,22 @@
 //! is designed to be a high level animatable node that multiple meshes attach to, as well as a singular
 //! (TODO: check) PartBundle that holds all skinning data
 
-use std::collections::BTreeMap;
+use std::{
+    collections::BTreeMap,
+    path::{Path, PathBuf},
+};
 
 use bevy_animation::{
     AnimationClip, AnimationPlayer, AnimationTarget, AnimationTargetId, animated_field,
     animation_curves::{AnimatableCurve, AnimatedField},
 };
 use bevy_app::{App, Plugin};
-use bevy_asset::{Asset, AssetApp as _, AssetLoader, Handle, LoadContext, RenderAssetUsages, io::Reader};
+use bevy_asset::{
+    Asset, AssetApp as _, AssetLoader, AssetPath, Handle, LoadContext, RenderAssetUsages,
+    io::{
+        AssetReader, AssetReaderError, AssetSource, AssetSourceId, PathStream, Reader, SliceReader, VecReader,
+    },
+};
 use bevy_color::{Color, ColorToComponents as _, Srgba};
 use bevy_ecs::{entity::Entity, name::Name, world::World};
 use bevy_image::{Image, ImageAddressMode, ImageFilterMode, ImageSamplerBorderColor};
@@ -36,7 +44,10 @@ use bevy_render::{
     view::Visibility,
 };
 use bevy_scene::Scene;
-use bevy_tasks::block_on;
+use bevy_tasks::{
+    block_on,
+    futures_lite::{AsyncRead, AsyncSeek, stream},
+};
 use bevy_transform::components::Transform;
 use hashbrown::HashMap;
 use orthrus_core::prelude::*;
@@ -80,7 +91,7 @@ pub enum Panda3DError {
     LoadError { source: bevy_asset::LoadDirectError },
 
     /// Thrown if a [`DataError`] other than EndOfFile is encountered.
-    #[snafu(display("Decoding Error {source}"))]
+    #[snafu(transparent)]
     DataError { source: DataError },
 
     #[snafu(display("Tried to get node {node_index}, but it wasn't {node_type}!"))]
@@ -88,13 +99,12 @@ pub enum Panda3DError {
 
     #[snafu(display("Tried to parse node {node_index}, but encountered unexpected data!"))]
     UnexpectedData { node_index: usize },
-}
 
-impl From<DataError> for Panda3DError {
-    #[inline]
-    fn from(source: DataError) -> Self {
-        Panda3DError::DataError { source }
-    }
+    #[snafu(display("Tried to build a Panda3D texture using an unsupported format ({format:?})!"))]
+    UnsupportedFormat { format: TextureFormat },
+
+    #[snafu(display("Tried to build a Panda3D texture using an unsupported wrap mode ({wrap_mode:?})!"))]
+    UnsupportedWrap { wrap_mode: WrapMode },
 }
 
 macro_rules! get_node {
@@ -614,50 +624,6 @@ impl BinaryAsset {
         Ok(())
     }
 
-    fn convert_wrap_mode(&self, mode: WrapMode, node_index: usize) -> ImageAddressMode {
-        match mode {
-            WrapMode::Clamp => ImageAddressMode::ClampToEdge,
-            WrapMode::Repeat => ImageAddressMode::Repeat,
-            WrapMode::Mirror => ImageAddressMode::MirrorRepeat,
-            WrapMode::BorderColor => ImageAddressMode::ClampToBorder,
-            _ => {
-                warn!(name: "unexpected_wrap_mode", target: "Panda3DLoader",
-                    "Unsupported WrapMode encountered on node {}", node_index);
-                ImageAddressMode::default()
-            }
-        }
-    }
-
-    fn convert_image_filter(&self, filter: FilterType, is_mipmap: bool) -> ImageFilterMode {
-        match filter {
-            // Direct mappings for basic filtering modes
-            FilterType::Nearest => ImageFilterMode::Nearest,
-            FilterType::Linear => ImageFilterMode::Linear,
-
-            // These are minification/mipmap modes but might be used for mag filter
-            // Map them to their nearest equivalent
-            FilterType::NearestMipmapNearest => ImageFilterMode::Nearest,
-            FilterType::NearestMipmapLinear => {
-                match is_mipmap {
-                    false => ImageFilterMode::Nearest,
-                    true => ImageFilterMode::Linear,
-                }
-            }
-            FilterType::LinearMipmapNearest => {
-                match is_mipmap {
-                    false => ImageFilterMode::Linear,
-                    true => ImageFilterMode::Nearest,
-                }
-            }
-            FilterType::LinearMipmapLinear => ImageFilterMode::Linear,
-
-            // Special cases
-            FilterType::Shadow => ImageFilterMode::Linear, // Typically want smooth shadows
-            FilterType::Default => ImageFilterMode::Linear, // Most common default
-            FilterType::Invalid => ImageFilterMode::Linear, // Safe fallback
-        }
-    }
-
     async fn create_material(
         &self, loader: &mut AssetLoaderData<'_, '_>, render_state: &RenderState,
     ) -> Result<Panda3DMaterial, Panda3DError> {
@@ -706,123 +672,27 @@ impl BinaryAsset {
                         loader.assets.textures[*image_id].clone()
                     } else {
                         let texture = get_node!(self, Texture, texture_ref)?;
+                        let settings = PandaImageInfo {
+                            filename: texture.filename.clone(),
+                            alpha_filename: texture.alpha_filename.clone(),
+                            label: texture.name.clone(),
+                            wrap_mode: [texture.wrap_u, texture.wrap_v, texture.wrap_w],
+                            filter: [texture.min_filter, texture.mag_filter],
+                            lod: [texture.min_lod, texture.max_lod],
+                            border_color: texture.border_color,
+                        };
+                        let mut path = PathBuf::from(texture.filename.clone());
+                        path.set_extension("image");
 
-                        /* I cannot tell if this section is blessed or cursed, fragile or robust,
-                         * but it works and that's all I care about */
-                        // First, load the RGB image which should always be available
-                        let rgb_image = match loader
+                        let image = loader
                             .context
                             .loader()
-                            .immediate()
-                            .load::<Image>(texture.filename.clone())
-                            .await
-                        {
-                            Ok(image) => image.take(),
-                            Err(error) => {
-                                warn!(name: "image_file_error", target: "Panda3DLoader",
-                                    "Tried to load file {}, got back error {}", texture.filename, error);
-                                continue;
-                            }
-                        };
-
-                        // Then, if the alpha image exists, load it
-                        let alpha_image = if !texture.alpha_filename.is_empty() {
-                            Some(
-                                match loader
-                                    .context
-                                    .loader()
-                                    .immediate()
-                                    .load::<Image>(texture.alpha_filename.clone())
-                                    .await
-                                {
-                                    Ok(image) => image.take(),
-                                    Err(error) => {
-                                        warn!(name: "image_file_error", target: "Panda3DLoader",
-                                            "Tried to load file {}, got back error {}", texture.alpha_filename, error);
-                                        continue;
-                                    }
-                                },
-                            )
-                        } else {
-                            None
-                        };
-
-                        // If an alpha texture exists, then we need to merge the two into a single Image.
-                        // TODO: enforce texture.format?
-                        let mut image = if let Some(alpha_image) = alpha_image {
-                            // Image.convert has very limited support, so use a match to filter out the couple
-                            // we care about, and convert to RGBA
-                            let mut rgb_image = match rgb_image.texture_descriptor.format {
-                                TextureFormat::R8Unorm | TextureFormat::Rg8Unorm => {
-                                    rgb_image.convert(TextureFormat::Rgba8UnormSrgb).unwrap()
-                                }
-                                TextureFormat::Rgba8UnormSrgb => rgb_image.clone(),
-                                _ => {
-                                    warn!(name: "combine_alpha_no_convert", target: "Panda3DLoader",
-                                        "Material {} has a separate alpha channel, but the RGB file {} was not in a supported format! Ignoring.", texture_ref, texture.filename);
-                                    continue;
-                                }
-                            };
-
-                            // The only supported format right now is R8, theoretically we could support any
-                            // kind of Rgba8 and just grab the alpha from that, TODO?
-                            match alpha_image.texture_descriptor.format {
-                                TextureFormat::R8Unorm => (),
-                                _ => {
-                                    warn!(name: "unsupported_alpha_image", target: "Panda3DLoader",
-                                        "Trying to merge alpha texture {}, but it's not in a supported format! Ignoring.", texture.alpha_filename);
-                                    continue;
-                                }
-                            }
-
-                            // For the entire image, replace the alpha u8 with the one from alpha image
-                            let height = rgb_image.texture_descriptor.size.height;
-                            let width = rgb_image.texture_descriptor.size.width;
-                            if let (Some(alpha_data), Some(rgb_data)) =
-                                (alpha_image.data.as_ref(), rgb_image.data.as_mut())
-                            {
-                                for y in 0..height {
-                                    for x in 0..width {
-                                        let alpha_pixel = alpha_data[(y * width + x) as usize];
-                                        rgb_data[((y * width + x) * 4) as usize + 3] = alpha_pixel;
-                                    }
-                                }
-                            }
-                            rgb_image
-                        } else {
-                            rgb_image
-                        };
-
-                        // Now that we have this new image, we need to configure its properties
-                        let descriptor = image.sampler.get_or_init_descriptor();
-                        descriptor.label = Some(texture.name.clone());
-
-                        descriptor.address_mode_u = self.convert_wrap_mode(texture.wrap_u, texture_ref);
-                        descriptor.address_mode_v = self.convert_wrap_mode(texture.wrap_v, texture_ref);
-                        descriptor.address_mode_w = self.convert_wrap_mode(texture.wrap_w, texture_ref);
-
-                        descriptor.mag_filter = self.convert_image_filter(texture.mag_filter, false);
-                        descriptor.min_filter = self.convert_image_filter(texture.min_filter, false);
-                        descriptor.mipmap_filter = self.convert_image_filter(texture.min_filter, true);
-
-                        // Clamp (-1000..=1000) to (0..=32) since that seems to be the default range for both.
-                        // TODO: re-evaluate once we find a model that doesn't have the default?
-                        descriptor.lod_min_clamp = (texture.min_lod * 32.0) / 2000.0 + 16.0;
-                        descriptor.lod_max_clamp = (texture.max_lod * 32.0) / 2000.0 + 16.0;
-
-                        descriptor.border_color = match texture.border_color.to_array() {
-                            [0.0, 0.0, 0.0, 0.0] => Some(ImageSamplerBorderColor::TransparentBlack),
-                            [0.0, 0.0, 0.0, 1.0] => Some(ImageSamplerBorderColor::OpaqueBlack),
-                            [1.0, 1.0, 1.0, 1.0] => Some(ImageSamplerBorderColor::OpaqueWhite),
-                            _ => None,
-                        };
+                            .with_settings(move |s: &mut PandaImageInfo| *s = settings.clone())
+                            .load(AssetPath::from(path).with_source(AssetSourceId::from("panda")));
 
                         // Make sure we cache this image so we don't try to merge it again
                         loader.image_cache.insert(texture_ref, loader.assets.textures.len());
 
-                        // Register our (potentially) new image with the AssetServer properly, and store it
-                        let label = format!("Image{}", loader.assets.textures.len());
-                        let image = loader.context.add_labeled_asset(label, image);
                         loader.assets.textures.push(image.clone());
 
                         image
@@ -1214,8 +1084,6 @@ impl BinaryAsset {
                     let name = Name::new(node.name.clone());
                     animation_context.path.push(name);
 
-                    println!("Animation {:?}", animation_context.path);
-
                     let anim_target_id = AnimationTargetId::from_names(animation_context.path.iter());
 
                     let (num_frames, fps) = frame_data.unwrap();
@@ -1406,12 +1274,63 @@ impl AssetLoader for PandaLoader {
     }
 }
 
+#[derive(Default)]
 struct PandaImage;
 
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Clone, Default, Serialize, Deserialize)]
 struct PandaImageInfo {
+    /// Relative filepath to an image
     filename: String,
+    /// Relative filepath to an alpha image
     alpha_filename: String,
+    /// Label to attach to the material
+    label: String,
+    /// Wrap U/V/W
+    wrap_mode: [WrapMode; 3],
+    /// Min/Mag Filter
+    filter: [FilterType; 2],
+    // Min/Max Level of Detail
+    lod: [f32; 2],
+    /// Border color, used in WrapMode::BorderColor,
+    border_color: Vec4,
+}
+
+impl PandaImage {
+    fn convert_wrap_mode(&self, wrap_mode: WrapMode) -> Result<ImageAddressMode, Panda3DError> {
+        Ok(match wrap_mode {
+            WrapMode::Clamp => ImageAddressMode::ClampToEdge,
+            WrapMode::Repeat => ImageAddressMode::Repeat,
+            WrapMode::Mirror => ImageAddressMode::MirrorRepeat,
+            WrapMode::BorderColor => ImageAddressMode::ClampToBorder,
+            _ => UnsupportedWrapSnafu { wrap_mode }.fail()?,
+        })
+    }
+
+    fn convert_image_filter(&self, filter: FilterType, is_mipmap: bool) -> ImageFilterMode {
+        match filter {
+            // Direct mappings for basic filtering modes
+            FilterType::Nearest => ImageFilterMode::Nearest,
+            FilterType::Linear => ImageFilterMode::Linear,
+
+            // These are minification/mipmap modes but might be used for mag filter
+            // Map them to their nearest equivalent
+            FilterType::NearestMipmapNearest => ImageFilterMode::Nearest,
+            FilterType::NearestMipmapLinear => match is_mipmap {
+                false => ImageFilterMode::Nearest,
+                true => ImageFilterMode::Linear,
+            },
+            FilterType::LinearMipmapNearest => match is_mipmap {
+                false => ImageFilterMode::Linear,
+                true => ImageFilterMode::Nearest,
+            },
+            FilterType::LinearMipmapLinear => ImageFilterMode::Linear,
+
+            // Special cases
+            FilterType::Shadow => ImageFilterMode::Linear, // Typically want smooth shadows
+            FilterType::Default => ImageFilterMode::Linear, // Most common default
+            FilterType::Invalid => ImageFilterMode::Linear, // Safe fallback
+        }
+    }
 }
 
 impl AssetLoader for PandaImage {
@@ -1420,15 +1339,69 @@ impl AssetLoader for PandaImage {
     type Settings = PandaImageInfo;
 
     async fn load(
-        &self, reader: &mut dyn Reader, settings: &Self::Settings, load_context: &mut LoadContext<'_>,
+        &self, _: &mut dyn Reader, settings: &Self::Settings, context: &mut LoadContext<'_>,
     ) -> Result<Self::Asset, Self::Error> {
-        let rgb_image = load_context.loader().immediate().load::<Image>(&*settings.filename).await?.take();
+        let rgb_image = context.loader().immediate().load::<Image>(&*settings.filename).await?.take();
         let alpha_image = match &*settings.alpha_filename {
             "" => None,
-            filename => Some(load_context.loader().immediate().load::<Image>(filename).await?.take()),
+            filename => Some(context.loader().immediate().load::<Image>(filename).await?.take()),
         };
 
-        Ok(rgb_image)
+        // If an alpha texture exists, then we need to merge the two into a single Image.
+        let mut image = if let Some(alpha_image) = alpha_image {
+            // Image.convert has limited support, so match on the couple it supports, and convert to RGBA.
+            let mut rgb_image = match rgb_image.texture_descriptor.format {
+                TextureFormat::R8Unorm | TextureFormat::Rg8Unorm => {
+                    rgb_image.convert(TextureFormat::Rgba8UnormSrgb).unwrap()
+                }
+                TextureFormat::Rgba8UnormSrgb => rgb_image.clone(),
+                format => UnsupportedFormatSnafu { format }.fail()?,
+            };
+
+            ensure!(
+                alpha_image.texture_descriptor.format == TextureFormat::R8Unorm,
+                UnsupportedFormatSnafu { format: alpha_image.texture_descriptor.format }
+            );
+
+            // For the entire image, replace the alpha u8 with the one from alpha image
+            let height = rgb_image.texture_descriptor.size.height;
+            let width = rgb_image.texture_descriptor.size.width;
+            if let (Some(alpha_data), Some(rgb_data)) = (alpha_image.data.as_ref(), rgb_image.data.as_mut()) {
+                let pixel_count = (width * height) as usize;
+                for i in 0..pixel_count {
+                    rgb_data[i * 4 + 3] = alpha_data[i];
+                }
+            }
+            rgb_image
+        } else {
+            rgb_image
+        };
+
+        // Now that we have this new image, we need to configure its properties
+        let descriptor = image.sampler.get_or_init_descriptor();
+        descriptor.label = Some(settings.label.clone());
+
+        descriptor.address_mode_u = self.convert_wrap_mode(settings.wrap_mode[0])?;
+        descriptor.address_mode_v = self.convert_wrap_mode(settings.wrap_mode[1])?;
+        descriptor.address_mode_w = self.convert_wrap_mode(settings.wrap_mode[2])?;
+
+        descriptor.mag_filter = self.convert_image_filter(settings.filter[1], false);
+        descriptor.min_filter = self.convert_image_filter(settings.filter[0], false);
+        descriptor.mipmap_filter = self.convert_image_filter(settings.filter[0], true);
+
+        // Clamp (-1000..=1000) to (0..=32) since that seems to be the default range for both.
+        // TODO: re-evaluate once we find a model that doesn't have the default?
+        descriptor.lod_min_clamp = (settings.lod[0] * 32.0) / 2000.0 + 16.0;
+        descriptor.lod_max_clamp = (settings.lod[1] * 32.0) / 2000.0 + 16.0;
+
+        descriptor.border_color = match settings.border_color.to_array() {
+            [0.0, 0.0, 0.0, 0.0] => Some(ImageSamplerBorderColor::TransparentBlack),
+            [0.0, 0.0, 0.0, 1.0] => Some(ImageSamplerBorderColor::OpaqueBlack),
+            [1.0, 1.0, 1.0, 1.0] => Some(ImageSamplerBorderColor::OpaqueWhite),
+            _ => None,
+        };
+
+        Ok(image)
     }
 
     // Loads as panda://relativepath.image, with the raw parameters as settings
@@ -1460,7 +1433,7 @@ impl PandaAssetReader {
 }
 
 impl AssetReader for PandaAssetReader {
-    async fn read<'a>(&'a self, path: &'a Path) -> Result<Box<dyn Reader + 'a>, AssetReaderError> {
+    async fn read<'a>(&'a self, path: &'a Path) -> Result<impl Reader + 'a, AssetReaderError> {
         println!("AssetReader::read(path: {path:?})");
         match &self.storage {
             PandaStorage::Extracted { root } => {
@@ -1468,20 +1441,20 @@ impl AssetReader for PandaAssetReader {
                 let data = std::fs::read(full_path)?;
                 Ok(Box::new(VecReader::new(data)))
             }
-            PandaStorage::Multifile { phases } => {
-                // Assuming we use paths ala `panda://phase_4/maps/texture.png` and we get the raw path
-                let path_str = path.to_str().ok_or_else(|| AssetReaderError::NotFound(path.to_owned()))?;
-                // First folder will always be a Multifile phase filename
-                let (phase, file_path) =
-                    path_str.split_once('/').ok_or_else(|| AssetReaderError::NotFound(path.to_owned()))?;
+            _ => todo!(), /*PandaStorage::Multifile { phases } => {
+                              // Assuming we use paths ala `panda://phase_4/maps/texture.png` and we get the raw path
+                              let path_str = path.to_str().ok_or_else(|| AssetReaderError::NotFound(path.to_owned()))?;
+                              // First folder will always be a Multifile phase filename
+                              let (phase, file_path) =
+                                  path_str.split_once('/').ok_or_else(|| AssetReaderError::NotFound(path.to_owned()))?;
 
-                let file = phases
-                    .get(phase)
-                    .and_then(|mf| mf.files.get(file_path))
-                    .ok_or_else(|| AssetReaderError::NotFound(path.to_owned()))?;
+                              let file = phases
+                                  .get(phase)
+                                  .and_then(|mf| mf.files.get(file_path))
+                                  .ok_or_else(|| AssetReaderError::NotFound(path.to_owned()))?;
 
-                Ok(Box::new(SliceReader::new(&file.data)))
-            }
+                              Ok(Box::new(SliceReader::new(&file.data)))
+                          }*/
         }
     }
 
@@ -1547,26 +1520,54 @@ impl AssetReader for PandaAssetReader {
             }
         }
     }
-}
-*/
-pub struct Panda3DPlugin;
+}*/
 
-impl Plugin for Panda3DPlugin {
+pub struct InlineAssetReader;
+
+impl AssetReader for InlineAssetReader {
+    async fn read<'a>(&'a self, _path: &'a Path) -> Result<Box<dyn Reader + 'a>, AssetReaderError> {
+        Ok(Box::new(SliceReader::new(&[])))
+    }
+
+    async fn read_meta<'a>(&'a self, path: &'a Path) -> Result<Box<dyn Reader + 'a>, AssetReaderError> {
+        Err(AssetReaderError::NotFound(path.to_owned()))
+    }
+
+    async fn read_directory<'a>(&'a self, _path: &'a Path) -> Result<Box<PathStream>, AssetReaderError> {
+        unreachable!("Reading directories is not supported by ComputedAssetReader.")
+    }
+
+    async fn is_directory<'a>(&'a self, _path: &'a Path) -> Result<bool, AssetReaderError> {
+        Ok(false)
+    }
+}
+
+pub struct Panda3DSource;
+
+impl Plugin for Panda3DSource {
     fn build(&self, app: &mut App) {
         /*let reader = if cfg!(debug_assertions) {
             PandaAssetReader::new_extracted("assets".into())
         } else {
             PandaAssetReader::new_multifile(BTreeMap::new())
-        };
+        };*/
 
         app.register_asset_source(
             "panda",
             AssetSource::build()
-                .with_reader(move || Box::new(reader.clone()))
+                .with_reader(move || Box::new(InlineAssetReader))
                 .with_watch_warning("Some assets cannot be hot-reloaded"),
-        )*/
+        );
+    }
+}
+
+pub struct Panda3DPlugin;
+
+impl Plugin for Panda3DPlugin {
+    fn build(&self, app: &mut App) {
         app.init_asset_loader::<PandaLoader>()
             .init_asset_loader::<SgiImageLoader>()
+            .init_asset_loader::<PandaImage>()
             .init_asset::<PandaAsset>()
             .add_plugins(MaterialPlugin::<Panda3DMaterial>::default());
     }

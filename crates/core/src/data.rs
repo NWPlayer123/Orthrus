@@ -427,7 +427,7 @@ pub trait WriteExt: EndianExt {
 /// An owned, in-memory file that allows endian-aware read and write.
 ///
 /// This is architected to assume a fixed length, and is `no_std` compatible.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DataCursor {
     data: Box<[u8]>,
     position: usize,

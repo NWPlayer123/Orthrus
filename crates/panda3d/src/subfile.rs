@@ -32,7 +32,7 @@ bitflags! {
 /// archives. Currently only for internal use.
 ///
 /// For more details on the Multifile format, see the [module documentation](self#format).
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct Subfile {
     pub(crate) offset: u32,
     pub(crate) length: u32,

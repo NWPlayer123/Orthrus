@@ -164,11 +164,11 @@ struct Header {
 /// Used for working with Multifile archives, supports both stateless and stateful operations.
 ///
 /// For more details on the Multifile format, see the [module documentation](self#format).
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub struct Multifile {
     data: DataCursor,
-    files: Vec<Subfile>,
+    pub(crate) files: Vec<Subfile>,
     version: Version,
     timestamp: u32,
 }
