@@ -9,7 +9,7 @@ use env_logger::Builder;
 use log::{Level, LevelFilter};
 use orthrus_godot::prelude::*;
 use orthrus_jsystem::prelude::*;
-use orthrus_ncompress::prelude::*;
+use orthrus_ncompress::{lz11::LZ11, prelude::*};
 use orthrus_nintendoware::prelude::*;
 use orthrus_panda3d::prelude::*;
 use owo_colors::OwoColorize;
@@ -138,6 +138,42 @@ fn main() -> Result<()> {
                             };
                             log::info!("Writing file {}", output);
                             std::fs::write(output, data)?;
+                        }
+                        None => eprintln!("Please select exactly one operation!"),
+                        _ => unreachable!("Oops! Forgot to cover all operations."),
+                    }
+                }
+                NCompressModules::LZ11(params) => {
+                    match exactly_one_true(&[params.decompress, params.compress]) {
+                        Some(0) => {
+                            log::info!("Decompressing file {}", &params.input);
+                            let data = LZ11::decompress_from_path(&params.input)?;
+                            let output = if let Some(output) = params.output {
+                                output
+                            } else {
+                                let mut new_path = PathBuf::from(params.input);
+                                new_path.set_extension("arc");
+                                new_path.to_string_lossy().into_owned()
+                            };
+                            log::info!("Writing file {}", output);
+                            std::fs::write(output, data)?;
+                        }
+                        Some(1) => {
+                            log::info!("Compressing file {}", &params.input);
+                            /*let data = LZ11::compress_from_path(
+                                &params.input,
+                                yaz0::CompressionAlgo::MatchingOld,
+                                0,
+                            )?;
+                            let output = if let Some(output) = params.output {
+                                output
+                            } else {
+                                let mut new_path = PathBuf::from(params.input);
+                                new_path.set_extension("szs");
+                                new_path.to_string_lossy().into_owned()
+                            };
+                            log::info!("Writing file {}", output);
+                            std::fs::write(output, data)?;*/
                         }
                         None => eprintln!("Please select exactly one operation!"),
                         _ => unreachable!("Oops! Forgot to cover all operations."),

@@ -2,7 +2,7 @@ use super::prelude::*;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Default, FromPrimitive)]
 #[repr(u8)]
-pub(crate) enum PlayMode {
+pub enum PlayMode {
     #[default]
     Pose,
     Play,
@@ -13,18 +13,18 @@ pub(crate) enum PlayMode {
 #[derive(Debug)]
 #[allow(dead_code)]
 pub(crate) struct AnimInterface {
-    num_frames: u32,
-    frame_rate: f32,
-    play_mode: PlayMode,
-    start_time: f32,
-    start_frame: f32,
-    play_frames: f32,
-    from_frame: u32,
-    to_frame: u32,
-    play_rate: f32,
-    effective_frame_rate: f32,
-    paused: bool,
-    paused_f: f32,
+    pub(crate) num_frames: u32,
+    pub(crate) frame_rate: f32,
+    pub(crate) play_mode: PlayMode,
+    pub(crate) start_time: f32,
+    pub(crate) start_frame: f32,
+    pub(crate) play_frames: f32,
+    pub(crate) from_frame: u32,
+    pub(crate) to_frame: u32,
+    pub(crate) play_rate: f32,
+    pub(crate) effective_frame_rate: f32,
+    pub(crate) paused: bool,
+    pub(crate) paused_f: f32,
 }
 
 impl AnimInterface {

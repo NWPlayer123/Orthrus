@@ -10,7 +10,6 @@ pub(super) use crate::{bam::BinaryAsset, common::Datagram};
 pub(super) mod bam {
     pub(crate) use crate::bam::Error;
 }
-pub(super) use serde::{Deserialize, Serialize};
 
 pub(crate) use bevy_math::{Mat4, Quat, UVec3, Vec2, Vec3, Vec4};
 

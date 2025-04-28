@@ -234,6 +234,28 @@ pub trait ReadExt: EndianExt {
         Ok(self.read_u16()? as i16)
     }
 
+    /// Reads an unsigned 24-bit integer.
+    ///
+    /// # Errors
+    /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds.
+    #[inline]
+    fn read_u24(&mut self) -> Result<u32, DataError> {
+        let bytes = self.read_exact::<3>()?;
+        Ok(match self.endian() {
+            Endian::Little => u32::from_le_bytes([bytes[0], bytes[1], bytes[2], 0]),
+            Endian::Big => u32::from_be_bytes([0, bytes[0], bytes[1], bytes[2]]),
+        })
+    }
+
+    /// Reads a signed 24-bit integer.
+    ///
+    /// # Errors
+    /// Returns [`EndOfFile`](Error::EndOfFile) if trying to read out of bounds.
+    #[inline]
+    fn read_i24(&mut self) -> Result<i32, DataError> {
+        Ok(self.read_u24()? as i32)
+    }
+
     /// Reads an unsigned 32-bit integer.
     ///
     /// # Errors
@@ -351,6 +373,32 @@ pub trait WriteExt: EndianExt {
     #[inline]
     fn write_i16(&mut self, value: i16) -> Result<(), DataError> {
         self.write_u16(value as u16)
+    }
+
+    /// Writes an unsigned 24-bit integer.
+    ///
+    /// # Errors
+    /// Returns an error if the write operation fails.
+    #[inline]
+    fn write_u24(&mut self, value: u32) -> Result<(), DataError> {
+        let bytes = match self.endian() {
+            Endian::Little => value.to_le_bytes(),
+            Endian::Big => value.to_be_bytes(),
+        };
+        let bytes = match self.endian() {
+            Endian::Little => [bytes[0], bytes[1], bytes[2]],
+            Endian::Big => [bytes[1], bytes[2], bytes[3]],
+        };
+        self.write_exact(&bytes)
+    }
+
+    /// Writes a signed 24-bit integer.
+    ///
+    /// # Errors
+    /// Returns an error if the write operation fails.
+    #[inline]
+    fn write_i24(&mut self, value: i32) -> Result<(), DataError> {
+        self.write_u24(value as u32)
     }
 
     /// Writes an unsigned 32-bit integer.
@@ -915,6 +963,9 @@ impl<'a> DataCursorMut<'a> {
     /// Due to the way that Yaz0 and Yay0 compression work, if this function is used to copy overlapping
     /// sections, the initial value will repeat itself. If you don't need this behavior, consider using a more
     /// normal memcpy.
+    /// 
+    /// Note that this will not increment the internal position, due to dest allowing any write location. You
+    /// are responsible for what you write where.
     ///
     /// # Example
     /// ```

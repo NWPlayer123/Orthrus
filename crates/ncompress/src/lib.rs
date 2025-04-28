@@ -10,6 +10,7 @@ mod no_std {
 }
 
 // All public modules
+pub mod lz11;
 pub mod yay0;
 pub mod yaz0;
 

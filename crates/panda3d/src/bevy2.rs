@@ -16,15 +16,19 @@ use bevy_animation::{
     AnimationClip, AnimationPlayer, AnimationTarget, AnimationTargetId, animated_field,
     animation_curves::{AnimatableCurve, AnimatedField},
 };
-use bevy_app::{App, Plugin};
+use bevy_app::{App, Plugin, Update};
 use bevy_asset::{
     Asset, AssetApp as _, AssetLoader, AssetPath, Handle, LoadContext, RenderAssetUsages,
-    io::{
-        AssetReader, AssetReaderError, AssetSource, AssetSourceId, PathStream, Reader, SliceReader, VecReader,
-    },
+    io::{AssetReader, AssetReaderError, AssetSource, AssetSourceId, PathStream, Reader, SliceReader},
 };
 use bevy_color::{Color, ColorToComponents as _, Srgba};
-use bevy_ecs::{entity::Entity, name::Name, world::World};
+use bevy_ecs::{
+    component::Component,
+    entity::Entity,
+    name::Name,
+    system::{Query, Res},
+    world::World,
+};
 use bevy_image::{Image, ImageAddressMode, ImageFilterMode, ImageSamplerBorderColor};
 use bevy_math::{EulerRot, curve::UnevenSampleAutoCurve};
 use bevy_pbr::{
@@ -44,10 +48,8 @@ use bevy_render::{
     view::Visibility,
 };
 use bevy_scene::Scene;
-use bevy_tasks::{
-    block_on,
-    futures_lite::{AsyncRead, AsyncSeek, stream},
-};
+use bevy_tasks::block_on;
+use bevy_time::Time;
 use bevy_transform::components::Transform;
 use hashbrown::HashMap;
 use orthrus_core::prelude::*;
@@ -59,6 +61,7 @@ use tracing::warn;
 use crate::{
     bevy_sgi::SgiImageLoader,
     nodes::{
+        anim_interface::PlayMode,
         color_attrib::ColorType,
         cull_face_attrib::CullMode,
         dispatch::NodeRef,
@@ -103,8 +106,8 @@ pub enum Panda3DError {
     #[snafu(display("Tried to build a Panda3D texture using an unsupported format ({format:?})!"))]
     UnsupportedFormat { format: TextureFormat },
 
-    #[snafu(display("Tried to build a Panda3D texture using an unsupported wrap mode ({wrap_mode:?})!"))]
-    UnsupportedWrap { wrap_mode: WrapMode },
+    #[snafu(display("Tried to build a Panda3D texture using an unsupported wrap mode ({wrap_mode})!"))]
+    UnsupportedWrap { wrap_mode: String },
 }
 
 macro_rules! get_node {
@@ -1302,7 +1305,7 @@ impl PandaImage {
             WrapMode::Repeat => ImageAddressMode::Repeat,
             WrapMode::Mirror => ImageAddressMode::MirrorRepeat,
             WrapMode::BorderColor => ImageAddressMode::ClampToBorder,
-            _ => UnsupportedWrapSnafu { wrap_mode }.fail()?,
+            _ => UnsupportedWrapSnafu { wrap_mode: format!("{wrap_mode:?}") }.fail()?,
         })
     }
 
@@ -1315,14 +1318,18 @@ impl PandaImage {
             // These are minification/mipmap modes but might be used for mag filter
             // Map them to their nearest equivalent
             FilterType::NearestMipmapNearest => ImageFilterMode::Nearest,
-            FilterType::NearestMipmapLinear => match is_mipmap {
-                false => ImageFilterMode::Nearest,
-                true => ImageFilterMode::Linear,
-            },
-            FilterType::LinearMipmapNearest => match is_mipmap {
-                false => ImageFilterMode::Linear,
-                true => ImageFilterMode::Nearest,
-            },
+            FilterType::NearestMipmapLinear => {
+                match is_mipmap {
+                    false => ImageFilterMode::Nearest,
+                    true => ImageFilterMode::Linear,
+                }
+            }
+            FilterType::LinearMipmapNearest => {
+                match is_mipmap {
+                    false => ImageFilterMode::Linear,
+                    true => ImageFilterMode::Nearest,
+                }
+            }
             FilterType::LinearMipmapLinear => ImageFilterMode::Linear,
 
             // Special cases
@@ -1569,7 +1576,249 @@ impl Plugin for Panda3DPlugin {
             .init_asset_loader::<SgiImageLoader>()
             .init_asset_loader::<PandaImage>()
             .init_asset::<PandaAsset>()
+            .add_systems(Update, update_sequence_nodes)
             .add_plugins(MaterialPlugin::<Panda3DMaterial>::default());
+    }
+}
+
+#[derive(Clone, Debug, Component)]
+pub struct SequenceNodeState {
+    // Core AnimInterface data matching Panda3D's CData
+    pub num_frames: u32,
+    pub frame_rate: f32,
+    pub play_mode: PlayMode,
+    pub start_time: f32, // We'll update this to track when animation started in Bevy
+    pub start_frame: f32,
+    pub play_frames: f32,
+    pub from_frame: u32,
+    pub to_frame: u32,
+    pub play_rate: f32,
+    pub effective_frame_rate: f32, // frame_rate * play_rate
+    pub paused: bool,
+    pub paused_f: f32, // Frame position when paused
+
+    // Additional runtime state needed for visibility switching in Bevy
+    pub current_frame: f32,          // Tracks current animation frame
+    pub play_direction: f32,         // 1.0 for forward, -1.0 for backward (used in PingPong)
+    pub child_entities: Vec<Entity>, // References to child entities for visibility control
+}
+
+impl Default for SequenceNodeState {
+    fn default() -> Self {
+        Self {
+            num_frames: 0,
+            frame_rate: 0.0,
+            play_mode: PlayMode::Pose,
+            start_time: 0.0,
+            start_frame: 0.0,
+            play_frames: 0.0,
+            from_frame: 0,
+            to_frame: 0,
+            play_rate: 1.0,
+            effective_frame_rate: 0.0,
+            paused: true,
+            paused_f: 0.0,
+            current_frame: 0.0,
+            play_direction: 1.0,
+            child_entities: Vec::new(),
+        }
+    }
+}
+
+impl From<&super::nodes::sequence_node::SequenceNode> for SequenceNodeState {
+    fn from(node: &super::nodes::sequence_node::SequenceNode) -> Self {
+        Self {
+            num_frames: node.interface.num_frames,
+            frame_rate: node.interface.frame_rate,
+            play_mode: node.interface.play_mode,
+            start_time: node.interface.start_time,
+            start_frame: node.interface.start_frame,
+            play_frames: node.interface.play_frames,
+            from_frame: node.interface.from_frame,
+            to_frame: node.interface.to_frame,
+            play_rate: node.interface.play_rate,
+            effective_frame_rate: node.interface.effective_frame_rate,
+            paused: node.interface.paused,
+            paused_f: node.interface.paused_f,
+            ..Default::default()
+        }
+    }
+}
+
+fn update_sequence_nodes(
+    time: Res<Time>, mut sequence_query: Query<&mut SequenceNodeState>,
+    mut visibility_query: Query<&mut Visibility>,
+) {
+    for mut sequence in sequence_query.iter_mut() {
+        if sequence.paused {
+            continue;
+        }
+
+        match sequence.play_mode {
+            PlayMode::Pose => {
+                // Static mode, no update needed
+                continue;
+            }
+
+            PlayMode::Play | PlayMode::Loop | PlayMode::PingPong => {
+                // Calculate elapsed frame count based on time
+                let now = time.elapsed_secs();
+                let elapsed_time = now - sequence.start_time;
+                let elapsed_frames = elapsed_time * sequence.effective_frame_rate;
+
+                // Calculate current frame based on play mode
+                let mut current_frame = match sequence.play_mode {
+                    PlayMode::Play => {
+                        // Single play, clamp to range
+                        let frame = elapsed_frames + sequence.start_frame;
+                        frame.clamp(sequence.start_frame, sequence.start_frame + sequence.play_frames)
+                    }
+
+                    PlayMode::Loop => {
+                        // Loop indefinitely
+                        if sequence.play_frames > 0.0 {
+                            let wrapped_frames = elapsed_frames % sequence.play_frames;
+                            sequence.start_frame + wrapped_frames
+                        } else {
+                            sequence.start_frame
+                        }
+                    }
+
+                    PlayMode::PingPong => {
+                        // Ping pong animation
+                        if sequence.play_frames > 0.0 {
+                            // Calculate wrapped frame within a full cycle (forward + backward)
+                            let cycle_length = sequence.play_frames * 2.0;
+                            let wrapped_frames = elapsed_frames % cycle_length;
+
+                            if wrapped_frames > sequence.play_frames {
+                                // Backward phase
+                                let backward_frames = wrapped_frames - sequence.play_frames;
+                                sequence.start_frame + sequence.play_frames - backward_frames
+                            } else {
+                                // Forward phase
+                                sequence.start_frame + wrapped_frames
+                            }
+                        } else {
+                            sequence.start_frame
+                        }
+                    }
+
+                    PlayMode::Pose => unreachable!(),
+                };
+
+                // For Play mode, check if we've reached the end
+                if sequence.play_mode == PlayMode::Play {
+                    if sequence.effective_frame_rate < 0.0 {
+                        // Playing backward
+                        if current_frame <= sequence.start_frame {
+                            sequence.paused = true;
+                            sequence.paused_f = sequence.start_frame;
+                            current_frame = sequence.start_frame;
+                        }
+                    } else {
+                        // Playing forward
+                        if current_frame >= sequence.start_frame + sequence.play_frames {
+                            sequence.paused = true;
+                            sequence.paused_f = sequence.start_frame + sequence.play_frames;
+                            current_frame = sequence.start_frame + sequence.play_frames;
+                        }
+                    }
+                }
+
+                // Convert float frame to integer index for visibility control
+                let current_frame_index = current_frame.floor() as usize;
+
+                // Clamp index within bounds of child entities
+                let clamped_index =
+                    current_frame_index.clamp(0, sequence.child_entities.len().saturating_sub(1));
+
+                // Update visibility for all children
+                for (i, &child_entity) in sequence.child_entities.iter().enumerate() {
+                    if let Ok(mut visibility) = visibility_query.get_mut(child_entity) {
+                        *visibility = if i == clamped_index {
+                            Visibility::Visible
+                        } else {
+                            Visibility::Inherited // The SequenceNode itself should be Hidden
+                        };
+                    }
+                }
+
+                // Update current frame state for debugging/tracking purposes
+                sequence.current_frame = current_frame;
+            }
+        }
+    }
+}
+
+// Helper function to initialize start_time relative to Bevy's Time resource
+impl SequenceNodeState {
+    pub fn init_start_time(&mut self, now: f32) {
+        self.start_time = now;
+
+        // If effective_frame_rate is negative, adjust start_time like Panda3D does
+        if self.effective_frame_rate < 0.0 {
+            self.start_time -= self.play_frames / self.effective_frame_rate;
+        }
+    }
+
+    pub fn set_play_rate(&mut self, play_rate: f32, now: f32) {
+        // Match Panda3D's internal_set_rate behavior
+        let current_frame = self.get_current_frame(now);
+
+        self.play_rate = play_rate;
+        self.effective_frame_rate = self.frame_rate * self.play_rate;
+
+        if self.effective_frame_rate == 0.0 {
+            self.paused = true;
+            self.paused_f = current_frame;
+        } else {
+            // Compute new start_time that keeps current frame the same with new play_rate
+            let elapsed_frames = (current_frame - self.start_frame) / self.effective_frame_rate;
+            self.start_time = now - elapsed_frames;
+            self.paused = false;
+        }
+    }
+
+    pub fn get_current_frame(&self, now: f32) -> f32 {
+        if self.paused {
+            return self.paused_f;
+        }
+
+        let elapsed_time = now - self.start_time;
+        let elapsed_frames = elapsed_time * self.effective_frame_rate;
+
+        match self.play_mode {
+            PlayMode::Pose => self.start_frame,
+
+            PlayMode::Play => elapsed_frames.clamp(0.0, self.play_frames) + self.start_frame,
+
+            PlayMode::Loop => {
+                if self.play_frames > 0.0 {
+                    (elapsed_frames % self.play_frames) + self.start_frame
+                } else {
+                    self.start_frame
+                }
+            }
+
+            PlayMode::PingPong => {
+                if self.play_frames > 0.0 {
+                    let cycle_length = self.play_frames * 2.0;
+                    let wrapped_frames = elapsed_frames % cycle_length;
+
+                    if wrapped_frames > self.play_frames {
+                        // Backward phase
+                        let backward_frames = wrapped_frames - self.play_frames;
+                        self.start_frame + self.play_frames - backward_frames
+                    } else {
+                        // Forward phase
+                        self.start_frame + wrapped_frames
+                    }
+                } else {
+                    self.start_frame
+                }
+            }
+        }
     }
 }
 
