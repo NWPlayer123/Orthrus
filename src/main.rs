@@ -160,11 +160,7 @@ fn main() -> Result<()> {
                         }
                         Some(1) => {
                             log::info!("Compressing file {}", &params.input);
-                            /*let data = LZ11::compress_from_path(
-                                &params.input,
-                                yaz0::CompressionAlgo::MatchingOld,
-                                0,
-                            )?;
+                            let data = LZ11::compress_from_path(&params.input, true)?;
                             let output = if let Some(output) = params.output {
                                 output
                             } else {
@@ -173,7 +169,7 @@ fn main() -> Result<()> {
                                 new_path.to_string_lossy().into_owned()
                             };
                             log::info!("Writing file {}", output);
-                            std::fs::write(output, data)?;*/
+                            std::fs::write(output, data)?;
                         }
                         None => eprintln!("Please select exactly one operation!"),
                         _ => unreachable!("Oops! Forgot to cover all operations."),

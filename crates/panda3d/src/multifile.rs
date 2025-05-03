@@ -355,10 +355,10 @@ impl Multifile {
             if !subfile.flags.contains(Flags::Signature) {
                 subfile.write_file(&data.read_slice(subfile.length as usize)?, &output)?;
             } /* else if cfg!(signature) {
-                  println!("{:?}", subfile);
-                  data.set_position(subfile.offset as usize);
-                  Self::check_signatures(data.get_slice(subfile.length as usize)?)?;
-              }*/
+            println!("{:?}", subfile);
+            data.set_position(subfile.offset as usize);
+            Self::check_signatures(data.get_slice(subfile.length as usize)?)?;
+            }*/
 
             data.set_position(next_index.into())?;
             next_index = data.read_u32()? * header.scale_factor;

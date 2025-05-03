@@ -963,7 +963,7 @@ impl<'a> DataCursorMut<'a> {
     /// Due to the way that Yaz0 and Yay0 compression work, if this function is used to copy overlapping
     /// sections, the initial value will repeat itself. If you don't need this behavior, consider using a more
     /// normal memcpy.
-    /// 
+    ///
     /// Note that this will not increment the internal position, due to dest allowing any write location. You
     /// are responsible for what you write where.
     ///

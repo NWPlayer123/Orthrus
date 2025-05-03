@@ -61,12 +61,20 @@ pub enum Error {
     /// Thrown if the header contains an unexpected magic number.
     #[snafu(display("Unexpected Magic! Expected {expected:?}."))]
     InvalidMagic { expected: &'static [u8] },
+
+    /// Thrown if the file is too large to fit inside the header.
+    #[snafu(display("File too large to store its length!"))]
+    FileTooBig,
 }
 
 pub struct LZ11;
 
 impl LZ11 {
     pub const MAGIC: &'static [u8] = b"\x11";
+    const MIN_MATCH: usize = 3;
+    const SMALL_MATCH: usize = 0xF + 0x1;
+    const MEDIUM_MATCH: usize = 0xFF + 0x11;
+    const MAX_MATCH: usize = 0xFFFF + 0x111;
 
     /// Calculates the filesize of the largest possible file that can be created for a given length.
     ///
@@ -79,8 +87,11 @@ impl LZ11 {
     #[cfg(feature = "std")]
     #[inline]
     pub fn decompress_from_path<P: AsRef<Path>>(path: P) -> Result<Box<[u8]>, self::Error> {
-        let input = std::fs::read(path)?;
-        Self::decompress_from(&input)
+        fn inner(path: &Path) -> Result<Box<[u8]>, self::Error> {
+            let input = std::fs::read(path)?;
+            LZ11::decompress_from(&input)
+        }
+        inner(path.as_ref())
     }
 
     #[inline]
@@ -146,5 +157,126 @@ impl LZ11 {
         }
 
         Ok(())
+    }
+
+    #[cfg(feature = "std")]
+    #[inline]
+    pub fn compress_from_path<P: AsRef<Path>>(path: P, extended: bool) -> Result<Box<[u8]>, self::Error> {
+        fn inner(path: &Path, extended: bool) -> Result<Box<[u8]>, self::Error> {
+            let input = std::fs::read(path)?;
+            LZ11::compress_from(&input, extended)
+        }
+        inner(path.as_ref(), extended)
+    }
+
+    #[inline]
+    pub fn compress_from(input: &[u8], extended: bool) -> Result<Box<[u8]>, self::Error> {
+        ensure!(input.len() <= 0xFFFFFF, FileTooBigSnafu);
+        let mut output = vec![0u8; Self::worst_possible_size(input.len())];
+
+        let compressed_size = Self::compress(input, &mut output, extended)?;
+
+        output.truncate(compressed_size);
+
+        Ok(output.into_boxed_slice())
+    }
+
+    #[inline]
+    pub fn compress(input: &[u8], output: &mut [u8], extended: bool) -> Result<usize, self::Error> {
+        let size = u32::try_from(input.len()).map_err(|_| self::Error::EndOfFile)?;
+
+        let mut data = DataCursorMut::new(output, Endian::Little);
+        if size < (1 << 24) {
+            data.write_u32(size << 8 | 0x10 | u32::from(extended))?;
+        } else {
+            data.write_u32(0x10 | u32::from(extended))?;
+            data.write_u32(size)?;
+        }
+
+        Ok(0)
+        /*let mut data = DataCursorMut::new(output, Endian::Little);
+
+        data.write_exact(b"\x11")?;
+        data.write_u24(input.len() as u32)?;
+
+        let mut window = crate::algorithms::Window::new(input, Self::MAX_MATCH);
+
+        let mut input_pos = 0;
+        let mut output_pos = 5;
+        let mut flag_pos = 4;
+        let mut flag_mask = 0x80;
+
+        while input_pos < input.len() {
+            let (mut match_offset, mut match_length) = window.search(input_pos);
+            if (match_length as usize) < Self::MIN_MATCH {
+                // No good match, it's smaller to just copy a byte.
+                output[output_pos] = input[input_pos];
+                input_pos += 1;
+                output_pos += 1;
+            } else {
+                let (better_offset, better_length) = window.search(input_pos + 1);
+                if match_length + 1 < better_length {
+                    // Found a better match looking ahead a byte, copy a byte and use this new info.
+                    output[output_pos] = input[input_pos];
+                    input_pos += 1;
+                    output_pos += 1;
+
+                    //Check if we need to create a new flag byte
+                    flag_mask >>= 1;
+                    if flag_mask == 0 {
+                        flag_mask = 0x80;
+                        flag_pos = output_pos;
+                        output_pos += 1;
+                    }
+
+                    match_offset = better_offset;
+                    match_length = better_length;
+                }
+
+                output[flag_pos] |= flag_mask;
+
+                // Calculate the lookback offset
+                let match_offset = input_pos - match_offset as usize - 1;
+                let mut match_length = match_length as usize;
+
+                if match_length > Self::MEDIUM_MATCH {
+                    // We've matched the long length: 1a bc dA BC
+                    match_length -= Self::MEDIUM_MATCH - 1;
+
+                    output[output_pos] = 0x10 | (match_length >> 12) as u8;
+                    output[output_pos + 1] = (match_length >> 4) as u8;
+                    output[output_pos + 2] = (match_length << 4) as u8 | (match_offset >> 8) as u8;
+                    output[output_pos + 3] = match_offset as u8;
+                    output_pos += 4;
+                } else if match_length > Self::SMALL_MATCH {
+                    // We've matched the medium length: 0a bA BC
+                    match_length -= Self::SMALL_MATCH - 1;
+
+                    output[output_pos] = (match_length >> 4) as u8;
+                    output[output_pos + 1] = (match_length << 4) as u8 | (match_offset >> 8) as u8;
+                    output[output_pos + 2] = match_offset as u8;
+                    output_pos += 3;
+                } else {
+                    // We've matched the short length: xA BC
+                    match_length -= 1;
+
+                    output[output_pos] = (match_length << 4) as u8 | (match_offset >> 8) as u8;
+                    output[output_pos + 1] = match_offset as u8;
+                    output_pos += 2;
+                }
+
+                input_pos += match_length;
+            }
+
+            //Check if we need to create a new flag byte
+            flag_mask >>= 1;
+            if flag_mask == 0 {
+                flag_mask = 0x80;
+                flag_pos = output_pos;
+                output_pos += 1;
+            }
+        }
+
+        Ok(output_pos)*/
     }
 }
