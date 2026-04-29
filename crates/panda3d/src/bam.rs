@@ -314,6 +314,8 @@ impl BinaryAsset {
         if object_id != 0 {
             // self.objects_left will only be ObjectCount on pre-6.21 so this will only match that case.
             if let ObjectsLeft::ObjectCount { ref mut num_extra_objects } = self.objects_left {
+                // TODO: this needs to be fixed up, we should only register once per ObjectID. `if
+                // (pointedObjectId > currentObjectId) _num_extra_objects++;`?
                 *num_extra_objects += 1;
             }
             // Object ID 0 is a special case, but we want zero-indexed, so we subtract one here.
